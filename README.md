@@ -177,6 +177,10 @@ always does.
 
 **What does it cost?** Nothing to run. The scripts are plain Python, and there is no CI or service to pay for.
 
+## License
+
+[MIT](LICENSE). Use it, fork it, adapt it to your team.
+
 ## Credits
 
 Specter is **inspired by [Kiro](https://kiro.dev)'s spec-driven workflow**. From Kiro it takes the
