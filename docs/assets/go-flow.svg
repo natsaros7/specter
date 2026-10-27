@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 300" width="960" height="300" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <style>
+    .bg { fill: #0d1117; }
+    .title { fill: #e6edf3; font-size: 20px; font-weight: 600; }
+    .sub { fill: #8b949e; font-size: 13px; }
+    .card { fill: #161b22; stroke: #30363d; stroke-width: 1.5; }
+    .num { fill: #8b949e; font-size: 12px; font-weight: 600; }
+    .label { fill: #e6edf3; font-size: 15px; font-weight: 600; }
+    .desc { fill: #8b949e; font-size: 11.5px; }
+    .you { fill: #0d1117; stroke: #3fb950; stroke-width: 1.2; }
+    .youtxt { fill: #3fb950; font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .arrow { stroke: #30363d; stroke-width: 2; fill: none; marker-end: url(#a); }
+    .step { animation: glow 14s infinite; opacity: .45; }
+    .s1 { animation-delay: 0s; } .s2 { animation-delay: 2s; } .s3 { animation-delay: 4s; }
+    .s4 { animation-delay: 6s; } .s5 { animation-delay: 8s; } .s6 { animation-delay: 10s; }
+    @keyframes glow {
+      0%   { opacity: .45; }
+      3%   { opacity: 1; }
+      14%  { opacity: 1; }
+      17%  { opacity: .45; }
+      100% { opacity: .45; }
+    }
+    .step .card { animation: ring 14s infinite; animation-delay: inherit; }
+    @keyframes ring {
+      0%, 17%, 100% { stroke: #30363d; }
+      3%, 14% { stroke: #58a6ff; }
+    }
+    .done { animation: done 14s infinite; opacity: 0; }
+    @keyframes done { 0%, 85% { opacity: 0; } 88%, 98% { opacity: 1; } 100% { opacity: 0; } }
+    @media (prefers-reduced-motion: reduce) { .step, .step .card, .done { animation: none; opacity: 1; } }
+  </style>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#30363d"/></marker></defs>
+  <rect class="bg" width="960" height="300" rx="14"/>
+  <text class="title" x="32" y="42">“Follow GO.md for this project.”</text>
+  <text class="sub" x="32" y="64">One paste. The agent does the work; you answer a few questions. Every question has a default.</text>
+
+  <g class="step s1"><rect class="card" x="24" y="88" width="138" height="122" rx="10"/>
+    <text class="num" x="40" y="112">1</text><text class="label" x="40" y="136">Look</text>
+    <text class="desc" x="40" y="158">read-only scan:</text><text class="desc" x="40" y="174">layout, parts,</text><text class="desc" x="40" y="190">agents in use</text></g>
+  <path class="arrow" d="M164 149 H178"/>
+  <g class="step s2"><rect class="card" x="180" y="88" width="138" height="122" rx="10"/>
+    <text class="num" x="196" y="112">2</text><text class="label" x="196" y="136">Propose</text>
+    <text class="desc" x="196" y="158">fit table +</text><text class="desc" x="196" y="174">exact file list</text>
+    <rect class="you" x="196" y="222" width="106" height="30" rx="15"/><text class="youtxt" x="212" y="242">you: ok</text></g>
+  <path class="arrow" d="M320 149 H334"/>
+  <g class="step s3"><rect class="card" x="336" y="88" width="138" height="122" rx="10"/>
+    <text class="num" x="352" y="112">3</text><text class="label" x="352" y="136">Install</text>
+    <text class="desc" x="352" y="158">.specs/kit/, skill</text><text class="desc" x="352" y="174">per agent, rules</text><text class="desc" x="352" y="190">block, git hook</text></g>
+  <path class="arrow" d="M476 149 H490"/>
+  <g class="step s4"><rect class="card" x="492" y="88" width="138" height="122" rx="10"/>
+    <text class="num" x="508" y="112">4</text><text class="label" x="508" y="136">Interview</text>
+    <text class="desc" x="508" y="158">4–8 questions:</text><text class="desc" x="508" y="174">requirements,</text><text class="desc" x="508" y="190">architecture, gate</text>
+    <rect class="you" x="508" y="222" width="106" height="30" rx="15"/><text class="youtxt" x="524" y="242">you: ok</text></g>
+  <path class="arrow" d="M632 149 H646"/>
+  <g class="step s5"><rect class="card" x="648" y="88" width="138" height="122" rx="10"/>
+    <text class="num" x="664" y="112">5</text><text class="label" x="664" y="136">Approve</text>
+    <text class="desc" x="664" y="158">domain map +</text><text class="desc" x="664" y="174">files to write</text>
+    <rect class="you" x="664" y="222" width="106" height="30" rx="15"/><text class="youtxt" x="680" y="242">you: go</text></g>
+  <path class="arrow" d="M788 149 H802"/>
+  <g class="step s6"><rect class="card" x="804" y="88" width="132" height="122" rx="10"/>
+    <text class="num" x="820" y="112">6</text><text class="label" x="820" y="136">Generate</text>
+    <text class="desc" x="820" y="158">.specs/ written,</text><text class="desc" x="820" y="174">linted, citations</text><text class="desc" x="820" y="190">checked</text></g>
+  <g class="done"><rect x="804" y="222" width="132" height="30" rx="15" fill="#238636"/><text x="822" y="242" fill="#ffffff" font-size="12.5" font-weight="600">✓ commit? yes</text></g>
+  <text class="sub" x="32" y="282">≈ 20 minutes · nothing changes before step 3 · setup resumes if the session ends</text>
+</svg>

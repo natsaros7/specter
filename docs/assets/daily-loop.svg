@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 340" width="960" height="340" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <style>
+    .bg { fill: #0d1117; }
+    .title { fill: #e6edf3; font-size: 20px; font-weight: 600; }
+    .sub { fill: #8b949e; font-size: 13px; }
+    .track { fill: none; stroke: #30363d; stroke-width: 2; stroke-dasharray: 6 6; }
+    .card { fill: #161b22; stroke: #30363d; stroke-width: 1.5; }
+    .label { fill: #e6edf3; font-size: 15px; font-weight: 600; text-anchor: middle; }
+    .desc { fill: #8b949e; font-size: 11.5px; text-anchor: middle; }
+    .who { font-size: 10.5px; text-anchor: middle; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .ai { fill: #58a6ff; } .script { fill: #d29922; } .human { fill: #3fb950; }
+    .node .card { animation: lit 10s infinite; }
+    @keyframes lit { 0%, 12%, 100% { stroke: #30363d; } 1%, 9% { stroke: #58a6ff; } }
+    .n1 .card { animation-delay: 0s; } .n2 .card { animation-delay: 1.9s; } .n3 .card { animation-delay: 3.82s; }
+    .n4 .card { animation-delay: 5.96s; } .n5 .card { animation-delay: 7.87s; }
+    .center { fill: #8b949e; font-size: 12.5px; text-anchor: middle; }
+    .esc { fill: none; stroke: #f85149; stroke-width: 1.5; stroke-dasharray: 4 4; }
+    .esctxt { fill: #f85149; font-size: 11.5px; }
+    @media (prefers-reduced-motion: reduce) { .node .card { animation: none; } .dot { display: none; } }
+  </style>
+  <defs><marker id="r" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#f85149"/></marker></defs>
+  <rect class="bg" width="960" height="340" rx="14"/>
+  <text class="title" x="32" y="40">Every change, the same loop</text>
+  <text class="sub" x="32" y="62">One task at a time. Scripts decide pass or fail; a fresh reviewer reads the frozen diff; the spec ships with the code.</text>
+
+  <path id="loop" class="track" d="M180 120 H780 A40 40 0 0 1 820 160 V220 A40 40 0 0 1 780 260 H180 A40 40 0 0 1 140 220 V160 A40 40 0 0 1 180 120 Z"/>
+  <circle class="dot" r="7" fill="#58a6ff">
+    <animateMotion dur="10s" repeatCount="indefinite"><mpath href="#loop"/></animateMotion>
+  </circle>
+
+  <g class="node n1"><rect class="card" x="110" y="88" width="140" height="64" rx="10"/>
+    <text class="label" x="180" y="113">Spec</text><text class="desc" x="180" y="131">requirements → design</text><text class="who ai" x="180" y="145">planner · you approve</text></g>
+  <g class="node n2"><rect class="card" x="410" y="88" width="140" height="64" rx="10"/>
+    <text class="label" x="480" y="113">Task</text><text class="desc" x="480" y="131">one box in tasks.md</text><text class="who ai" x="480" y="145">generator</text></g>
+  <g class="node n3"><rect class="card" x="710" y="88" width="140" height="64" rx="10"/>
+    <text class="label" x="780" y="113">Gate</text><text class="desc" x="780" y="131">build · tests · spec_lint</text><text class="who script" x="780" y="145">script, no AI</text></g>
+  <g class="node n4"><rect class="card" x="560" y="228" width="140" height="64" rx="10"/>
+    <text class="label" x="630" y="253">Review</text><text class="desc" x="630" y="271">fresh context, file:line</text><text class="who ai" x="630" y="285">reviewer</text></g>
+  <g class="node n5"><rect class="card" x="260" y="228" width="140" height="64" rx="10"/>
+    <text class="label" x="330" y="253">Sync</text><text class="desc" x="330" y="271">domains/ in same commit</text><text class="who human" x="330" y="285">you commit</text></g>
+
+  <path class="esc" d="M760 86 C 740 70, 580 70, 552 82" marker-end="url(#r)"/>
+  <text class="esctxt" x="780" y="172" text-anchor="middle">red → retry once</text><text class="esctxt" x="780" y="188" text-anchor="middle">red twice → planner</text>
+  <text class="center" x="480" y="185">Not true yet? → a dated row in the Drift Register.</text>
+  <text class="center" x="480" y="203">Not known? → UNKNOWN, never a guess.</text>
+  <text class="sub" x="32" y="325"><tspan class="ai">■ AI role</tspan>   <tspan class="script">■ script</tspan>   <tspan class="human">■ human</tspan></text>
+</svg>

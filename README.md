@@ -1,102 +1,181 @@
-# spec-first-kit
+# 👻 specter
 
-A spec-first ("Kiro-style") workflow that any coding agent can follow (Claude Code, Codex, Cursor, Copilot, Gemini CLI and others) and that sets itself up in your project.
+**Specs that don't go stale.** A spec-first ("Kiro-style") workflow for *any* AI coding agent.
 
-- **Before code:** a non-trivial change gets `requirements.md → design.md → tasks.md`, with traceable `[REQ-…]` IDs.
-- **During code:** one task at a time, each closed by your project's gate.
-- **After code:** the spec ships in the same commit. A **Drift Register** records anything that isn't true yet.
-- **Setup is done by your agent:** it scans the project, interviews you only where the code can't answer, and writes `.specs/`.
-
-Why it works this way: [`PHILOSOPHY.md`](PHILOSOPHY.md).
-
-## Get started: 3 steps, about 20 minutes, mostly answering questions
-
-**1. Download the kit** (anywhere *outside* your project; it is a tool, not part of your code):
+## Clone it. Paste one line. Your agent does the rest.
 
 ```bash
-git clone git@github.com:natsaros7/spec-first-kit.git ~/tools/spec-first-kit
+git clone git@github.com:natsaros7/specter.git ~/tools/specter
 ```
 
-**2. Open your AI agent in your project** (Claude Code, Codex, Cursor, Copilot, Gemini…) **and paste:**
+Open your AI agent (Codex, Claude Code, Cursor, Copilot, Gemini CLI…) **in your project** and paste:
 
 ```text
-Follow ~/tools/spec-first-kit/GO.md for this project.
+Follow ~/tools/specter/GO.md for this project.
 ```
 
-**3. Answer its questions.** Every question has a default, so `ok` is always a valid answer.
+That's all. The agent looks at your project, tells you what it would set up, and asks before changing anything. Then
+it asks you a few questions (`ok` accepts every default) and writes the specs. About 20 minutes, most of it the agent working.
 
-The agent then:
-- looks at your project (read-only),
-- proposes what it would install and asks **"Install it?"**,
-- installs on your yes,
-- interviews you briefly (where requirements live, who decides architecture, what your build gate is),
-- shows you the list of parts ("domains") to approve,
-- writes `.specs/` and offers to commit it.
+<p align="center"><img src="docs/assets/go-flow.svg" alt="Paste one line; the agent looks, proposes, installs on your yes, interviews you, and generates the specs" width="100%"></p>
 
-Your teammates get everything with the repo. They never need to clone the kit.
+When it's done, commit `.specs/`. Your teammates get everything with the repo and never need to clone specter.
 
-> Prefer not to paste? Open the agent **in the kit folder** and just say **go**. It asks for your project path.
-> Want no AI for the install itself? Run `~/tools/spec-first-kit/install.sh ~/code/my-project`, then tell your agent
-> "follow .specs/kit/playbooks/setup.md".
+> **Other ways in:** open the agent *in the specter folder* and just say **go**, or install without AI with
+> `~/tools/specter/install.sh ~/code/my-project`.
 
-## Where to install (the `<target>`)
+## Why
 
-`<target>` is the folder where `.specs/` should live:
+- **AI agents are confident by default.** Specter makes them cite `path:line`, mark what they can't verify as
+  `UNKNOWN`, and write the spec *before* the code.
+- **Docs rot.** Here the spec ships in the same commit as the code, and anything not true yet goes into a dated
+  **Drift Register**, never a silent lie.
+- **Scripts judge structure; AI judges content.** Lint, traceability and the spec-sync hook are plain Python: free,
+  fast and the same every time.
 
-| Your layout | `<target>` | Git hook |
+More in [`PHILOSOPHY.md`](PHILOSOPHY.md) (12 short rules, each learned the hard way). New to spec-driven development? Read
+[`kit/docs/spec-driven.md`](kit/docs/spec-driven.md): the method in one page, including EARS-style acceptance criteria.
+
+## Where it goes
+
+`.specs/` lives at the top of whatever you call "the system":
+
+| Your layout | Install at | Git hook |
 |---|---|---|
-| One repo | The repo root | Yes: warns when code changes without a spec change |
-| Monorepo | The repo root (one `domains/` folder per deployable) | Yes |
-| **Several repos for one system** | The **workspace folder** that holds them (`git init` it and add the child repos to `.gitignore`) | No (commits happen in the child repos); agent rules + review keep specs in sync |
+| One repo | The repo root | ✅ warns when code changes without a spec change |
+| Monorepo | The repo root (one `domains/` folder per deployable) | ✅ |
+| **Several repos for one system** | The **folder holding them** (`git init` it and add the child repos to `.gitignore`) | — commits happen in the child repos; the agent rules and review keep specs in sync |
 
-## Day-to-day
+## Every change, the same loop
 
-Say these to your agent. With Claude Code, `/spec-first <request>` does the same.
+<p align="center"><img src="docs/assets/daily-loop.svg" alt="Spec, task, gate, review, sync loop" width="100%"></p>
 
-| Say | Playbook |
-|---|---|
-| "Spec this: <change>" | `new-feature.md`: writes requirements/design/tasks, lints them, waits for your approval |
-| "Next task on <feature>" | `next-task.md`: one task, gate, tick |
-| "Sync specs, <feature> landed" | `sync.md`: fold into `domains/`, update traceability and drift |
-| "Refresh the specs" | `refresh.md`: re-ground against the latest code |
+Say these to your agent. With a skill installed, `/spec-first …` (Claude Code) or `$spec-first …` (Codex) works too.
 
-The two scripts decide pass or fail; no AI is involved:
+| Say | What happens | Playbook |
+|---|---|---|
+| **"Spec this: <change>"** | requirements → design → tasks with traceable `[REQ-…]` IDs, lint, then it waits for your approval | `new-feature.md` |
+| **"Next task on <feature>"** | One task, the project's gate, tick the box | `next-task.md` |
+| **"Sync specs, <feature> landed"** | Folds the change into the as-built `domains/` docs, traceability and drift | `sync.md` |
+| **"Refresh the specs"** | Re-grounds against the latest code, logs new drift | `refresh.md` |
+
+Small changes (one file, under the threshold, no contract change) skip the spec and go straight to code.
+
+## What lives where
+
+```mermaid
+flowchart LR
+  subgraph tool["~/tools/specter (this repo)"]
+    GO[GO.md] --> INST[install.sh]
+    KIT[kit/<br/>rules · playbooks · templates<br/>roles · scripts · skill]
+  end
+  subgraph proj["your project"]
+    AG["AGENTS.md / CLAUDE.md …<br/>+ marker block"]
+    SK["&lt;agent&gt;/skills/spec-first/"]
+    subgraph specs[".specs/"]
+      VK["kit/ (vendored copy,<br/>replaced on upgrade)"]
+      GEN["README router · system/ · domains/<br/>steering/ · features/<br/>(written by setup, yours)"]
+    end
+  end
+  INST -- copies --> VK
+  INST -- adds --> AG
+  INST -- adds --> SK
+  VK -- "setup.md interview" --> GEN
+```
+
+### The spec tree it builds
+
+```mermaid
+flowchart TD
+  R[".specs/README.md<br/>router: for X, open only Y"] --> SYS & DOM & FEAT & ST
+  SYS["system/<br/>architecture · data flows<br/>Drift Register · traceability"]
+  DOM["domains/&lt;part&gt;/<br/>design + requirements<br/><b>as-built</b>"]
+  FEAT["features/&lt;id&gt;/<br/>requirements → design → tasks<br/><b>proposed change</b>"]
+  ST["steering/<br/>spec-rules · code-standards<br/>project-profile (interview answers)"]
+  FEAT -- "lands → folded into" --> DOM
+  DOM -. "not true yet" .-> SYS
+```
+
+## The helpers: three roles
+
+The person who writes the code never approves it, and the expensive model is only used where judgement matters.
+The roles are plain markdown briefs in [`kit/roles/`](kit/roles/README.md), so they work with any agent.
+
+| Role | Model tier | Does | Never does |
+|---|---|---|---|
+| **planner** | deep: your strongest model, high effort | Setup and refresh, feature specs, architecture, root-cause diagnosis, security reviews, escalations | — |
+| **generator** | standard: a mid-tier model | Implements **one** task, writes tests, runs the gate, reports the exit code | Commit; decide what the spec left open |
+| **reviewer** | standard; deep for security paths | Reads the frozen diff in a **fresh context** and reports findings with `file:line` | Edit code |
+
+How to use them:
+
+- **Any agent:** start a new session: *"Act as `.specs/kit/roles/reviewer.md` on `<patch>`"*.
+- **Model profiles:** map *deep* and *standard* to two profiles.
+- **Claude Code:** gets the roles as native sub-agents automatically.
+
+The rules are simple: a red gate gets one retry at the same tier, two reds escalate to the planner, and nothing
+escalates without a failed gate. Details: [`kit/docs/model-routing.md`](kit/docs/model-routing.md) ·
+[`kit/docs/review-loop.md`](kit/docs/review-loop.md).
+
+## Supported agents
+
+The installer detects what you use. Agent files in the project win over what's installed on your machine. You can
+override it with `--agents=codex,claude`.
+
+| Agent | Rules | Skill | Status |
+|---|---|---|---|
+| Codex | `AGENTS.md` (native) | `.agents/skills/spec-first/` · `$spec-first` | ✅ official paths |
+| Claude Code | `CLAUDE.md` block | `.claude/skills/spec-first/` · `/spec-first` + role sub-agents | ✅ |
+| Cursor | `.cursor/rules/spec-first.mdc` + `AGENTS.md` | `.cursor/skills/spec-first/` | best-effort (community docs) |
+| Gemini CLI | `GEMINI.md` block (if present) | `.gemini/skills/spec-first/` | best-effort |
+| GitHub Copilot | `.github/copilot-instructions.md` block (if present) | `.github/skills/spec-first/` | best-effort |
+| Anything else | `AGENTS.md` | — | Paste "Follow `.specs/kit/playbooks/…`" |
+
+If a skill path turns out to be wrong for your tool, nothing breaks: the `AGENTS.md` rules and playbooks still work.
+
+## The scripts (no AI, Python 3.8+, stdlib only)
 
 ```bash
-python3 .specs/kit/scripts/spec_lint.py         # structure + REQ traceability + broken links
-python3 .specs/kit/scripts/spec_sync_check.py   # code changed without a spec change? (the pre-commit hook)
+python3 .specs/kit/scripts/spec_lint.py           # files present, REQ traced both ways, links resolve
+python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation exists and points at real code
+python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 ```
-
-## What gets installed
-
-```
-<target>/
-├── AGENTS.md                      # + marker block with the rules (created if missing)
-├── CLAUDE.md, GEMINI.md, .github/copilot-instructions.md   # + same block, only if the file/agent is present
-├── .cursor/rules/spec-first.mdc   # only if .cursor/ exists
-├── <agent>/skills/spec-first/     # one per agent detected: .agents/ (Codex), .claude/, .cursor/, .gemini/, .github/
-├── .claude/agents/                # Claude Code only: planner/generator/reviewer sub-agents
-└── .specs/
-    ├── spec-kit.json              # settings (setup tunes them)
-    ├── kit/                       # playbooks, templates, scripts, docs (replaced on upgrade)
-    └── …                          # what setup generates: README router, system/, domains/, steering/, features/
-```
-
-The installer never touches content outside its marker blocks. Re-run it to upgrade; `--uninstall` removes the kit
-but keeps your specs. Requirements: `python3` (3.8+) and `git`. Nothing else.
 
 ## Example
 
 [`examples/acme-shop/.specs/`](examples/acme-shop/.specs/README.md) is the whole system on a fictional shop:
 
-- the router, architecture, data flows with a Drift Register, and traceability;
-- a filled-in project profile showing the setup interview;
-- an as-built domain;
-- two features: a **small change blocked on a decision** (`ord-142`) and a **cross-cutting refactor** with a safety net and behaviour sign-offs (`ord-120`).
+- the router, architecture, flows with a Drift Register, and traceability against a client contract;
+- a filled-in interview profile and one as-built domain;
+- two features:
+  - **[ord-142](examples/acme-shop/.specs/features/ord-142-request-timestamp-validation/requirements.md):** a small
+    change that is blocked on a decision, with a config-flag rollout and a standalone `AGENT_PROMPT.md`;
+  - **[ord-120](examples/acme-shop/.specs/features/ord-120-service-transaction-boundary/requirements.md):** a
+    cross-cutting refactor with the safety net first, behaviour-delta sign-off, a ratchet and a `▶ Resume here` block.
 
-## Going further (optional)
+## Upgrade, uninstall, versions
 
-- [`kit/docs/model-routing.md`](kit/docs/model-routing.md): which model tier runs which step, and when to escalate.
-- [`kit/docs/review-loop.md`](kit/docs/review-loop.md): worker → gate → fresh-context reviewer → one retry → human.
-- [`kit/roles/`](kit/roles/README.md): the generic planner / generator / reviewer roles. Claude Code gets them as native sub-agents automatically.
-- `install.sh --user` adds the `spec-first` skill at user level for every agent detected.
+```bash
+cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: replaces .specs/kit/, keeps your specs and settings
+./install.sh ~/code/my-project --uninstall                         # removes the kit, marker blocks, skills, hook; keeps .specs/ content
+./install.sh ~/code/my-project --detect                            # which agents it would wire, and why
+```
+
+The installed version is in `.specs/kit/VERSION` and in `spec-kit.json`. Changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
+Self-test, run locally: `tests/selftest.sh`.
+
+## FAQ
+
+**Is this Kiro?** No. It borrows Kiro's *requirements → design → tasks* triplet and adds as-built domain docs, a
+Drift Register, a setup interview, script gates and agent-neutral playbooks.
+
+**Does it need Claude?** No. Everything is markdown and stdlib Python. Claude Code, Codex and the others each get a
+thin extra when detected.
+
+**Does anything leave my machine?** Specter itself sends nothing anywhere. Your agent reads your repo the way it
+always does.
+
+**Can I stop it nagging?** Set `"spec_sync": "off"` in `.specs/spec-kit.json`. You can go the other way too:
+`"block"` makes the hook refuse commits.
+
+**What does it cost?** Nothing to run. The scripts are plain Python, and there is no CI or service to pay for.

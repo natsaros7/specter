@@ -1,4 +1,4 @@
-# GO: assess, install and set up spec-first-kit in one conversation
+# GO: assess, install and set up specter in one conversation
 
 **For the AI agent.** The user wants this to take no effort: they say "go" and answer your questions. Do everything
 else yourself, in this order. Keep each message short and plain.

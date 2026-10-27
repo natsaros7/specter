@@ -17,7 +17,7 @@ printf '# Mine\nkeep me\n' > "$P/CLAUDE.md"
 snap() { (cd "$P" && find . -path ./.git -prune -o -type f -print | sort | xargs cat | shasum); }
 first=$(snap); "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null; [ "$first" = "$(snap)" ] || fail "install not idempotent"
 grep -q "keep me" "$P/CLAUDE.md" || fail "user CLAUDE.md content lost"
-[ "$(grep -c 'spec-first-kit:begin' "$P/AGENTS.md")" = 1 ] || fail "duplicate marker block"
+[ "$(grep -c 'specter:begin' "$P/AGENTS.md")" = 1 ] || fail "duplicate marker block"
 for f in .agents/skills/spec-first/SKILL.md .specs/kit/roles/reviewer.md .claude/agents/reviewer.md .specs/kit/playbooks/setup.md .specs/spec-kit.json .cursor/rules/spec-first.mdc .claude/skills/spec-first/SKILL.md .git/hooks/pre-commit; do
   [ -e "$P/$f" ] || fail "missing $f"
 done
@@ -49,6 +49,6 @@ echo "6. uninstall keeps user content"
 "$KIT/install.sh" "$P" --uninstall >/dev/null
 [ ! -e "$P/.agents/skills/spec-first" ] || fail "codex skill left"
 [ ! -e "$P/.specs/kit" ] && [ ! -e "$P/AGENTS.md" ] && [ ! -e "$P/.claude/agents/reviewer.md" ] && [ ! -e "$P/.git/hooks/pre-commit" ] || fail "uninstall left kit files"
-grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "spec-first-kit" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
+grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "specter" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
 
 echo "selftest: OK"

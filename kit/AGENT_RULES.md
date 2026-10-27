@@ -1,4 +1,4 @@
-## Spec-first workflow (spec-first-kit)
+## Spec-first workflow (specter)
 
 This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is the router: open only the one file it points to.
 

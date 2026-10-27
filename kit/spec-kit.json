@@ -1,5 +1,5 @@
 {
-  "kit_version": "0.1.0",
+  "kit_version": null,
   "code_globs": ["src/*", "app/*", "lib/*", "services/*", "packages/*"],
   "ignore_globs": ["*/node_modules/*", "*/target/*", "*/build/*", "*/dist/*", "*.md"],
   "spec_sync": "warn",

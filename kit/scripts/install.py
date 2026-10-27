@@ -6,9 +6,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-BEGIN, END = "<!-- spec-first-kit:begin -->", "<!-- spec-first-kit:end -->"
+BEGIN, END = "<!-- specter:begin -->", "<!-- specter:end -->"
 KIT_PARTS = ("AGENT_RULES.md", "playbooks", "templates", "roles", "scripts", "hooks", "docs")
-HOOK_TAG = "spec-first-kit"
+HOOK_TAG = "specter"
 ROLE_TAG = ".specs/kit/roles/"
 
 
@@ -115,14 +115,16 @@ def install_hook(target, kit_rules_note):
 def install(kit_home, target):
     specs = target / ".specs"
     kit = specs / "kit"
-    print("Installing spec-first-kit into " + str(specs))
+    print("Installing specter into " + str(specs))
     for part in KIT_PARTS:
         src, dst = kit_home / "kit" / part, kit / part
         if dst.exists():
             shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
-    say(".specs/kit/: rules, playbooks, templates, roles, scripts, docs")
+    version = (kit_home / "VERSION").read_text().strip()
+    (kit / "VERSION").write_text(version + "\n")
+    say(".specs/kit/ " + version + ": rules, playbooks, templates, roles, scripts, docs")
 
     config_path = specs / "spec-kit.json"
     top = git(target, "rev-parse", "--show-toplevel").stdout.strip()
@@ -133,10 +135,16 @@ def install(kit_home, target):
         if repos or not is_repo:
             config["spec_sync"] = "off"
         config["code_globs"] = detect_code_globs(target) or config["code_globs"]
+        config["kit_version"] = version
         config_path.write_text(json.dumps(config, indent=2) + "\n")
         say(".specs/spec-kit.json (code paths: " + ", ".join(config["code_globs"][:4])
             + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
-
+    else:
+        config = json.loads(config_path.read_text())
+        if config.get("kit_version") != version:
+            say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
+            config["kit_version"] = version
+            config_path.write_text(json.dumps(config, indent=2) + "\n")
     rules = (kit / "AGENT_RULES.md").read_text()
     put_block(target / "AGENTS.md", rules)
     say("AGENTS.md: spec rules block (Codex, Cursor, Copilot, Gemini and others read this)")

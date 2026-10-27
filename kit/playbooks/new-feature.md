@@ -21,7 +21,7 @@ Copy the template. Keep the sections in this order:
 3. **Decisions that block implementation.** An options table (option, meaning, code effect). If one exists,
    the first task in `tasks.md` is the gate that records the decision.
 4. **Requirements.** A table of `[REQ-<FEAT>-NN]`, requirement and acceptance. The acceptance must be testable:
-   name the test or the observable behaviour.
+   name the test or the observable behaviour. EARS phrasing ("When …, the system shall …") helps; see `.specs/kit/docs/spec-driven.md`.
 5. **Behaviour deltas** (refactors): every observable change, with who signed it off and when.
 6. **Out of scope**, then **Open decisions**.
 

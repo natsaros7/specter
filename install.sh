@@ -1,5 +1,5 @@
 #!/bin/sh
-# spec-first-kit installer. Copies the kit into <target>/.specs/kit/ and wires the agents it finds.
+# specter installer. Copies the kit into <target>/.specs/kit/ and wires the agents it finds.
 #
 #   ./install.sh <target>                 install or upgrade (safe to re-run)
 #   ./install.sh --user                   add the spec-first skill at user level for every agent detected

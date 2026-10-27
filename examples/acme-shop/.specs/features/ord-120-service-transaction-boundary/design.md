@@ -5,12 +5,12 @@
 ```mermaid
 flowchart LR
   subgraph Before
-    C1[Controller / gRPC service<br/>@Transactional] -- "Entity in/out" --> S1[Service]
-    C1 -- "walks lazy relations" --> M1[Mapper in adapter]
+    C1["Controller / gRPC service<br/>@Transactional"] -- "Entity in/out" --> S1["Service"]
+    C1 -- "walks lazy relations" --> M1["Mapper in adapter"]
   end
   subgraph After
-    C2[Controller / gRPC service<br/>no tx] -- "command / DTO" --> S2[Service<br/>@Transactional]
-    S2 -- "maps inside tx" --> M2[Entity to DTO mapper<br/>in service]
+    C2["Controller / gRPC service<br/>no tx"] -- "command / DTO" --> S2["Service<br/>@Transactional"]
+    S2 -- "maps inside tx" --> M2["Entity to DTO mapper<br/>in service"]
   end
 ```
 
