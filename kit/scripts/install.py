@@ -7,8 +7,55 @@ import sys
 from pathlib import Path
 
 BEGIN, END = "<!-- spec-first-kit:begin -->", "<!-- spec-first-kit:end -->"
-KIT_PARTS = ("AGENT_RULES.md", "playbooks", "templates", "scripts", "hooks", "docs")
+KIT_PARTS = ("AGENT_RULES.md", "playbooks", "templates", "roles", "scripts", "hooks", "docs")
 HOOK_TAG = "spec-first-kit"
+ROLE_TAG = ".specs/kit/roles/"
+
+
+HOME = Path.home()
+# name: (project signals, CLI names, user dirs, project skill dir, user skill dir)
+AGENTS = {
+    "claude": ([".claude", "CLAUDE.md"], ["claude"], [".claude"], ".claude/skills", ".claude/skills"),
+    "codex": ([".codex", ".agents"], ["codex"], [".codex"], ".agents/skills", ".agents/skills"),
+    "cursor": ([".cursor"], ["cursor-agent", "cursor"], [".cursor"], ".cursor/skills", ".cursor/skills"),
+    "gemini": ([".gemini", "GEMINI.md"], ["gemini"], [".gemini"], ".gemini/skills", ".gemini/skills"),
+    "copilot": ([".github/copilot-instructions.md", ".github/skills"], ["copilot"], [".copilot"], ".github/skills", ".copilot/skills"),
+}
+
+
+def detect_agents(target, args):
+    forced = [a.split("=", 1)[1] for a in args if a.startswith("--agents=")]
+    if forced:
+        return [a for a in forced[0].split(",") if a in AGENTS]
+    # Files in the project say what the team uses; CLIs and home folders only say what this machine has.
+    in_project = [n for n, (signals, _, _, _, _) in AGENTS.items() if any((target / s).exists() for s in signals)]
+    if in_project:
+        return in_project
+    return MACHINE + [n for n, (_, clis, user_dirs, _, _) in AGENTS.items()
+            if any(shutil.which(c) for c in clis) or any((HOME / d).is_dir() for d in user_dirs)]
+
+
+MACHINE = []  # marker: detect_agents fell back to what is installed on this machine
+
+
+def detection_source(target):
+    forced = any(a.startswith("--agents=") for a in ARGS)
+    in_project = any((target / s).exists() for signals, _, _, _, _ in AGENTS.values() for s in signals)
+    return "override" if forced else ("project files" if in_project else "this machine (no agent files in the project)")
+
+
+BUILD_FILES = ("pom.xml", "build.gradle", "build.gradle.kts", "package.json", "go.mod", "Cargo.toml",
+               "pyproject.toml", "setup.py", "composer.json", "Gemfile", "mix.exs")
+SOURCE_DIRS = ("src", "app", "lib", "cmd", "internal", "pkg")
+
+
+def detect_code_globs(target):
+    """Source folders at the root and in first-level modules (anything holding a build file or a child repo)."""
+    globs = [d + "/*" for d in SOURCE_DIRS if (target / d).is_dir()]
+    for module in sorted(p for p in target.iterdir() if p.is_dir() and not p.name.startswith(".")):
+        if any((module / b).exists() for b in BUILD_FILES) or (module / ".git").exists():
+            globs += [module.name + "/" + d + "/*" for d in SOURCE_DIRS if (module / d).is_dir()]
+    return globs
 
 
 def say(msg):
@@ -48,7 +95,7 @@ def nested_repos(target):
 def install_skill(kit_home, dest_dir):
     dest = dest_dir / "spec-first"
     dest.mkdir(parents=True, exist_ok=True)
-    src = (kit_home / "kit/adapters/claude/skills/spec-first/SKILL.md").read_text()
+    src = (kit_home / "kit/skill/spec-first/SKILL.md").read_text()
     (dest / "SKILL.md").write_text(src.replace("{{KIT_HOME}}", str(kit_home)))
 
 
@@ -65,7 +112,7 @@ def install_hook(target, kit_rules_note):
     say("git pre-commit hook: spec-sync check (" + kit_rules_note + ")")
 
 
-def install(kit_home, target, with_agents):
+def install(kit_home, target):
     specs = target / ".specs"
     kit = specs / "kit"
     print("Installing spec-first-kit into " + str(specs))
@@ -75,7 +122,7 @@ def install(kit_home, target, with_agents):
             shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
-    say(".specs/kit/: playbooks, templates, scripts, docs")
+    say(".specs/kit/: rules, playbooks, templates, roles, scripts, docs")
 
     config_path = specs / "spec-kit.json"
     top = git(target, "rev-parse", "--show-toplevel").stdout.strip()
@@ -85,36 +132,40 @@ def install(kit_home, target, with_agents):
         config = json.loads((kit_home / "kit/spec-kit.json").read_text())
         if repos or not is_repo:
             config["spec_sync"] = "off"
+        config["code_globs"] = detect_code_globs(target) or config["code_globs"]
         config_path.write_text(json.dumps(config, indent=2) + "\n")
-        say(".specs/spec-kit.json (defaults; setup tunes it)")
+        say(".specs/spec-kit.json (code paths: " + ", ".join(config["code_globs"][:4])
+            + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
 
     rules = (kit / "AGENT_RULES.md").read_text()
     put_block(target / "AGENTS.md", rules)
     say("AGENTS.md: spec rules block (Codex, Cursor, Copilot, Gemini and others read this)")
 
-    claude = (target / "CLAUDE.md").exists() or (target / ".claude").is_dir() or shutil.which("claude")
-    if claude:
+    agents = detect_agents(target, ARGS)
+    say("agents (" + detection_source(target) + "): " + (", ".join(agents) or "none; AGENTS.md alone works with most agents"))
+    for name in agents:
+        install_skill(kit_home, target / AGENTS[name][3])
+        say("skill spec-first -> " + AGENTS[name][3] + "/spec-first/")
+    if "claude" in agents:
         put_block(target / "CLAUDE.md", rules)
-        install_skill(kit_home, target / ".claude/skills")
-        say("CLAUDE.md block + .claude/skills/spec-first (/spec-first)")
-        if with_agents:
-            for agent in sorted((kit_home / "kit/adapters/claude/agents").glob("*.md")):
-                dst = target / ".claude/agents" / agent.name
-                if dst.exists():
-                    say(".claude/agents/" + agent.name + " exists: kept yours")
-                    continue
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(agent, dst)
-            say(".claude/agents: planner / generator / reviewer")
-    if (target / ".cursor").is_dir():
+        say("CLAUDE.md: spec rules block")
+        for agent in sorted((kit_home / "kit/adapters/claude/agents").glob("*.md")):
+            dst = target / ".claude/agents" / agent.name
+            if dst.exists() and ROLE_TAG not in dst.read_text():
+                say(".claude/agents/" + agent.name + " exists and is yours: kept it")
+                continue
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(agent, dst)
+        say(".claude/agents: planner / generator / reviewer (sub-agents for .specs/kit/roles/)")
+    if "cursor" in agents and (target / ".cursor").is_dir():
         header = (kit_home / "kit/adapters/cursor/spec-first.mdc").read_text()
         (target / ".cursor/rules").mkdir(parents=True, exist_ok=True)
         (target / ".cursor/rules/spec-first.mdc").write_text(header + rules)
         say(".cursor/rules/spec-first.mdc")
     if put_block(target / ".github/copilot-instructions.md", rules, create=False):
-        say(".github/copilot-instructions.md block")
+        say(".github/copilot-instructions.md: spec rules block")
     if put_block(target / "GEMINI.md", rules, create=False):
-        say("GEMINI.md block")
+        say("GEMINI.md: spec rules block")
 
     if repos:
         say("multi-repo workspace (" + ", ".join(repos[:5]) + ("…" if len(repos) > 5 else "") + "): "
@@ -124,8 +175,11 @@ def install(kit_home, target, with_agents):
     else:
         say("not a git repo: no hook. Run `git init` here if you want the specs versioned.")
 
-    print("\nDone. Next: open your agent in " + str(target) + " and say:\n"
-          "  \"Set up the spec system: follow .specs/kit/playbooks/setup.md\"")
+    if "--from-go" in ARGS:
+        print("\nDone. Continue with .specs/kit/playbooks/setup.md (GO.md step 5).")
+    else:
+        print("\nDone. Next: open your agent in " + str(target) + " and say:\n"
+              "  \"Set up the spec system: follow .specs/kit/playbooks/setup.md\"")
 
 
 def uninstall(target):
@@ -135,19 +189,31 @@ def uninstall(target):
         drop_block(target / f)
     for f in (".cursor/rules/spec-first.mdc",):
         (target / f).unlink() if (target / f).exists() else None
-    shutil.rmtree(target / ".claude/skills/spec-first", ignore_errors=True)
+    for _, _, _, skill_dir, _ in AGENTS.values():
+        shutil.rmtree(target / skill_dir / "spec-first", ignore_errors=True)
+    for agent in (target / ".claude/agents").glob("*.md"):
+        if ROLE_TAG in agent.read_text():
+            agent.unlink()
     hooks = git(target, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip()
     hook = Path(hooks) / "pre-commit" if hooks else None
     if hook and hook.exists() and HOOK_TAG in hook.read_text():
         hook.unlink()
-    print("Removed the kit, marker blocks, skill and hook. Your specs in .specs/ and any .claude/agents are kept.")
+    print("Removed the kit, marker blocks, skill, role agents and hook. Your specs in .specs/ are kept.")
+
+
+ARGS = []
 
 
 def main(argv):
     kit_home, args = Path(argv[0]), argv[1:]
-    if args == ["--user"]:
-        install_skill(kit_home, Path.home() / ".claude/skills")
-        print("Installed /spec-first into ~/.claude/skills. In any project, say: \"install spec-first here\".")
+    global ARGS
+    ARGS = args
+    if "--user" in args:
+        agents = detect_agents(Path.cwd(), args)
+        for name in agents:
+            install_skill(kit_home, HOME / AGENTS[name][4])
+            print("  skill spec-first -> ~/" + AGENTS[name][4] + "/spec-first/")
+        print("In any project, ask your agent to \"install spec-first here\"." if agents else "No agents detected; use --agents=codex,claude")
         return 0
     targets = [a for a in args if not a.startswith("--")]
     if len(targets) != 1:
@@ -160,10 +226,14 @@ def main(argv):
     if target == kit_home:
         print("Target is the kit itself. Point it at your project.")
         return 2
+    if "--detect" in args:
+        agents = detect_agents(target, args)
+        print("agents: " + (",".join(agents) or "none") + "\nsource: " + detection_source(target))
+        return 0
     if "--uninstall" in args:
         uninstall(target)
     else:
-        install(kit_home, target, "--with-agents" in args)
+        install(kit_home, target)
     return 0
 
 

@@ -12,8 +12,8 @@ agent: <tool and model that ran setup>
 
 ## Domain map (draft)
 
-| Domain | Path | Kind | Contracts | Depends on | Confidence |
-|---|---|---|---|---|---|
+| Domain | Path | Kind | Contracts | Depends on | REQ prefix | Confidence |
+|---|---|---|---|---|---|---|
 
 ## Interview log
 

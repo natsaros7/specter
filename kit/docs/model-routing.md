@@ -33,13 +33,14 @@ pass or fail everywhere else. This works with any vendor: map the tiers to whate
 
 ## Claude Code wiring
 
-`install.sh <project> --with-agents` installs three tier agents into `.claude/agents/`, each pinned in its
-frontmatter: `planner` (deep), `generator` (standard), `reviewer` (standard, read-only on code). The main session
-plans; `generator` implements one task; `reviewer` reviews the diff; `planner` takes escalations and security reviews.
+The roles are generic briefs in `.specs/kit/roles/`. When the installer sees Claude Code, it also wires them in as native
+sub-agents in `.claude/agents/`, each pinned in its frontmatter: `planner` (deep), `generator` (standard), `reviewer`
+(standard, read-only on code). The main session plans; `generator` implements one task; `reviewer` reviews the diff;
+`planner` takes escalations and security reviews.
 
 ## Other agents
 
 Most agentic CLIs let you choose the model per session or per profile (for example Codex profiles in
 `~/.codex/config.toml`, or Cursor's per-chat model picker). Map the three tiers to three profiles and switch by step.
-If your tool has sub-agents, mirror the planner/generator/reviewer split. If it doesn't, run review in a **new
+If your tool has sub-agents, point them at the role briefs in `.specs/kit/roles/`. If it doesn't, run review in a **new
 session** so the reviewer doesn't share the implementer's context.

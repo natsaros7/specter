@@ -2,7 +2,11 @@
 """Script gate for the spec layer. Structural only: no AI and no network. Python 3.8+, stdlib only.
 
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [feature-dir-name ...]
+       python3 .specs/kit/scripts/spec_lint.py [--specs DIR] --cites    check `path:line` citations only
        default DIR = the .specs/ this script is installed in; default features = all
+
+--cites resolves every `path:line` / `path:a-b` in backticks against the project (the folder holding .specs/).
+      Elided paths (`.../web/Foo.java:12`) match by suffix. FAIL: no such file, ambiguous, past EOF, or a blank cited line.
 
 FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature folder name is not kebab-case;
       a feature defines no [REQ-..]; a defined REQ is absent from design.md or tasks.md; a REQ is
@@ -12,6 +16,7 @@ WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missi
 """
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -88,10 +93,54 @@ def broken_links(specs):
     return broken
 
 
+CITE = re.compile(r"`([^`\s]*?[\w-]+\.[A-Za-z0-9]+):(\d+)(?:-(\d+))?`")
+
+
+def check_cites(specs):
+    root = specs.parent
+    def ls(repo, prefix=""):
+        out = subprocess.run(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
+                             capture_output=True, text=True).stdout.splitlines()
+        return [prefix + f for f in out]
+    files = ls(root) + [f for child in sorted(root.glob("*/.git")) for f in ls(child.parent, child.parent.name + "/")]
+    files = files or [str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()]
+    problems, count = [], 0
+    for md in sorted(specs.rglob("*.md")):
+        if "kit" in md.relative_to(specs).parts[:1]:
+            continue
+        for path, start, end in CITE.findall(FENCE.sub("", md.read_text())):
+            count += 1
+            where = str(md.relative_to(specs)) + ": `" + path + ":" + start + (("-" + end) if end else "") + "`"
+            tail = re.split(r"\.\.\./|…/", path)[-1].lstrip("./")
+            if (root / path).is_file():
+                target = root / path
+            else:
+                hits = [f for f in files if f == tail or f.endswith("/" + tail)]
+                parts = md.relative_to(specs).parts
+                if len(hits) > 1 and parts[0] == "domains":
+                    hits = [f for f in hits if parts[1] in f.split("/")[0]] or hits
+                if len(hits) != 1:
+                    problems.append(where + (" ambiguous: " + ", ".join(hits[:3]) if hits else " no such file"))
+                    continue
+                target = root / hits[0]
+            lines = target.read_text(errors="replace").splitlines()
+            last = int(end or start)
+            if last > len(lines):
+                problems.append(where + " past end of file (" + str(len(lines)) + " lines)")
+            elif not lines[int(start) - 1].strip():
+                problems.append(where + " cited line is blank")
+    for p in problems:
+        print("FAIL cite " + p)
+    print("spec-lint --cites: " + str(len(problems)) + " FAIL of " + str(count) + " citation(s)")
+    return 1 if problems else 0
+
+
 def main(argv):
     specs = Path(__file__).resolve().parents[2]
     if argv[:1] == ["--specs"]:
         specs, argv = Path(argv[1]).resolve(), argv[2:]
+    if "--cites" in argv:
+        return check_cites(specs)
     config = load_config(specs)
     features_dir = specs / "features"
     trace_path = specs / "system" / "traceability.md"

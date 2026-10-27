@@ -74,7 +74,8 @@ python3 .specs/kit/scripts/spec_sync_check.py   # code changed without a spec ch
 ├── AGENTS.md                      # + marker block with the rules (created if missing)
 ├── CLAUDE.md, GEMINI.md, .github/copilot-instructions.md   # + same block, only if the file/agent is present
 ├── .cursor/rules/spec-first.mdc   # only if .cursor/ exists
-├── .claude/skills/spec-first/     # only if you use Claude Code
+├── <agent>/skills/spec-first/     # one per agent detected: .agents/ (Codex), .claude/, .cursor/, .gemini/, .github/
+├── .claude/agents/                # Claude Code only: planner/generator/reviewer sub-agents
 └── .specs/
     ├── spec-kit.json              # settings (setup tunes them)
     ├── kit/                       # playbooks, templates, scripts, docs (replaced on upgrade)
@@ -97,5 +98,5 @@ but keeps your specs. Requirements: `python3` (3.8+) and `git`. Nothing else.
 
 - [`kit/docs/model-routing.md`](kit/docs/model-routing.md): which model tier runs which step, and when to escalate.
 - [`kit/docs/review-loop.md`](kit/docs/review-loop.md): worker → gate → fresh-context reviewer → one retry → human.
-- Claude Code: `install.sh <target> --with-agents` adds pinned `planner` / `generator` / `reviewer` agents;
-  `install.sh --user` adds `/spec-first` to all your projects.
+- [`kit/roles/`](kit/roles/README.md): the generic planner / generator / reviewer roles. Claude Code gets them as native sub-agents automatically.
+- `install.sh --user` adds the `spec-first` skill at user level for every agent detected.

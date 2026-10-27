@@ -25,7 +25,8 @@ At `PROJECT`, find out:
 
 1. **Layout:** a git repo? A folder of several repos (`ls -d */.git`)? Is `.specs/` already there?
    (If `.specs/kit/` exists, this is an **upgrade**: say so, and the install step just refreshes the kit.)
-2. **Agents in use:** `AGENTS.md`, `CLAUDE.md`/`.claude/`, `.cursor/`, `.github/copilot-instructions.md`, `GEMINI.md`.
+2. **Agents in use:** run `KIT/install.sh <path> --detect`. It prints the agents it would wire (a skill for each, plus
+   rule files) and whether it found them in the **project files** or only on **this machine**.
 3. **Quick scan:** the deployables (build files, Dockerfiles, charts), the contracts (OpenAPI, proto, topics),
    any docs/ADRs, and the CI file. Skim only. The deep scan happens in setup.
 
@@ -38,7 +39,7 @@ Show this table, filled in:
 | Layout | single repo / monorepo / workspace of N repos | Install at `<path>`; git hook yes/no |
 | Parts I see | e.g. 3 services, 1 UI, 1 shared lib | Become `domains/` (you approve the list in setup) |
 | Requirements | e.g. Jira keys in commits / none found | I'll ask in setup |
-| Agent files | e.g. AGENTS.md (new), CLAUDE.md (block added) | Marker block only; your text untouched |
+| Agents | e.g. Codex + Claude Code (from project files) | `spec-first` skill for each; `AGENTS.md` (+ `CLAUDE.md` …) marker block only, your text untouched |
 
 Then list exactly what the installer creates or changes (see "What gets installed" in `KIT/README.md`) and give your
 recommendation in one line. If it's a poor fit, say why.
@@ -47,35 +48,30 @@ Ask:
 
 > **Install it in `<path>`?**
 > 1. yes **[default]**
-> 2. yes, and add the Claude Code helper agents *(only offer this if Claude Code is in use)*
-> 3. not now
+> 2. not now
 
-If the user picks 3, stop politely. You're done.
+Only when `--detect` said **this machine**, add to the same question: *"…for `<agents>`? If you only use some of them,
+name them."* Pass whatever they name as `--agents=a,b`. When the source is **project files**, don't ask about agents.
+
+If the user picks 2, stop politely. You're done.
 
 **Where to install:** a single repo or monorepo → its root. Several repos for one system → the folder that holds them.
 If that folder isn't a git repo, recommend `git init` there with the child repos listed in `.gitignore`, and ask before doing it.
 
 ## Step 4: Install
 
-Run `KIT/install.sh <path>` (add `--with-agents` for option 2). Show the user the "Done" lines of its output, nothing more.
-If it fails, show the error and stop.
+Run `KIT/install.sh <path> --from-go` (plus `--agents=…` if the user named agents). Show its output as a short
+bullet list. If it fails, show the error and stop.
 
 ## Step 5: Setup interview (continue straight on, no extra confirmation)
 
-Tell the user: *"Installed. Now I'll learn the project. I'll ask a few questions as I go, usually 5–10 in total."*
-Then follow `<path>/.specs/kit/playbooks/setup.md` from Phase 0 to the end. It includes one approval: the domain map.
+Tell the user: *"Installed. Now I'll learn the project. Expect 4–8 questions in 1–2 rounds, then one approval of the plan."*
+Then follow `<path>/.specs/kit/playbooks/setup.md` from Phase 0 to the end.
 
 If the session or context runs out, setup can resume. Tell the user they can say "continue setup" in a fresh session.
 
 ## Step 6: Wrap up
 
-Report in at most 8 lines: what was created, the open UNKNOWNs, the top 3 drift findings, and how to use it from now on:
-
-- *"Spec this: <change>"* → a feature spec before code
-- *"Next task on <feature>"* → implement one task
-- *"Sync specs"* → after a change lands
-- *"Refresh the specs"* → now and then
-
-Finally ask: **"Commit the new spec files? 1. yes [default] 2. no, I'll review first."**
-On yes, commit only `.specs/` and the agent files the installer touched, with the message
-`docs(specs): add spec-first system`.
+Give the setup report from Phase 6 of `setup.md`. Don't add a second report. Then ask:
+**"Commit the new spec files? 1. yes [default] 2. no, I'll review first."**
+On yes, commit only `.specs/` and the files the installer listed, with the message `docs(specs): add spec-first system`.
