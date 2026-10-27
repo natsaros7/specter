@@ -1,6 +1,8 @@
-# 👻 specter
+<p align="center"><img src="docs/assets/specter-logo.svg" width="160" alt="specter logo: a friendly ghost made of a spec page"></p>
 
-**Specs that don't go stale.** A spec-first workflow for *any* AI coding agent.
+<h1 align="center">specter</h1>
+
+<p align="center"><b>Specs that don't go stale.</b> A spec-first workflow for <i>any</i> AI coding agent.</p>
 
 ## Clone it. Paste one line. Your agent does the rest.
 

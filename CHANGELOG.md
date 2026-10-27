@@ -17,4 +17,4 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 - Scripts (stdlib Python 3.8+): `spec_lint.py` (structure, REQ traceability, links, `--cites` citation checker) and `spec_sync_check.py` (pre-commit / range spec-sync gate).
 - Worked example `examples/acme-shop/` with a small decision-gated change and a cross-cutting refactor.
 - MIT license.
-- Animated README diagrams (`docs/assets/*.svg`) and `tests/selftest.sh`.
+- Logo and animated README diagrams (`docs/assets/*.svg`) and `tests/selftest.sh`.

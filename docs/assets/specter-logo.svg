@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="specter: a ghost made of a spec page">
+  <style>
+    .float { animation: float 4s ease-in-out infinite; }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-7px); } }
+    .shadow { animation: shadow 4s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+    @keyframes shadow { 0%, 100% { transform: scaleX(1); opacity: .35; } 50% { transform: scaleX(.82); opacity: .2; } }
+    .eye { animation: blink 5s infinite; transform-box: fill-box; transform-origin: center; }
+    @keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+    .tick { stroke-dasharray: 60; animation: tick 5s ease-out infinite; }
+    @keyframes tick { 0% { stroke-dashoffset: 0; } 4% { stroke-dashoffset: 60; } 20%, 100% { stroke-dashoffset: 0; } }
+    @media (prefers-reduced-motion: reduce) { .float, .shadow, .eye, .tick { animation: none; } }
+  </style>
+  <ellipse class="shadow" cx="128" cy="238" rx="62" ry="7" fill="#1F2A5A"/>
+  <g class="float">
+    <!-- page body with ghost hem -->
+    <path d="M62 82 Q62 46 98 46 H166 L204 84 V198
+             Q204 216 190 216 Q178 216 172 204 Q166 192 156 192 Q146 192 140 204 Q134 216 122 216
+             Q110 216 104 204 Q98 192 88 192 Q78 192 72 204 Q68 212 62 212 Z"
+          fill="#EDEBFF" stroke="#1F2A5A" stroke-width="8" stroke-linejoin="round"/>
+    <!-- dog-ear -->
+    <path d="M166 46 V72 Q166 84 178 84 H204 Z" fill="#C9C3FF" stroke="#1F2A5A" stroke-width="8" stroke-linejoin="round"/>
+    <!-- eyes -->
+    <ellipse class="eye" cx="106" cy="106" rx="9" ry="12" fill="#1F2A5A"/>
+    <ellipse class="eye" cx="152" cy="106" rx="9" ry="12" fill="#1F2A5A"/>
+    <circle cx="109" cy="101" r="3" fill="#EDEBFF"/>
+    <circle cx="155" cy="101" r="3" fill="#EDEBFF"/>
+    <path d="M118 124 Q129 132 140 124" fill="none" stroke="#1F2A5A" stroke-width="6" stroke-linecap="round"/>
+    <!-- spec lines, last one checked -->
+    <path d="M90 142 H170" stroke="#1F2A5A" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+    <path d="M90 162 H146" stroke="#1F2A5A" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+    <path class="tick" d="M150 166 L161 177 L182 152" fill="none" stroke="#3FD69A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
