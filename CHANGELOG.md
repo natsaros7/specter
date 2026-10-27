@@ -5,6 +5,9 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+### Added
+- `docs/assets/social-preview.svg`: source of the GitHub social preview card (render with `rsvg-convert -w 1280 -h 640`).
+
 ## [0.1.1] - 2026-10-27
 
 From the first non-Claude dry run (Antigravity CLI, Gemini).

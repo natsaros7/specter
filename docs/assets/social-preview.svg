@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640">
+<rect width="1280" height="640" fill="#F6F5FF"/>
+<rect x="0" y="600" width="1280" height="40" fill="#1F2A5A"/>
+<g transform="translate(110,110) scale(1.6)">
+  <ellipse class="shadow" opacity=".3" cx="128" cy="238" rx="62" ry="7" fill="#1F2A5A"/>
+  <g class="float">
+    <!-- page body with ghost hem -->
+    <path d="M62 82 Q62 46 98 46 H166 L204 84 V198
+             Q204 216 190 216 Q178 216 172 204 Q166 192 156 192 Q146 192 140 204 Q134 216 122 216
+             Q110 216 104 204 Q98 192 88 192 Q78 192 72 204 Q68 212 62 212 Z"
+          fill="#EDEBFF" stroke="#1F2A5A" stroke-width="8" stroke-linejoin="round"/>
+    <!-- dog-ear -->
+    <path d="M166 46 V72 Q166 84 178 84 H204 Z" fill="#C9C3FF" stroke="#1F2A5A" stroke-width="8" stroke-linejoin="round"/>
+    <!-- eyes -->
+    <ellipse class="eye" cx="106" cy="106" rx="9" ry="12" fill="#1F2A5A"/>
+    <ellipse class="eye" cx="152" cy="106" rx="9" ry="12" fill="#1F2A5A"/>
+    <circle cx="109" cy="101" r="3" fill="#EDEBFF"/>
+    <circle cx="155" cy="101" r="3" fill="#EDEBFF"/>
+    <path d="M118 124 Q129 132 140 124" fill="none" stroke="#1F2A5A" stroke-width="6" stroke-linecap="round"/>
+    <!-- spec lines, last one checked -->
+    <path d="M90 142 H170" stroke="#1F2A5A" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+    <path d="M90 162 H146" stroke="#1F2A5A" stroke-width="8" stroke-linecap="round" opacity=".55"/>
+    <path class="tick" d="M150 166 L161 177 L182 152" fill="none" stroke="#3FD69A" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</g>
+<text x="590" y="285" font-family="Helvetica Neue, Arial, sans-serif" font-size="118" font-weight="700" fill="#1F2A5A">specter</text>
+<text x="594" y="360" font-family="Helvetica Neue, Arial, sans-serif" font-size="44" fill="#1F2A5A">Specs that don't go stale.</text>
+<text x="594" y="420" font-family="Helvetica Neue, Arial, sans-serif" font-size="30" fill="#5A6390">A spec-first workflow for any AI coding agent.</text>
+<text x="594" y="470" font-family="Menlo, monospace" font-size="26" fill="#2FA87A">clone · paste one line · go</text>
+</svg>
