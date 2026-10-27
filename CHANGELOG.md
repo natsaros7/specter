@@ -6,7 +6,22 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 ## [Unreleased]
 
 ### Added
+- `spec_report.py`: one self-contained HTML page (no JavaScript, light and dark) with feature progress, open drift, coverage and citation health; written to `.specs/report.html`.
+- `spec_lint.py --json` for the default and `--cites` modes (same exit codes).
+- `--cites` notations: repo prefix (`<repo>:path:12`), several ranges (`path:12-20,31`), GitHub style (`path#L12-L20`); each range is checked on its own.
+- `--cites` indexes git repos two levels below the project (`charts/<chart>/.git`).
+- Drift aging: unresolved Drift Register rows (any table with a `Drift` column) older than `drift_max_age_days` (default 90) WARN; open rows without a `Logged` date (or no `Logged` column) WARN once per file.
+- `spec-kit.json` keys `cite_aliases`, `cite_ignore_globs`, `drift_max_age_days`.
+- Installer writes `.specs/.gitignore` with `report.html`; `--uninstall` removes that line.
 - `docs/assets/social-preview.svg`: source of the GitHub social preview card (render with `rsvg-convert -w 1280 -h 640`).
+
+### Changed
+- Multi-range citations (`path:12-20,31`) used to be skipped silently; they are now checked, so existing projects can see new `--cites` failures.
+- `--cites` ambiguity can be resolved with `cite_ignore_globs`; a citation can name its repo.
+- `spec_lint.py` is split into collect and print (`lint_all`, `cites`) so the report reuses the checks.
+
+### Fixed
+- `--cites`: an elided path (`head/.../tail`) now has to contain `head` before `tail`, so it no longer matches every copy of `tail`.
 
 ## [0.1.1] - 2026-10-27
 

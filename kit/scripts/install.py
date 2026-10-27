@@ -79,6 +79,19 @@ def drop_block(path):
             path.unlink()
 
 
+def ensure_line(path, line):
+    lines = path.read_text().splitlines() if path.exists() else []
+    if line not in lines:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join(lines + [line]) + "\n")
+
+
+def drop_line(path, line):
+    if path.exists():
+        lines = [l for l in path.read_text().splitlines() if l != line]
+        path.write_text("\n".join(lines) + "\n") if lines else path.unlink()
+
+
 def git(target, *args):
     return subprocess.run(["git", "-C", str(target)] + list(args), capture_output=True, text=True)
 
@@ -140,6 +153,7 @@ def install(kit_home, target):
             say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
             config["kit_version"] = version
             config_path.write_text(json.dumps(config, indent=2) + "\n")
+    ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists():
         profile.parent.mkdir(parents=True, exist_ok=True)
@@ -198,6 +212,7 @@ def install(kit_home, target):
 def uninstall(target):
     specs = target / ".specs"
     shutil.rmtree(specs / "kit", ignore_errors=True)
+    drop_line(specs / ".gitignore", "report.html")
     for f in ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md", "GEMINI.md"):
         drop_block(target / f)
     for f in (".cursor/rules/spec-first.mdc",):

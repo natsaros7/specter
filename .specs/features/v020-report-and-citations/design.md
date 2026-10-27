@@ -37,7 +37,7 @@ Order: exact path → prefix scope → suffix match → domain rule → ignore g
 ## Drift aging — [REQ-V020-05]
 
 `drift_rows(specs)` scans `*.md` outside `kit/` with fenced code removed. A table starts at a header row whose cells, after
-lowercasing and stripping, include `drift` and `logged`. Each data row maps to `{file, id: first cell, sev: "sev" cell or
+lowercasing and stripping, include `drift` (`logged` optional). Each data row maps to `{file, id: first cell, sev: "sev" cell or
 "", logged, age_days, resolved: "RESOLVED" in row}`. The date is the first `\d{4}-\d{2}-\d{2}` in the Logged cell, else
 `None`. Warnings are emitted only for unresolved rows; the exit code is unchanged. The `null` value comes from
 `spec-kit.json`; the default is in `DEFAULTS`.

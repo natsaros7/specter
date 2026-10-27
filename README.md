@@ -143,8 +143,21 @@ If a skill path turns out to be wrong for your tool, nothing breaks: the `AGENTS
 ```bash
 python3 .specs/kit/scripts/spec_lint.py           # files present, REQ traced both ways, links resolve
 python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation exists and points at real code
+python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdout (also with --cites)
+python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 ```
+
+Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
+Git repos up to two levels below the project are indexed. The report goes to `.specs/report.html` (git-ignored).
+
+New `.specs/spec-kit.json` keys (all optional):
+
+| Key | Default | Effect |
+|---|---|---|
+| `cite_aliases` | `{}` | Repo prefix to folder, e.g. `{"NS": "tools/load-sim"}` |
+| `cite_ignore_globs` | `[]` | fnmatch on the root-relative path; drops these files when a citation matches several |
+| `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 
 ## Example
 

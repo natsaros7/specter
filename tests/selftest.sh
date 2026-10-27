@@ -21,6 +21,7 @@ grep -q "keep me" "$P/CLAUDE.md" || fail "user CLAUDE.md content lost"
 for f in .agents/skills/spec-first/SKILL.md .specs/kit/roles/reviewer.md .claude/agents/reviewer.md .specs/kit/playbooks/setup.md .specs/spec-kit.json .cursor/rules/spec-first.mdc .claude/skills/spec-first/SKILL.md .git/hooks/pre-commit; do
   [ -e "$P/$f" ] || fail "missing $f"
 done
+grep -qx "report.html" "$P/.specs/.gitignore" && [ "$(grep -c report.html "$P/.specs/.gitignore")" = 1 ] || fail ".specs/.gitignore line"
 [ ! -e "$P/.specs/kit/scripts/install.py" ] || fail "installer copied into project"
 
 mkdir -p "$P/.claude/agents"; echo "mine" > "$P/.claude/agents/planner.md"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
@@ -63,10 +64,78 @@ python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null |
 printf '`f.txt:2`\n' > "$R/.specs/domains/x/design.md"
 ! python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null || fail "blank single line accepted"
 
+echo "5f. citations: prefix, alias, multi-range, #L, nested repo, ignore globs"
+L="python3 $KIT/kit/scripts/spec_lint.py"
+V="$TMP/v020"; mkdir -p "$V/.specs/domains/x" "$V/tools/svc/core" "$V/tools/sim" "$V/mirror/core"; gitq -C "$V" init
+gitq -C "$V/tools/svc" init; gitq -C "$V/tools/sim" init
+seq 1 30 > "$V/tools/svc/core/a.txt"; seq 1 30 > "$V/tools/sim/a.txt"; seq 1 30 > "$V/tools/sim/only.txt"
+printf '1\n\n\n4\n' > "$V/tools/svc/core/gaps.txt"; seq 1 5 > "$V/mirror/core/m.txt"; seq 1 5 > "$V/tools/svc/m.txt"
+gitq -C "$V" add mirror; gitq -C "$V/tools/svc" add .; gitq -C "$V/tools/sim" add .
+D="$V/.specs/domains/x/design.md"; cites() { printf '%s\n' "$1" > "$D"; $L --specs "$V/.specs" --cites; }
+cites '`svc:core/a.txt:5` `sim:a.txt:30` `core/a.txt:1-3,10,20-25` `core/a.txt#L4` `core/a.txt#L4-L9` `core/a.txt#L4-9`' >/dev/null || fail "(a,c,d) good citations rejected"
+cites '`core/a.txt:1-3,31,40-44`' | grep -q "range 31: past end of file" || fail "(b) bad range not named"
+cites '`core/gaps.txt:1,2-3`' | grep -q "range 2-3: cited lines are blank" || fail "(b) blank range not named"
+cites '`nope:a.txt:1`' | grep -q "unknown repo prefix 'nope'" || fail "(a) unknown prefix passed"
+cites '`a.txt:1`' | grep -q "ambiguous" || fail "(e) ambiguity not reported"
+printf '{"cite_aliases": {"NS": "tools/sim"}, "cite_ignore_globs": ["tools/sim/*"]}\n' > "$V/.specs/spec-kit.json"
+printf '{"cite_aliases": {"NS": "tools/sim"}, "cite_ignore_globs": ["tools/sim/*"]}\n' > "$V/.specs/spec-kit.json"
+cites '`NS:only.txt:2` `a.txt:1`' >/dev/null || fail "(a,e) alias or ignore-glob tie-break"
+cites '`m.txt:2`' | grep -q "ambiguous" || fail "(e) unrelated glob resolved an ambiguity"
+printf '{"cite_ignore_globs": ["mirror/*"]}\n' > "$V/.specs/spec-kit.json"
+cites '`m.txt:1`' >/dev/null || fail "(e) tie-break"
+printf '{"cite_ignore_globs": ["*m.txt"]}\n' > "$V/.specs/spec-kit.json"
+cites '`m.txt:1`' | grep -q "ambiguous" || fail "(e) tie-break dropped every candidate"
+rm "$V/.specs/spec-kit.json"
+
+echo "5f2. elided paths keep their head"
+E="$TMP/elide"; mkdir -p "$E/.specs/domains/x" "$E/svc-a/x" "$E/svc-b/x"; gitq -C "$E" init
+echo c > "$E/svc-a/x/conf.yml"; echo c > "$E/svc-b/x/conf.yml"; gitq -C "$E" add .
+printf '`svc-a/.../conf.yml:1`\n' > "$E/.specs/domains/x/design.md"
+$L --specs "$E/.specs" --cites >/dev/null || fail "head-elided path did not resolve"
+printf '`.../conf.yml:1`\n' > "$E/.specs/domains/x/design.md"
+$L --specs "$E/.specs" --cites | grep -q ambiguous || fail "headless elision not ambiguous"
+
+echo "5g. drift aging: old open row warns, resolved and null do not; exit code unchanged"
+G="$TMP/drift"; mkdir -p "$G/.specs"; gitq -C "$G" init
+printf '| # | Sev | Drift | Logged |\n|---|---|---|---|\n| D1 | x | old | 2020-01-01 |\n| D2 | x | gone **RESOLVED** | 2020-01-01 |\n| D3 | x | undated | |\n| D4 | x | fresh | %s |\n' "$(date +%Y-%m-%d)" > "$G/.specs/drift.md"
+out=$($L --specs "$G/.specs") || fail "drift aging changed the exit code"
+echo "$out" | grep -q "WARN drift drift.md D1: open [0-9]* days" || fail "old row did not warn"
+echo "$out" | grep -q "WARN drift drift.md: 1 open row(s) without a Logged date" || fail "undated row did not warn"
+echo "$out" | grep -q "D2\|D4" && fail "resolved or fresh row warned" || true
+printf '{"drift_max_age_days": null}\n' > "$G/.specs/spec-kit.json"
+$L --specs "$G/.specs" | grep -q "WARN drift" && fail "null did not switch drift aging off" || true
+
+printf '| # | Sev | Drift |\n|---|---|---|\n| U1 | x | a |\n| U2 | x | b |\n| U3 | x | c **RESOLVED** |\n' > "$G/.specs/nolog.md"
+rm "$G/.specs/spec-kit.json"
+out=$($L --specs "$G/.specs"); [ "$(echo "$out" | grep -c 'nolog.md')" = 1 ] && echo "$out" | grep -q "nolog.md: 2 open row(s) without a Logged date" || fail "undated rows: want one per-file WARN"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$G/.specs" --out "$G/r0.html" >/dev/null
+grep -q ">U1<" "$G/r0.html" && grep -q ">U2<" "$G/r0.html" && ! grep -q ">U3<" "$G/r0.html" || fail "report undated rows"
+rm "$G/.specs/nolog.md"
+printf '{"drift_max_age_days": null}\n' > "$G/.specs/spec-kit.json"
+
+echo "5h. --json parses in both modes, exit codes match"
+$L --specs "$G/.specs" --json | python3 -c 'import json,sys; json.load(sys.stdin)' || fail "json default"
+cites '`core/a.txt:99`' > /dev/null && fail "cites should fail" || true
+$L --specs "$V/.specs" --cites --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["problems"]' || fail "json cites"
+rc=0; $L --specs "$V/.specs" --cites --json >/dev/null || rc=$?; [ "$rc" = 1 ] || fail "json cites exit code"
+
+echo "5i. report: written, no script, escapes spec text"
+mkdir -p "$G/.specs/features/f-one"
+printf '# F\n[REQ-F-01] <b>bold</b>\n' > "$G/.specs/features/f-one/requirements.md"
+printf 'REQ-F-01\n' > "$G/.specs/features/f-one/design.md"
+printf -- '- [x] 1 a [REQ-F-01]\n- [ ] 2 b <b>x</b> [REQ-F-01]\n' > "$G/.specs/features/f-one/tasks.md"
+printf '| # | Drift | Logged |\n|---|---|---|\n| D<b>9</b> | x | 2020-01-01 |\n' > "$G/.specs/drift2.md"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$G/.specs" --out "$G/r.html" >/dev/null || fail "report not written"
+grep -q "f-one" "$G/r.html" && grep -q "1/2" "$G/r.html" || fail "report lacks feature progress"
+grep -q "<script" "$G/r.html" && fail "report has a script" || true
+grep -q "<b>9</b>" "$G/r.html" && fail "report did not escape spec text" || true
+grep -q "D&lt;b&gt;9" "$G/r.html" || fail "escaped drift id missing"
+
 echo "6. uninstall keeps user content"
 "$KIT/install.sh" "$P" --uninstall >/dev/null
 [ ! -e "$P/.agents/skills/spec-first" ] || fail "codex skill left"
 [ ! -e "$P/.specs/kit" ] && [ ! -e "$P/AGENTS.md" ] && [ ! -e "$P/.claude/agents/reviewer.md" ] && [ ! -e "$P/.git/hooks/pre-commit" ] || fail "uninstall left kit files"
+[ ! -e "$P/.specs/.gitignore" ] || fail ".gitignore line left"
 grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "specter" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
 
 echo "selftest: OK"

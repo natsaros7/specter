@@ -64,17 +64,19 @@ citation stays ambiguous. An exact path is never dropped.
 
 ### [REQ-V020-05] Drift aging
 
-- `spec_lint.py` SHALL read every markdown table under `.specs/` (outside `kit/`) whose header has both a `Drift` and a
-  `Logged` column.
-- WHEN a row is not resolved (no `RESOLVED` in the row) AND its `Logged` date (`YYYY-MM-DD`) is older than
-  `drift_max_age_days` (`spec-kit.json`, default 90) THEN it SHALL print `WARN drift <file> <id>: open <N> days`.
-- `"drift_max_age_days": null` SHALL switch the check off. A missing or unparseable date SHALL WARN once per row as `no Logged date`.
-- Drift aging SHALL NOT change the exit code.
+- `spec_lint.py` SHALL read every markdown table under `.specs/` (outside `kit/`) whose header has a `Drift` column. A
+  `Logged` column is optional: registers written before the template had one are still read.
+- A row is open unless it contains `RESOLVED`. Its date is the first `YYYY-MM-DD` in the `Logged` cell.
+- WHEN an open row's date is older than `drift_max_age_days` (`spec-kit.json`, default 90) THEN it SHALL print
+  `WARN drift <file> <id>: open <N> days`.
+- WHEN a file has open rows without a date THEN it SHALL print one `WARN drift <file>: <N> open row(s) without a Logged
+  date`, once per file, not once per row.
+- `"drift_max_age_days": null` SHALL switch both warnings off. Drift aging SHALL NOT change the exit code.
 
 ### [REQ-V020-06] JSON output
 
 - WHEN `--json` is given THEN both modes SHALL print one JSON object on stdout and nothing else:
-  - default mode: `{"features": [{"name", "ok", "fails", "warns"}], "links": [...], "drift": [{"file", "id", "sev", "logged", "age_days", "resolved"}], "warnings": [...], "fails": N}`
+  - default mode: `{"features": [{"name", "ok", "fails", "warns"}], "links": [...], "drift": [{"file", "id", "sev", "text", "logged", "age_days", "resolved"}], "warnings": [...], "fails": N}`
   - `--cites`: `{"count": N, "problems": [{"file", "cite", "reason"}]}`
 - Exit codes SHALL be the same as without `--json`.
 
