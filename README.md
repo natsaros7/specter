@@ -121,8 +121,10 @@ escalates without a failed gate. Details: [`kit/docs/model-routing.md`](kit/docs
 
 ## Supported agents
 
-The installer detects what you use. Agent files in the project win over what's installed on your machine. You can
-override it with `--agents=codex,claude`.
+The installer detects what you use from the project's own files (`.claude/`, `.codex/`, `.cursor/`, `.agents/rules`, …).
+Tools that are only installed on your machine are reported but not wired, so a project doesn't fill up with folders
+for tools nobody on the team uses. `GO.md` wires the agent you're running plus any you name, and
+`--agents=codex,claude` overrides detection.
 
 | Agent | Rules | Skill | Status |
 |---|---|---|---|
@@ -131,6 +133,7 @@ override it with `--agents=codex,claude`.
 | Cursor | `.cursor/rules/spec-first.mdc` + `AGENTS.md` | `.cursor/skills/spec-first/` | best-effort (community docs) |
 | Gemini CLI | `GEMINI.md` block (if present) | `.gemini/skills/spec-first/` | best-effort |
 | GitHub Copilot | `.github/copilot-instructions.md` block (if present) | `.github/skills/spec-first/` | best-effort |
+| Antigravity (`agy`) | `AGENTS.md` | `.agents/skills/spec-first/` | best-effort; dry-run tested end to end |
 | Anything else | `AGENTS.md` | — | Paste "Follow `.specs/kit/playbooks/…`" |
 
 If a skill path turns out to be wrong for your tool, nothing breaks: the `AGENTS.md` rules and playbooks still work.
@@ -167,6 +170,10 @@ The installed version is in `.specs/kit/VERSION` and in `spec-kit.json`. Changes
 Self-test, run locally: `tests/selftest.sh`.
 
 ## FAQ
+
+**Which model should run setup?** Your strongest. Setup is planning work: on the same app, a frontier model found
+twice the verified citations and real code hazards for the Drift Register, while a fast model produced a correct but
+shallow map. Day-to-day tasks are fine on a mid-tier model.
 
 **Does it need Claude?** No. Everything is markdown and stdlib Python. Claude Code, Codex and the others each get a
 thin extra when detected.

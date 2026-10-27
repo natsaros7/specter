@@ -16,32 +16,27 @@ HOME = Path.home()
 # name: (project signals, CLI names, user dirs, project skill dir, user skill dir)
 AGENTS = {
     "claude": ([".claude", "CLAUDE.md"], ["claude"], [".claude"], ".claude/skills", ".claude/skills"),
-    "codex": ([".codex", ".agents"], ["codex"], [".codex"], ".agents/skills", ".agents/skills"),
+    "codex": ([".codex"], ["codex"], [".codex"], ".agents/skills", ".agents/skills"),
     "cursor": ([".cursor"], ["cursor-agent", "cursor"], [".cursor"], ".cursor/skills", ".cursor/skills"),
     "gemini": ([".gemini", "GEMINI.md"], ["gemini"], [".gemini"], ".gemini/skills", ".gemini/skills"),
     "copilot": ([".github/copilot-instructions.md", ".github/skills"], ["copilot"], [".copilot"], ".github/skills", ".copilot/skills"),
+    "antigravity": ([".agent", ".agents/rules", ".agents/workflows"], ["agy"], [".gemini/antigravity-cli", ".gemini/antigravity"],
+                    ".agents/skills", ".gemini/antigravity/skills"),
 }
 
 
 def detect_agents(target, args):
+    """Return (agents to wire, source, found on machine). Project files say what the team uses; a CLI or home folder
+    only says what this machine has, so machine-only finds are reported but not wired unless named with --agents=."""
     forced = [a.split("=", 1)[1] for a in args if a.startswith("--agents=")]
     if forced:
-        return [a for a in forced[0].split(",") if a in AGENTS]
-    # Files in the project say what the team uses; CLIs and home folders only say what this machine has.
+        return [a for a in forced[0].split(",") if a in AGENTS], "override", []
     in_project = [n for n, (signals, _, _, _, _) in AGENTS.items() if any((target / s).exists() for s in signals)]
     if in_project:
-        return in_project
-    return MACHINE + [n for n, (_, clis, user_dirs, _, _) in AGENTS.items()
-            if any(shutil.which(c) for c in clis) or any((HOME / d).is_dir() for d in user_dirs)]
-
-
-MACHINE = []  # marker: detect_agents fell back to what is installed on this machine
-
-
-def detection_source(target):
-    forced = any(a.startswith("--agents=") for a in ARGS)
-    in_project = any((target / s).exists() for signals, _, _, _, _ in AGENTS.values() for s in signals)
-    return "override" if forced else ("project files" if in_project else "this machine (no agent files in the project)")
+        return in_project, "project files", []
+    on_machine = [n for n, (_, clis, user_dirs, _, _) in AGENTS.items()
+                  if any(shutil.which(c) for c in clis) or any((HOME / d).is_dir() for d in user_dirs)]
+    return [], "this machine only", on_machine
 
 
 BUILD_FILES = ("pom.xml", "build.gradle", "build.gradle.kts", "package.json", "go.mod", "Cargo.toml",
@@ -145,12 +140,22 @@ def install(kit_home, target):
             say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
             config["kit_version"] = version
             config_path.write_text(json.dumps(config, indent=2) + "\n")
+    profile = specs / "steering" / "project-profile.md"
+    if not profile.exists():
+        profile.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(kit / "templates/steering/project-profile.md", profile)
+        say(".specs/steering/project-profile.md (status: setup-incomplete)")
     rules = (kit / "AGENT_RULES.md").read_text()
     put_block(target / "AGENTS.md", rules)
     say("AGENTS.md: spec rules block (Codex, Cursor, Copilot, Gemini and others read this)")
 
-    agents = detect_agents(target, ARGS)
-    say("agents (" + detection_source(target) + "): " + (", ".join(agents) or "none; AGENTS.md alone works with most agents"))
+    agents, source, on_machine = detect_agents(target, ARGS)
+    if agents:
+        say("agents (" + source + "): " + ", ".join(agents))
+    else:
+        say("agents: none in the project files; AGENTS.md alone works with most agents")
+        if on_machine:
+            say("  installed on this machine: " + ", ".join(on_machine) + ". To wire some: --agents=" + ",".join(on_machine))
     for name in agents:
         install_skill(kit_home, target / AGENTS[name][3])
         say("skill spec-first -> " + AGENTS[name][3] + "/spec-first/")
@@ -217,7 +222,8 @@ def main(argv):
     global ARGS
     ARGS = args
     if "--user" in args:
-        agents = detect_agents(Path.cwd(), args)
+        agents, _, on_machine = detect_agents(Path.cwd(), args)
+        agents = agents or on_machine
         for name in agents:
             install_skill(kit_home, HOME / AGENTS[name][4])
             print("  skill spec-first -> ~/" + AGENTS[name][4] + "/spec-first/")
@@ -235,8 +241,9 @@ def main(argv):
         print("Target is the kit itself. Point it at your project.")
         return 2
     if "--detect" in args:
-        agents = detect_agents(target, args)
-        print("agents: " + (",".join(agents) or "none") + "\nsource: " + detection_source(target))
+        agents, source, on_machine = detect_agents(target, args)
+        print("agents: " + (",".join(agents) or "none") + "\nsource: " + source
+              + ("\non this machine: " + ",".join(on_machine) if on_machine else ""))
         return 0
     if "--uninstall" in args:
         uninstall(target)

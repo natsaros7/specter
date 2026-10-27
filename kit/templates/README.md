@@ -8,7 +8,7 @@ Grounded on `<sha>`, <YYYY-MM-DD>. Workflow: [`steering/spec-rules.md`](steering
 | If you need… | Open only |
 |---|---|
 | What the system does, topology, component registry | [`system/architecture.md`](system/architecture.md) |
-| How one domain works | `domains/<domain>/design.md` |
+| How one domain works | One link per domain: [`domains/<domain>/design.md`](domains/<domain>/design.md) · … (replace with the real list) |
 | End-to-end flows, known drift | [`system/data-flows.md`](system/data-flows.md) |
 | To make a non-trivial change | [`steering/spec-rules.md`](steering/spec-rules.md), then `kit/playbooks/new-feature.md` |
 | Standards and gates | [`steering/code-standards.md`](steering/code-standards.md) |

@@ -13,7 +13,8 @@ Never ask a question that already has an answer there.
 2. **Link, don't copy.** Where a source of truth already exists (ADRs, an architecture doc, an OpenAPI file, a wiki page),
    the spec links to it and summarises in a line or two. Where the two conflict, the source wins, and the conflict goes
    into the Drift Register.
-3. **Evidence or UNKNOWN.** Every fact cites `path:line`, a command output, or a user answer with its date.
+3. **Evidence or UNKNOWN.** Every fact cites `path:line` (repo-relative path; a bare filename only when it is unique in
+   the repo), a command output, or a user answer with its date.
    Something you can't support is written as `UNKNOWN (asked YYYY-MM-DD)` or as a Drift Register row. Never guess.
 4. **Token discipline.** Find with search (`git ls-files`, `rg`, `grep`), then read excerpts. Never bulk-read
    generated files, lock files, vendored code or large doc trees.
@@ -23,7 +24,8 @@ Never ask a question that already has an answer there.
 
 ## Phase 0: Orient (no questions yet)
 
-Copy `.specs/kit/templates/steering/project-profile.md` to `.specs/steering/project-profile.md` and set `phase: 0`.
+The installer created `.specs/steering/project-profile.md` (`status: setup-incomplete`). If it is missing, create the
+folder and copy it from `.specs/kit/templates/steering/project-profile.md`. Set `phase: 0`.
 Record the commit you ground against (`git rev-parse --short HEAD`, branch, date).
 
 ## Phase 1: Scan
@@ -87,7 +89,9 @@ From `.specs/kit/templates/`:
 2. `system/architecture.md`: overview, a Mermaid diagram (protocols on edges, no ports), and a component registry.
    Ports and endpoints go in the registry only.
 3. `system/data-flows.md`: the 3–6 flows that matter most, as sequence diagrams, then the **Drift Register**
-   seeded with everything you found in Phases 1–3 where docs, code and answers disagree.
+   seeded with everything you found in Phases 1–3 where docs, code and answers disagree. A row is a **disagreement**
+   or a hazard (docs vs code, config vs code, code that contradicts its stated behaviour, e.g. a lookup that ignores
+   part of its key, a client that always takes the first instance). Never a restated fact like "uses version X".
 4. `system/traceability.md`: **only if Q1 found an upstream requirement source.** Requirement ID → domain → code → test → status.
    If you can't verify an ID, mark it 🔴 and give the reason.
 5. `domains/<domain>/design.md` (as-built: stack, behaviour, public interface, data, config, local drift) and
@@ -100,12 +104,13 @@ From `.specs/kit/templates/`:
 
 ## Phase 6: Verify and report
 
-1. Set the profile to `status: active` and `phase: done`. Do this first, so the lint doesn't warn about setup.
+1. Set the profile to `status: verifying` and `phase: 6`.
 2. `python3 .specs/kit/scripts/spec_lint.py` exits 0.
 3. `python3 .specs/kit/scripts/spec_lint.py --cites` reports no broken citations. Fix every `path:line` it flags
-   (a missing file, a line past the end of the file, or a cited line that is blank).
+   (a missing or ambiguous file, a line past the end of the file, or only blank cited lines).
 4. Every Mermaid block is fenced with `mermaid` and parses (if no renderer is available, check the syntax by eye).
 5. Nothing outside `.specs/` changed apart from the installer's files (`git status`).
+   Only now set the profile to `status: active` and `phase: done`.
 6. **Report** (≤ 8 lines): domains created, open UNKNOWNs, the top 3 Drift Register rows, the three highest-value
    next steps, and the four everyday phrases ("Spec this", "Next task on", "Sync specs", "Refresh the specs").
 

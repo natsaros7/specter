@@ -120,15 +120,15 @@ def check_cites(specs):
                 if len(hits) > 1 and parts[0] == "domains":
                     hits = [f for f in hits if parts[1] in f.split("/")[0]] or hits
                 if len(hits) != 1:
-                    problems.append(where + (" ambiguous: " + ", ".join(hits[:3]) if hits else " no such file"))
+                    problems.append(where + (" ambiguous (use the repo-relative path): " + ", ".join(hits[:3]) if hits else " no such file"))
                     continue
                 target = root / hits[0]
             lines = target.read_text(errors="replace").splitlines()
             last = int(end or start)
             if last > len(lines):
                 problems.append(where + " past end of file (" + str(len(lines)) + " lines)")
-            elif not lines[int(start) - 1].strip():
-                problems.append(where + " cited line is blank")
+            elif not any(line.strip() for line in lines[int(start) - 1:last]):
+                problems.append(where + (" cited lines are blank" if end else " cited line is blank"))
     for p in problems:
         print("FAIL cite " + p)
     print("spec-lint --cites: " + str(len(problems)) + " FAIL of " + str(count) + " citation(s)")

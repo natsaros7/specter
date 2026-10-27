@@ -16,6 +16,9 @@ else yourself, in this order. Keep each message short and plain.
 - If your working folder is **not** `KIT`, then `PROJECT` = your working folder. Don't ask.
 - If your working folder **is** `KIT`, ask one question: *"Which project folder should I look at? (path)"*
 
+If you are not the strongest model the user has available, say so in one line: setup quality (depth of the Drift
+Register, number of verified citations) follows the model, and they can switch now or carry on.
+
 Then say, in three lines at most: what is about to happen (look → propose → install on your yes → a short interview → done),
 and that nothing changes until they say yes.
 
@@ -50,8 +53,9 @@ Ask:
 > 1. yes **[default]**
 > 2. not now
 
-Only when `--detect` said **this machine**, add to the same question: *"…for `<agents>`? If you only use some of them,
-name them."* Pass whatever they name as `--agents=a,b`. When the source is **project files**, don't ask about agents.
+When `--detect` says **this machine only**, nothing agent-specific gets wired by default. Add to the same question:
+*"…and wire it for `<the agent you are>`? Others found on this machine: `<list>`; name any you also use."* Pass the
+answer as `--agents=a,b`. When the source is **project files**, don't ask about agents.
 
 If the user picks 2, stop politely. You're done.
 

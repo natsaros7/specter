@@ -45,6 +45,24 @@ C="$TMP/codex"; mkdir -p "$C"; gitq -C "$C" init
 [ -e "$C/.agents/skills/spec-first/SKILL.md" ] && [ ! -e "$C/CLAUDE.md" ] && [ ! -e "$C/.claude" ] || fail "codex-only install"
 grep -q "{{KIT_HOME}}" "$C/.agents/skills/spec-first/SKILL.md" && fail "KIT_HOME not substituted" || true
 
+echo "5c. no agent files in the project: nothing agent-specific wired, profile seeded"
+N="$TMP/plain"; mkdir -p "$N"; gitq -C "$N" init
+"$KIT/install.sh" "$N" >/dev/null
+[ ! -e "$N/CLAUDE.md" ] && [ ! -e "$N/.claude" ] && [ ! -e "$N/.agents" ] || fail "machine-only detection wired agents"
+grep -q "status: setup-incomplete" "$N/.specs/steering/project-profile.md" || fail "profile not seeded"
+
+echo "5d. antigravity detected from project files"
+A="$TMP/agy"; mkdir -p "$A/.agents/rules"; gitq -C "$A" init
+"$KIT/install.sh" "$A" --detect | grep -q "agents: antigravity" || fail "antigravity not detected"
+
+echo "5e. citations: a range is valid if any cited line has content; a blank single line fails"
+R="$TMP/cite"; mkdir -p "$R/.specs/domains/x"; gitq -C "$R" init
+printf 'a\n\nb\n' > "$R/f.txt"; gitq -C "$R" add f.txt
+printf '`f.txt:2-3`\n' > "$R/.specs/domains/x/design.md"
+python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null || fail "range with content rejected"
+printf '`f.txt:2`\n' > "$R/.specs/domains/x/design.md"
+! python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null || fail "blank single line accepted"
+
 echo "6. uninstall keeps user content"
 "$KIT/install.sh" "$P" --uninstall >/dev/null
 [ ! -e "$P/.agents/skills/spec-first" ] || fail "codex skill left"

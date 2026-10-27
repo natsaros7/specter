@@ -5,6 +5,26 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-27
+
+From the first non-Claude dry run (Antigravity CLI, Gemini).
+
+### Added
+- Antigravity (`agy`) as a detected agent; the skill goes to `.agents/skills/`.
+- Installer seeds `.specs/steering/project-profile.md` (`status: setup-incomplete`).
+- `GO.md` says when the running model isn't the strongest available, and why setup depth depends on it.
+
+### Changed
+- Agents found only on the machine (CLI or home folder) are reported but not wired; `GO.md` wires the running agent plus any the user names.
+- Codex is detected from `.codex/` only; `.agents/` is shared across agents.
+- Setup verifies under `status: verifying` and sets `active` only after both lint runs pass.
+- Drift Register rows must be disagreements or hazards, not restated facts.
+- Router template lists one link per domain.
+
+### Fixed
+- `spec_lint.py --cites`: a range is valid if any cited line has content; the ambiguous-file message says to use the repo-relative path.
+- Removed dead detection code in the installer.
+
 ## [0.1.0] - 2026-10-27
 
 ### Added
