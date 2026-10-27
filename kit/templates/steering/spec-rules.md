@@ -1,4 +1,4 @@
-# Steering — Spec rules (spec-first, Kiro-style)
+# Steering — Spec rules (spec-first)
 
 How changes are proposed, designed and tracked in <System>. It wraps the project's existing gates and doesn't replace them.
 

@@ -11,7 +11,7 @@ cheapest to catch: a wrong assumption costs one line in `requirements.md`, or a 
 
 ## 2. Requirements → design → tasks
 
-The Kiro triplet. **requirements.md** says *what and why*, with testable acceptance criteria and stable
+The triplet (borrowed from Kiro, see the README credits). **requirements.md** says *what and why*, with testable acceptance criteria and stable
 `[REQ-…]` IDs. **design.md** says *how*, and traces every REQ to a concrete component. **tasks.md** is a checklist
 where every box links to a REQ. The lint checks that links go both ways: no requirement without design and tasks,
 and no task without a requirement.

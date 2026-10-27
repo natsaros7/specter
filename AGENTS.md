@@ -1,6 +1,6 @@
 # specter: instructions for AI agents
 
-You are inside **specter**, a spec-first ("Kiro-style") workflow that any coding agent can follow.
+You are inside **specter**, a spec-first workflow that any coding agent can follow.
 
 ## Whatever the user's first message is ("go", "hi", "what is this?"), follow [`GO.md`](GO.md).
 

@@ -1,6 +1,6 @@
 # 👻 specter
 
-**Specs that don't go stale.** A spec-first ("Kiro-style") workflow for *any* AI coding agent.
+**Specs that don't go stale.** A spec-first workflow for *any* AI coding agent.
 
 ## Clone it. Paste one line. Your agent does the rest.
 
@@ -166,9 +166,6 @@ Self-test, run locally: `tests/selftest.sh`.
 
 ## FAQ
 
-**Is this Kiro?** No. It borrows Kiro's *requirements → design → tasks* triplet and adds as-built domain docs, a
-Drift Register, a setup interview, script gates and agent-neutral playbooks.
-
 **Does it need Claude?** No. Everything is markdown and stdlib Python. Claude Code, Codex and the others each get a
 thin extra when detected.
 
@@ -179,3 +176,14 @@ always does.
 `"block"` makes the hook refuse commits.
 
 **What does it cost?** Nothing to run. The scripts are plain Python, and there is no CI or service to pay for.
+
+## Credits
+
+Specter is **inspired by [Kiro](https://kiro.dev)'s spec-driven workflow**. From Kiro it takes the
+*requirements → design → tasks* triplet and the idea of *steering* files for project-wide rules. The rest came from running
+the method on a multi-service production system: as-built domain docs, the Drift Register, the evidence/`UNKNOWN`
+rule, the setup interview, script gates, roles with a review loop, and support for any agent.
+
+Kiro is a trademark of its owner. Specter is an independent project, not affiliated with or endorsed by Amazon or the
+Kiro team, and it uses no Kiro code, text or assets.
+
