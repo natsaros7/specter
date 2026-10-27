@@ -1,0 +1,4 @@
+#!/bin/sh
+# spec-first-kit: spec-sync gate on staged files. Mode in .specs/spec-kit.json ("spec_sync").
+root=$(git rev-parse --show-toplevel)
+exec python3 "$root/.specs/kit/scripts/spec_sync_check.py"

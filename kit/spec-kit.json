@@ -1,0 +1,13 @@
+{
+  "kit_version": "0.1.0",
+  "code_globs": ["src/*", "app/*", "lib/*", "services/*", "packages/*"],
+  "ignore_globs": ["*/node_modules/*", "*/target/*", "*/build/*", "*/dist/*", "*.md"],
+  "spec_sync": "warn",
+  "spec_threshold_loc": 15,
+  "req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+",
+  "upstream_req_pattern": null,
+  "required_sections": {
+    "requirements": [],
+    "design": []
+  }
+}
