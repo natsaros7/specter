@@ -5,7 +5,7 @@
 ## Clone it. Paste one line. Your agent does the rest.
 
 ```bash
-git clone git@github.com:natsaros7/specter.git ~/tools/specter
+git clone https://github.com/natsaros7/specter.git ~/tools/specter
 ```
 
 Open your AI agent (Codex, Claude Code, Cursor, Copilot, Gemini CLI…) **in your project** and paste:
