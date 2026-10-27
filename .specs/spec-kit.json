@@ -1,0 +1,10 @@
+{
+  "kit_version": null,
+  "code_globs": ["kit/scripts/*", "kit/hooks/*", "install.sh"],
+  "ignore_globs": ["*.md"],
+  "spec_sync": "off",
+  "spec_threshold_loc": 15,
+  "req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+",
+  "upstream_req_pattern": null,
+  "required_sections": {"requirements": [], "design": []}
+}
