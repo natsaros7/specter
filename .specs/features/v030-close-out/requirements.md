@@ -48,12 +48,15 @@ the spec" can't go unnoticed.
 ### [REQ-V030-03] Merged-work detection
 
 - WHEN `tracker_pattern` is set in `spec-kit.json` (default `null`, off) THEN for each feature whose folder name
-  contains a match, the lint SHALL count commits on `merged_ref` (default `origin/HEAD`, falling back to `HEAD`) whose
-  message contains that key not followed by a digit. It SHALL count in the project root and in every indexed child
-  repo, with one `git log` per repo.
-- WHEN commits exist AND the status is missing, `Proposed`, or no task is ticked THEN it SHALL WARN
+  contains a match, the lint SHALL count commits on the merged ref whose message contains that key not followed by a
+  digit. It SHALL count in the project root and in every indexed child repo, with one `git log` per repo.
+- Merged ref: `merged_ref` when set; a repo where it doesn't resolve SHALL be skipped silently, so branch-only work
+  never counts. When `merged_ref` is not set, the lint SHALL use `origin/HEAD`, then `HEAD`.
+- Commits that change only files under `.specs/` SHALL NOT count: writing the spec is not merged work.
+- WHEN commits exist AND the status is missing or `Proposed`, or (no task is ticked AND the status is not `Done` or
+  `Dropped`) THEN it SHALL WARN
   `merged work found (<N> commit(s) in <repos>) but the spec says <status>, <done>/<total> tasks`.
-- A repo without `merged_ref` is skipped silently. The check SHALL NOT change the exit code.
+- The project root SHALL be labelled `.` in the repo list. The check SHALL NOT change the exit code.
 
 ### [REQ-V030-04] Close-out step in the playbooks
 

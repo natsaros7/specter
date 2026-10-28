@@ -161,7 +161,7 @@ New `.specs/spec-kit.json` keys (all optional):
 | `cite_ignore_globs` | `[]` | fnmatch on the root-relative path; drops these files when a citation matches several |
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 | `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
-| `merged_ref` | `"origin/HEAD"` | Ref searched for those commits, in the project and in every indexed child repo; falls back to `HEAD` |
+| `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count |
 
 ## Example
 

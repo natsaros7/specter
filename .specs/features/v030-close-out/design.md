@@ -19,9 +19,10 @@ task is ticked when it matches `[x]`/`[X]`.
 
 `merged_commits(root, repos, config)` collects the commits first:
 
-1. For each repo (the root and the indexed child repos) it resolves `merged_ref`:
-   `git rev-parse --verify --quiet <ref>`, then `HEAD`.
-2. It runs one `git log <ref> --format=%x00%s%n%b`.
+1. For each repo (the root and the indexed child repos) it resolves the ref with `git rev-parse --verify --quiet`:
+   `merged_ref` if set (missing → skip the repo), else `origin/HEAD`, then `HEAD`.
+2. It runs one `git log <ref> --format=%x00%s%n%b -- . ':(exclude).specs'`. The pathspec drops commits that touch only
+   `.specs/`.
 3. It splits the output on `\0` and keeps a list of messages per repo.
 
 `lint_all` then checks each feature:
@@ -72,4 +73,5 @@ The selftest gets the following:
 |---|---|
 | Old spec sets get one "no Status line" WARN per feature | Intended: it is the to-do list. WARN only, exit unchanged |
 | A key mentioned in an unrelated commit ("see ABC-7") counts as merged work | It is only a WARN, it names the repos, and a person decides |
-| `origin/HEAD` is unset in some clones | Falls back to `HEAD`; projects set `merged_ref` explicitly (e.g. `origin/develop`) |
+| `origin/HEAD` is unset in some clones | Without `merged_ref`, falls back to `HEAD`. Projects set `merged_ref` (e.g. `origin/develop`), and then repos without it are skipped |
+| Spec commits naming the key look like merged work | The `.specs` exclude pathspec |

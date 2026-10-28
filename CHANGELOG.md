@@ -9,7 +9,7 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 - Feature `Status:` line (Proposed, In progress, Blocked on …, Done <date> (<PR>), Dropped <date> (<why>)) in the `requirements.md` template; the lint reads the first one before the first `## `.
 - Lint WARNs: no `Status:` line, unknown status, all tasks ticked but not Done/Dropped, Done with unticked tasks, Done without a date.
 - Merged-work detection: with `tracker_pattern` set, the lint WARNs when commits on `merged_ref` name a feature's key while its spec says Proposed, has no status, or has no task ticked. One `git log` per repo; exit code unchanged.
-- `spec-kit.json` keys `tracker_pattern` (default `null`) and `merged_ref` (default `origin/HEAD`, falls back to `HEAD`).
+- `spec-kit.json` keys `tracker_pattern` (default `null`) and `merged_ref` (default `null`: `origin/HEAD`, then `HEAD`; when set, repos without it are skipped; `.specs`-only commits are ignored).
 - Report: status comes from the `Status:` line; a `merged, not closed` badge and a counter.
 - Close-out steps in `sync.md`, `next-task.md`, `refresh.md`, `AGENT_RULES.md` and the spec-rules Definition of Done.
 

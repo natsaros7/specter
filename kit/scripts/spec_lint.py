@@ -23,7 +23,8 @@ WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missi
       Drift Register row (any table with a Drift column; Logged optional) is older than drift_max_age_days (default 90, null = off),
       or, once per file, has open rows without a Logged date; a feature has no `Status:` line, an unknown status, or a status that
       disagrees with its tasks (all ticked but not Done, Done with unticked tasks, Done without a date); with tracker_pattern set,
-      commits on merged_ref name the feature's key while the spec says proposed, missing or no task is ticked.
+      commits on merged_ref (else origin/HEAD, then HEAD; .specs-only commits ignored) name the feature's key while the spec says
+      proposed or missing, or no task is ticked and it is not Done/Dropped.
 """
 import datetime
 import fnmatch
@@ -40,7 +41,7 @@ FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
             "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
-            "tracker_pattern": None, "merged_ref": "origin/HEAD"}
+            "tracker_pattern": None, "merged_ref": None}
 STATUS = re.compile(r"^\s*>?\s*(\*\*)?Status:?(\*\*)?\s*(.+)$", re.I)
 STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
 MERGED = "merged work found"
@@ -160,15 +161,17 @@ def repos(root):
 
 
 def merged_commits(root, child_repos, config):
-    """{repo label: [commit message, ...]} on merged_ref (else HEAD), one git log per repo. Repos with no usable ref are skipped."""
+    """{repo label: [commit message, ...]}, one git log per repo, ignoring commits that touch only .specs/.
+    Ref: merged_ref if set (a repo without it is skipped), else origin/HEAD, then HEAD."""
     out = {}
-    for label, path in [(root.name, root)] + [(r, root / r) for r in child_repos]:
+    for label, path in [(".", root)] + [(r, root / r) for r in child_repos]:
         if not (path / ".git").exists():
             continue
         git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace")
-        ref = config["merged_ref"] if git("rev-parse", "--verify", "--quiet", config["merged_ref"]).returncode == 0 else "HEAD"
-        log = git("log", ref, "--format=%x00%s%n%b")
-        if log.returncode == 0:
+        ref = next((r for r in ([config["merged_ref"]] if config["merged_ref"] else ["origin/HEAD", "HEAD"])
+                    if git("rev-parse", "--verify", "--quiet", r).returncode == 0), None)
+        log = git("log", ref, "--format=%x00%s%n%b", "--", ".", ":(exclude).specs") if ref else None
+        if log and log.returncode == 0:
             out[label] = [m for m in log.stdout.split("\0") if m.strip()]
     return out
 
@@ -234,7 +237,8 @@ def lint_all(specs, names=()):
                 status = feature_status((feature / "requirements.md").read_text())
                 tasks = feature / "tasks.md"
                 done, total = task_counts(tasks.read_text() if tasks.exists() else "")
-                if found and (status is None or status["state"] == "Proposed" or not done):
+                state = status["state"] if status else ""
+                if found and (not status or state == "Proposed" or (not done and state not in ("Done", "Dropped"))):
                     says = status["state"] or status["raw"] if status else "no Status"
                     warns.append(MERGED + " (" + str(sum(found.values())) + " commit(s) in " + ", ".join(found) + ") but the spec says "
                                  + says + ", " + str(done) + "/" + str(total) + " tasks")
