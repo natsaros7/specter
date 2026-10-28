@@ -45,6 +45,12 @@ def load_config(specs):
     config = dict(DEFAULTS)
     if path.exists():
         config.update(json.loads(path.read_text()))
+    age = config["drift_max_age_days"]
+    if age is not None:
+        try:
+            config["drift_max_age_days"] = int(age)
+        except (TypeError, ValueError):
+            sys.exit("spec-kit.json: drift_max_age_days must be an integer or null, got " + json.dumps(age))
     return config
 
 
@@ -125,13 +131,14 @@ def drift_rows(specs, max_age):
                 continue
             if not cols or not cells[0] or set("".join(cells)) <= set("-: "):
                 continue
-            found = DATE.search(cells[cols["logged"]]) if cols.get("logged", len(cells)) < len(cells) else None
+            cell = lambda name: cells[cols[name]] if name in cols and cols[name] < len(cells) else ""
+            found = DATE.search(cell("logged"))
             try:
                 logged = datetime.date.fromisoformat(found.group()) if found else None
             except ValueError:
                 logged = None
-            sev = cells[cols["sev"]] if cols.get("sev", len(cells)) < len(cells) else ""
-            rows.append({"file": str(md.relative_to(specs)), "id": cells[0], "sev": sev, "text": cells[cols["drift"]].replace("\x00", "|"),
+            sev = cell("sev")
+            rows.append({"file": str(md.relative_to(specs)), "id": cells[0], "sev": sev, "text": cell("drift").replace("\x00", "|"),
                          "logged": str(logged) if logged else None,
                          "age_days": (today - logged).days if logged else None, "resolved": "RESOLVED" in line})
     return rows
@@ -194,7 +201,7 @@ def cites(specs):
                              capture_output=True, text=True).stdout.splitlines()
         return [prefix + f for f in out if not f.endswith("/")]
     repos = sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
-                    if not p.relative_to(root).parts[0].startswith(".")})
+                    if not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
     files = list(dict.fromkeys(ls(root) + [f for repo in repos for f in ls(root / repo, repo + "/")]))
     files = files or [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
     problems, count = [], 0
@@ -209,7 +216,7 @@ def cites(specs):
         if (root / (base + path)).is_file():
             return root / (base + path), None
         pool = [f for f in files if any(f.startswith(s + "/") for s in scope)] if scope else files
-        pieces = [x.lstrip("./") for x in re.split(r"\.\.\./|…/", path)]
+        pieces = [re.sub(r"^(\./)+", "", x) for x in re.split(r"\.\.\./|…/", path)]
         tail, heads = pieces[-1], [x.strip("/").split("/") for x in pieces[:-1] if x.strip("/")]
         def has_heads(f):
             segs, at = f[:len(f) - len(tail)].strip("/").split("/"), 0
@@ -219,7 +226,8 @@ def cites(specs):
                     return False
                 at = runs[0] + len(head)
             return True
-        hits = [f for f in pool if (f == tail or f.endswith("/" + tail)) and has_heads(f)]
+        tails = [f for f in pool if f == tail or f.endswith("/" + tail)]
+        hits = [f for f in tails if has_heads(f)] or tails
         parts = md.relative_to(specs).parts
         if len(hits) > 1 and parts[0] == "domains":
             hits = [f for f in hits if parts[1] in f.split("/")[0]] or hits
@@ -240,7 +248,11 @@ def cites(specs):
             if reason:
                 problems.append({"file": file, "cite": cite, "reason": reason})
                 continue
-            lines = target.read_text(errors="replace").splitlines()
+            try:
+                lines = target.read_text(errors="replace").splitlines()
+            except OSError:
+                problems.append({"file": file, "cite": cite, "reason": "no such file"})
+                continue
             for a, b in ranges:
                 label = "range " + str(a) + ("-" + str(b) if b != a else "") + ": " if len(ranges) > 1 else ""
                 if b > len(lines):

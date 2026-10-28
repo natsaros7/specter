@@ -80,16 +80,31 @@ def drop_block(path):
 
 
 def ensure_line(path, line):
-    lines = path.read_text().splitlines() if path.exists() else []
-    if line not in lines:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("\n".join(lines + [line]) + "\n")
+    text = ""
+    if path.exists():
+        with open(path, newline="") as f:
+            text = f.read()
+    if line in text.splitlines():
+        return
+    nl = "\r\n" if "\r\n" in text else "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + line + nl)
 
 
 def drop_line(path, line):
-    if path.exists():
-        lines = [l for l in path.read_text().splitlines() if l != line]
-        path.write_text("\n".join(lines) + "\n") if lines else path.unlink()
+    if not path.exists():
+        return
+    with open(path, newline="") as f:
+        lines = f.read().splitlines(keepends=True)
+    kept = [l for l in lines if l.rstrip("\r\n") != line]
+    if len(kept) == len(lines):
+        return
+    if any(l.strip() for l in kept):
+        with open(path, "w", newline="") as f:
+            f.write("".join(kept))
+    else:
+        path.unlink()
 
 
 def git(target, *args):

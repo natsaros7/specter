@@ -10,6 +10,7 @@ import re
 import sys
 from html import escape as e
 from pathlib import Path
+from urllib.parse import quote
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import spec_lint  # noqa: E402
@@ -44,10 +45,12 @@ def progress(specs, name):
 
 def status(specs, name, done, total):
     req = specs / "features" / name / "requirements.md"
-    docs = "".join(p.read_text() for p in (specs / "features" / name).glob("*.md"))
-    if re.search(r"status:\W*done", docs, re.I) or (total and done == total):
+    text = req.read_text() if req.exists() else ""
+    if re.search(r"^\s*>?\s*(\*\*)?Status:?(\*\*)?\s*\**Done\b", text, re.I | re.M) or (total and done == total):
         return "Done"
-    if req.exists() and any(re.search(r"(?<!not )(?<!no longer )blocked on", l, re.I) for l in req.read_text().splitlines()):
+    lines = text.splitlines()
+    head = lines[:next((i for i, l in enumerate(lines) if l.startswith("## ")), len(lines))]
+    if any(re.search(r"(?<!not )(?<!no longer )\bBlocked on\b", l, re.I) for l in head) or any(l.lstrip().startswith("**Blocked on") for l in lines):
         return "Blocked"
     return "Not started" if not done else "In progress"
 
@@ -66,7 +69,7 @@ def build(specs, out):
     for f in lint["features"]:
         done, total = progress(specs, f["name"])
         st = status(specs, f["name"], done, total)
-        link = rel + "/features/" + f["name"] + "/requirements.md"
+        link = quote(rel + "/features/" + f["name"] + "/requirements.md", safe="/")
         pct = round(100 * done / total) if total else 0
         cls = {"Done": "ok", "Blocked": "bad"}.get(st, "warn" if st == "In progress" else "mute")
         feats.append("<tr><td><a href=\"" + e(link) + "\">" + e(f["name"]) + "</a></td><td>" + str(done) + "/" + str(total)
@@ -78,11 +81,12 @@ def build(specs, out):
     drift = ['<tr class="' + ("old" if old(r) else "") + '"><td>' + e(r["id"]) + "</td><td>" + e(r["sev"]) + '</td><td title="' + e(r["text"], True) + '">'
              + e(r["text"][:120] + ("…" if len(r["text"]) > 120 else "")) + "</td><td>" + (str(r["age_days"]) if r["age_days"] is not None else "\u2014") + "</td><td>" + e(r["file"]) + "</td></tr>" for r in rows]
     resolved = sum(1 for r in lint["drift"] if r["resolved"])
-    findings = [("FAIL ", f["name"] + ": " + t) for f in lint["features"] for t in f["fails"]] + \
+    miss = "tasks.md does not trace "
+    findings = [("FAIL ", f["name"] + ": " + t) for f in lint["features"] for t in f["fails"] if not t.startswith(miss)] + \
                [("FAIL ", "broken link: " + l) for l in lint["links"]] + \
                [("WARN ", f["name"] + ": " + t) for f in lint["features"] for t in f["warns"]] + \
                [("", w) for w in lint["warnings"]]
-    uncovered = [t for f in lint["features"] for t in f["fails"] if t.startswith("tasks.md does not trace")]
+    uncovered = [f["name"] + ": " + t[len(miss):] for f in lint["features"] for t in f["fails"] if t.startswith(miss)]
     nbad = len(cite["problems"])
     counters = [("Features", len(feats), ""), ("Open drift", len(rows), "warn" if any(old(r) for r in rows) else ""),
                 ("Lint FAIL", lint["fails"], "bad" if lint["fails"] else "ok"),
@@ -100,7 +104,7 @@ def build(specs, out):
 <section class="card"><h2>Features</h2>{table(["Feature", "Tasks", "Progress", "Status"], feats, "No features.")}</section>
 <section class="card"><h2>Drift</h2>{table(["#", "Sev", "Drift", "Age (days)", "File"], drift, "No open drift rows.")}
 <p class="mute">{resolved} resolved{"" if limit is None else ", highlighted: open over " + str(limit) + " days"}</p></section>
-<section class="card"><h2>Coverage</h2><p class="mute">Requirements no task or design links</p>
+<section class="card"><h2>Coverage</h2><p class="mute">Requirements no task links</p>
 {li([e(t) for t in uncovered])}<p class="mute">Lint findings</p>{li([e(k + t) for k, t in findings])}</section>
 <section class="card"><h2>Citations</h2><p>{cite["count"]} total, <span class="{"bad" if nbad else "ok"}">{nbad} failing</span></p>
 {li(["<code>" + e(p["file"] + ": " + p["cite"]) + "</code> " + e(p["reason"]) for p in cite["problems"]]) if nbad else ""}</section>
@@ -116,9 +120,12 @@ def main(argv):
             i = argv.index(flag)
             value, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
             specs, out = (value, out) if flag == "--specs" else (specs, value)
+    if not specs.is_dir():
+        print("spec-report: no such specs directory: " + str(specs), file=sys.stderr)
+        return 2
     out = out or specs / "report.html"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(build(specs, out))
+    out.write_text(build(specs, out), encoding="utf-8")
     print("spec-report: wrote " + str(out))
     return 0
 

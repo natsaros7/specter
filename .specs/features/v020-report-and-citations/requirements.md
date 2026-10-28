@@ -37,6 +37,9 @@ checker to understand the notations people actually write, so that a red result 
 - IF `<prefix>` resolves to nothing THEN the citation SHALL FAIL with `unknown repo prefix '<prefix>'` (add it to
   `cite_aliases`).
 - `<path>` keeps today's rules inside that folder: exact path first, else suffix match, with `.../` and `…/` elision.
+- Elided heads narrow the match: in `head/.../tail` a candidate must end with `tail` and contain `head` as a run of whole
+  path segments before it. IF no candidate does THEN matching falls back to `tail` alone (today's behaviour), so a head
+  that isn't a folder of the file, like the repo's own name, still resolves.
 
 ### [REQ-V020-02] Line notations
 
@@ -54,7 +57,7 @@ Each range is checked on its own: past end of file, or all its lines blank, fail
 ### [REQ-V020-03] Nested repos
 
 The citation index SHALL include git repos up to two levels below the project root (`*/.git` and `*/*/.git`), with paths
-relative to the project root.
+relative to the project root. Folders whose name starts with `.` (`.venv`, `.cache`, …) are not searched for repos, at any depth.
 
 ### [REQ-V020-04] Citation tie-break
 

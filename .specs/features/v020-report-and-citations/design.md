@@ -82,6 +82,6 @@ The kit version comes from `.specs/kit/VERSION` if present, else `VERSION` two l
 
 | Risk | Mitigation |
 |---|---|
-| The new pattern counts something that isn't a citation (a host and port) | A path still needs `name.ext` before the line number, as today; the selftest keeps today's example clean |
+| Something that isn't a citation is counted: a dotted host name or IP followed by a port, or a URL | A path needs `name.ext` before the line number, which rules out `host:8080` but not dotted hosts. Write hosts without backticks or as `<host>:<port>`. Skipping them silently would also hide real stale citations such as a bare file name with a line number |
 | Previously uncounted multi-range citations now fail on existing projects | Intended. CHANGELOG says so under "Changed" |
 | The report goes stale if committed | `.specs/.gitignore` keeps it out; it is regenerated on demand |

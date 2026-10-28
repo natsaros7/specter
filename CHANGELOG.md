@@ -16,12 +16,11 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 - `docs/assets/social-preview.svg`: source of the GitHub social preview card (render with `rsvg-convert -w 1280 -h 640`).
 
 ### Changed
+- `--cites`: an elided path (`head/.../tail`) narrows to files containing `head` as whole path segments; if none does, it falls back to matching `tail` alone.
+- `--cites` does not look for repos inside folders whose name starts with `.`.
 - Multi-range citations (`path:12-20,31`) used to be skipped silently; they are now checked, so existing projects can see new `--cites` failures.
 - `--cites` ambiguity can be resolved with `cite_ignore_globs`; a citation can name its repo.
 - `spec_lint.py` is split into collect and print (`lint_all`, `cites`) so the report reuses the checks.
-
-### Fixed
-- `--cites`: an elided path (`head/.../tail`) now has to contain `head` before `tail`, so it no longer matches every copy of `tail`.
 
 ## [0.1.1] - 2026-10-27
 
