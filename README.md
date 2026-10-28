@@ -58,7 +58,7 @@ Say these to your agent. With a skill installed, `/spec-first …` (Claude Code)
 |---|---|---|
 | **"Spec this: <change>"** | requirements → design → tasks with traceable `[REQ-…]` IDs, lint, then it waits for your approval | `new-feature.md` |
 | **"Next task on <feature>"** | One task, the project's gate, tick the box | `next-task.md` |
-| **"Sync specs, <feature> landed"** | Folds the change into the as-built `domains/` docs, traceability and drift | `sync.md` |
+| **"Sync specs, <feature> landed"** | Close-out: `Status: Done`, folds the change into the as-built `domains/` docs, traceability and drift | `sync.md` |
 | **"Refresh the specs"** | Re-grounds against the latest code, logs new drift | `refresh.md` |
 
 Small changes (one file, under the threshold, no contract change) skip the spec and go straight to code.
@@ -149,7 +149,9 @@ python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec cha
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
-Git repos up to two levels below the project are indexed. The report goes to `.specs/report.html` (git-ignored).
+Git repos up to two levels below the project are indexed (linked worktrees and submodules, whose `.git` is a file, are skipped).
+Each feature's `requirements.md` starts with a `Status:` line (Proposed, In progress, Blocked on …, Done <date> (<PR>),
+Dropped <date> (<why>)); the lint WARNs when it is missing or disagrees with the tasks. The report goes to `.specs/report.html` (git-ignored).
 
 New `.specs/spec-kit.json` keys (all optional):
 
@@ -158,6 +160,8 @@ New `.specs/spec-kit.json` keys (all optional):
 | `cite_aliases` | `{}` | Repo prefix to folder, e.g. `{"NS": "tools/load-sim"}` |
 | `cite_ignore_globs` | `[]` | fnmatch on the root-relative path; drops these files when a citation matches several |
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
+| `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
+| `merged_ref` | `"origin/HEAD"` | Ref searched for those commits, in the project and in every indexed child repo; falls back to `HEAD` |
 
 ## Example
 

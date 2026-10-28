@@ -16,4 +16,4 @@ python3 kit/scripts/spec_lint.py --specs .specs --cites`. Released as 0.2.0 on 2
 - [x] 9 README Scripts and settings, CHANGELOG `[Unreleased]` — [REQ-V020-08]
 - [x] 10 Gate green; review in a fresh context — [REQ-V020-01] [REQ-V020-07]
 - [x] 11 Release 0.2.0 (Nikos chose to ship before the Codex dry run) — [REQ-V020-08]
-- [ ] 12 Codex dry run: deferred to the next release; fold its friction log into 0.2.x — [REQ-V020-08]
+- [x] 12 Dropped from 0.2.0 (Codex dry run: deferred to the next release; fold its friction log into 0.2.x) — [REQ-V020-08]

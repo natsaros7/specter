@@ -9,6 +9,8 @@
   "cite_aliases": {},
   "cite_ignore_globs": [],
   "drift_max_age_days": 90,
+  "tracker_pattern": null,
+  "merged_ref": "origin/HEAD",
   "required_sections": {
     "requirements": [],
     "design": []

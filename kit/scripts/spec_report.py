@@ -25,6 +25,7 @@ main{max-width:960px;margin:auto}h1{margin:0}h2{margin:0 0 .75rem;font-size:1.05
 .row .card{margin:0}.num{font-size:1.9rem;font-weight:650}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}
 table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.4rem .5rem;border-bottom:1px solid var(--line);vertical-align:top}
 th{color:var(--mute);font-weight:500;font-size:.8rem}tr:last-child td{border:0}tr.old td{background:color-mix(in srgb,var(--warn) 12%,transparent)}
+.badge{margin-left:.4rem;padding:0 .4rem;border:1px solid var(--warn);border-radius:4px;font-size:.75rem;color:var(--warn)}
 .bar{height:8px;min-width:90px;background:var(--line);border-radius:4px;overflow:hidden}.bar i{display:block;height:100%;background:var(--bar)}
 a{color:var(--bar)}ul{margin:0;padding-left:1.2rem}code{font-size:.85em}
 """
@@ -46,6 +47,9 @@ def progress(specs, name):
 def status(specs, name, done, total):
     req = specs / "features" / name / "requirements.md"
     text = req.read_text() if req.exists() else ""
+    field = spec_lint.feature_status(text)
+    if field and field["state"]:
+        return field["state"]
     if re.search(r"^\s*>?\s*(\*\*)?Status:?(\*\*)?\s*\**Done\b", text, re.I | re.M) or (total and done == total):
         return "Done"
     lines = text.splitlines()
@@ -65,16 +69,18 @@ def build(specs, out):
     lint, cite, config = spec_lint.lint_all(specs), spec_lint.cites(specs), spec_lint.load_config(specs)
     limit = config.get("drift_max_age_days")
     rel = os.path.relpath(specs, out.parent)
-    feats = []
+    feats, stale = [], 0
     for f in lint["features"]:
         done, total = progress(specs, f["name"])
         st = status(specs, f["name"], done, total)
         link = quote(rel + "/features/" + f["name"] + "/requirements.md", safe="/")
         pct = round(100 * done / total) if total else 0
         cls = {"Done": "ok", "Blocked": "bad"}.get(st, "warn" if st == "In progress" else "mute")
+        merged = any(w.startswith(spec_lint.MERGED) for w in f["warns"])
+        stale += merged
         feats.append("<tr><td><a href=\"" + e(link) + "\">" + e(f["name"]) + "</a></td><td>" + str(done) + "/" + str(total)
                      + '</td><td><div class="bar"><i style="width:' + str(pct) + '%"></i></div></td><td class="' + cls + '">'
-                     + st + "</td></tr>")
+                     + st + ('<span class="badge">merged, not closed</span>' if merged else "") + "</td></tr>")
     rows = [r for r in lint["drift"] if not r["resolved"]]
     rows.sort(key=lambda r: -(r["age_days"] if r["age_days"] is not None else -1))
     old = lambda r: limit is not None and r["age_days"] is not None and r["age_days"] > limit
@@ -90,7 +96,8 @@ def build(specs, out):
     nbad = len(cite["problems"])
     counters = [("Features", len(feats), ""), ("Open drift", len(rows), "warn" if any(old(r) for r in rows) else ""),
                 ("Lint FAIL", lint["fails"], "bad" if lint["fails"] else "ok"),
-                ("Citation failures", nbad, "bad" if nbad else "ok")]
+                ("Citation failures", nbad, "bad" if nbad else "ok")] + \
+               ([("Merged, not closed", stale, "warn")] if stale else [])
     cards = "".join('<div class="card"><div class="num ' + c + '">' + str(n) + '</div><div class="mute">' + e(t) + "</div></div>"
                     for t, n, c in counters)
     li = lambda items: "<ul>" + "".join("<li>" + i + "</li>" for i in items) + "</ul>" if items else '<p class="mute">None.</p>'

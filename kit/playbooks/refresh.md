@@ -10,4 +10,5 @@ Run this periodically (each release, or when the specs feel stale) or after a la
 5. Fix spec statements that are now false. Where a fix needs a decision, add a Drift Register row and ask the user
    (same question rules as setup).
 6. Update the profile: new grounded sha, date, and any new interview answers.
-7. Run `spec_lint.py`, then report the docs changed, the drifts opened and resolved, and the open questions.
+7. Run `spec_lint.py`. Go through its Status warnings and any "merged work found" ones: close the feature out
+   (`sync.md`) or correct its status. Then report the docs changed, the drifts opened and resolved, and the open questions.

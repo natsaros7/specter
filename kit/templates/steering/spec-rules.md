@@ -45,7 +45,7 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 
 1. Gate: `<exact commands, e.g. ./gradlew check / npm test && npm run lint>`
 2. `python3 .specs/kit/scripts/spec_lint.py` exits 0.
-3. `tasks.md` fully ticked; affected `domains/` (and `system/`) docs updated in the same commit (§8).
+3. `tasks.md` fully ticked and `Status: Done <date> (<PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
 4. <review rule, e.g. fresh-context review on the diff; security paths get the strongest reviewer>
 
 ## 8. Keep specs in sync

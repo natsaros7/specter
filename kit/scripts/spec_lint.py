@@ -21,7 +21,9 @@ FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature fold
 WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missing; an upstream
       requirement id used in a feature is not in system/traceability.md; setup is still incomplete; an unresolved
       Drift Register row (any table with a Drift column; Logged optional) is older than drift_max_age_days (default 90, null = off),
-      or, once per file, has open rows without a Logged date.
+      or, once per file, has open rows without a Logged date; a feature has no `Status:` line, an unknown status, or a status that
+      disagrees with its tasks (all ticked but not Done, Done with unticked tasks, Done without a date); with tracker_pattern set,
+      commits on merged_ref name the feature's key while the spec says proposed, missing or no task is ticked.
 """
 import datetime
 import fnmatch
@@ -37,7 +39,30 @@ LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
-            "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90}
+            "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
+            "tracker_pattern": None, "merged_ref": "origin/HEAD"}
+STATUS = re.compile(r"^\s*>?\s*(\*\*)?Status:?(\*\*)?\s*(.+)$", re.I)
+STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
+MERGED = "merged work found"
+
+
+def feature_status(text):
+    """First Status line before the first '## ': {"state", "date", "raw"}, or None. state is '' when the value is unknown."""
+    for line in text.splitlines():
+        if line.startswith("## "):
+            return None
+        m = STATUS.match(line)
+        if m:
+            raw = m.group(3).replace("**", "").strip()
+            state = next((name for prefix, name in STATES if raw.lower().startswith(prefix)), "")
+            found = DATE.search(raw)
+            return {"state": state, "date": found.group() if found else None, "raw": raw}
+    return None
+
+
+def task_counts(text):
+    lines = [l for l in text.splitlines() if TASK.match(l)]
+    return sum(1 for l in lines if re.match(r"^\s*- \[[xX]\]", l)), len(lines)
 
 
 def load_config(specs):
@@ -89,6 +114,20 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
         for heading in headings:
             if name in docs and not re.search(r"^" + re.escape(heading) + r"\s*$", docs[name], re.M):
                 warns.append(name + ".md has no '" + heading + "' section")
+    status = feature_status(docs["requirements"])
+    done, total = task_counts(docs.get("tasks", ""))
+    if status is None:
+        warns.append("no Status line (see the requirements template)")
+    elif not status["state"]:
+        warns.append("unknown status '" + status["raw"] + "'")
+    state = status["state"] if status else ""
+    if total and done == total and state not in ("Done", "Dropped"):
+        warns.append("all tasks ticked: close out (Status: Done <date> (<PR>), fold into domains/ per sync.md)")
+    if state == "Done":
+        if done < total:
+            warns.append("Status is Done but " + str(total - done) + " task(s) are unticked")
+        if not status["date"]:
+            warns.append("Done needs a date and the PR or commit")
     if config.get("upstream_req_pattern") and traceability is not None:
         upstream = re.compile(config["upstream_req_pattern"])
         unknown = sorted(set().union(*(upstream.findall(t) for t in docs.values())) - set(upstream.findall(traceability)))
@@ -112,6 +151,26 @@ def broken_links(specs):
     return broken
 
 
+
+
+def repos(root):
+    """Child git repos up to two levels below root: `.git` is a directory (skips linked worktrees and submodules), no hidden parts."""
+    return sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
+                   if p.is_dir() and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
+
+
+def merged_commits(root, child_repos, config):
+    """{repo label: [commit message, ...]} on merged_ref (else HEAD), one git log per repo. Repos with no usable ref are skipped."""
+    out = {}
+    for label, path in [(root.name, root)] + [(r, root / r) for r in child_repos]:
+        if not (path / ".git").exists():
+            continue
+        git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace")
+        ref = config["merged_ref"] if git("rev-parse", "--verify", "--quiet", config["merged_ref"]).returncode == 0 else "HEAD"
+        log = git("log", ref, "--format=%x00%s%n%b")
+        if log.returncode == 0:
+            out[label] = [m for m in log.stdout.split("\0") if m.strip()]
+    return out
 
 
 def drift_rows(specs, max_age):
@@ -161,10 +220,24 @@ def lint_all(specs, names=()):
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists() or "status: setup-incomplete" in profile.read_text():
         warnings.append("WARN setup incomplete: run .specs/kit/playbooks/setup.md")
-    features = []
+    features, commits = [], None
     for feature in targets:
         if feature.is_dir():
             fails, warns = lint_feature(feature, config, traceability, domain_reqs)
+            keys = {m.group(0).upper() for m in re.finditer(config["tracker_pattern"], feature.name, re.I)} if config["tracker_pattern"] else set()
+            if keys and (feature / "requirements.md").exists():
+                if commits is None:
+                    commits = merged_commits(specs.parent, repos(specs.parent), config)
+                hit = re.compile("|".join(re.escape(k) + "(?![0-9])" for k in sorted(keys)))
+                found = {r: sum(1 for m in msgs if hit.search(m.upper())) for r, msgs in commits.items()}
+                found = {r: n for r, n in found.items() if n}
+                status = feature_status((feature / "requirements.md").read_text())
+                tasks = feature / "tasks.md"
+                done, total = task_counts(tasks.read_text() if tasks.exists() else "")
+                if found and (status is None or status["state"] == "Proposed" or not done):
+                    says = status["state"] or status["raw"] if status else "no Status"
+                    warns.append(MERGED + " (" + str(sum(found.values())) + " commit(s) in " + ", ".join(found) + ") but the spec says "
+                                 + says + ", " + str(done) + "/" + str(total) + " tasks")
         else:
             fails, warns = ["no such feature directory"], []
         features.append({"name": feature.name, "ok": not fails, "fails": fails, "warns": warns})
@@ -200,16 +273,15 @@ def cites(specs):
         out = subprocess.run(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
                              capture_output=True, text=True).stdout.splitlines()
         return [prefix + f for f in out if not f.endswith("/")]
-    repos = sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
-                    if not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
-    files = list(dict.fromkeys(ls(root) + [f for repo in repos for f in ls(root / repo, repo + "/")]))
+    children = repos(root)
+    files = list(dict.fromkeys(ls(root) + [f for repo in children for f in ls(root / repo, repo + "/")]))
     files = files or [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
     problems, count = [], 0
     def resolve(md, prefix, path):
         """Returns (file, None) or (None, reason)."""
         scope, base = None, ""
         if prefix:
-            scope = [aliases[prefix].strip("/")] if prefix in aliases else [r for r in repos if r.split("/")[-1] == prefix]
+            scope = [aliases[prefix].strip("/")] if prefix in aliases else [r for r in children if r.split("/")[-1] == prefix]
             if not scope:
                 return None, "unknown repo prefix '" + prefix + "' (add it to cite_aliases)"
             base = scope[0] + "/"

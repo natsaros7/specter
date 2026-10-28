@@ -152,6 +152,39 @@ grep -q 'h%22%3E%3Ci%3Ex' "$K/r.html" && grep -q 'h&quot;&gt;&lt;i&gt;x' "$K/r.h
 rc=0; python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$K/nope" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && [ ! -e "$K/nope" ] || fail "missing specs dir: want exit 2 and nothing created"
 
+echo "5l. status checks, merged-work detection, linked worktrees, report badge"
+M="$TMP/merged"; mkdir -p "$M/.specs/features/abc-7-x"; gitq -C "$M" init
+printf '{"tracker_pattern": "ABC-[0-9]+", "merged_ref": "nope/none"}\n' > "$M/.specs/spec-kit.json"
+F="$M/.specs/features/abc-7-x"
+printf '# X\n\nStatus: In progress\n\n[REQ-X-01] a\n' > "$F/requirements.md"; echo REQ-X-01 > "$F/design.md"
+printf -- '- [ ] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+echo a > "$M/a.txt"; gitq -C "$M" add a.txt; gitq -C "$M" commit -m "feat: thing (ABC-7)"
+out=$(L --specs "$M/.specs"); echo "$out" | grep -q "WARN merged work found (1 commit(s) in merged) but the spec says In progress, 0/1 tasks" || fail "merged work not reported: $out"
+gitq -C "$M" commit --allow-empty -m "feat: other (ABC-70)"
+L --specs "$M/.specs" | grep -q "merged work found (1 commit(s)" || fail "ABC-70 counted for ABC-7"
+printf -- '- [x] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+out=$(L --specs "$M/.specs"); echo "$out" | grep -q "all tasks ticked: close out" || fail "no close-out warning"
+echo "$out" | grep -q "merged work" && fail "merged warning with a ticked task" || true
+printf '# X\n\nStatus: Done\n\n[REQ-X-01] a\n' > "$F/requirements.md"
+L --specs "$M/.specs" | grep -q "Done needs a date" || fail "Done without a date accepted"
+printf -- '- [x] 1 a [REQ-X-01]\n- [ ] 2 b [REQ-X-01]\n' > "$F/tasks.md"
+L --specs "$M/.specs" | grep -q "Status is Done but 1 task(s) are unticked" || fail "unticked tasks under Done"
+printf '# X\n\n> **Status:** Done 2026-01-02 (PR 3)\n\n[REQ-X-01] a\n' > "$F/requirements.md"; printf -- '- [x] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+L --specs "$M/.specs" | grep -q "^     WARN" && fail "clean Done feature warns" || true
+printf '# X\n\nStatus: Maybe\n\n[REQ-X-01] a\n' > "$F/requirements.md"
+L --specs "$M/.specs" | grep -q "unknown status 'Maybe'" || fail "unknown status accepted"
+printf '# X\n\n[REQ-X-01] a\n' > "$F/requirements.md"
+L --specs "$M/.specs" | grep -q "no Status line (see the requirements template)" || fail "missing status not reported"
+printf -- '- [ ] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+printf '# X\n\nStatus: Proposed\n\n[REQ-X-01] a\n' > "$F/requirements.md"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$M/.specs" --out "$M/r.html" >/dev/null || fail "report"
+grep -q "merged, not closed" "$M/r.html" && grep -q "Merged, not closed" "$M/r.html" || fail "report lacks the merged badge"
+rc=0; L --specs "$M/.specs" >/dev/null || rc=$?; [ "$rc" = 0 ] || fail "merged warning changed the exit code"
+printf 'x\n' > "$M/.specs/note.txt"; seq 1 3 > "$M/w.txt"; gitq -C "$M" add w.txt .specs/note.txt; gitq -C "$M" commit -m "add w"
+gitq -C "$M" worktree add "$M/wt" -b side 2>/dev/null
+printf '`w.txt:2`\n' > "$M/.specs/domains.md"
+L --specs "$M/.specs" --cites >/dev/null || fail "linked worktree made a citation ambiguous"
+
 echo "6. uninstall keeps user content"
 printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
 [ "$(grep -c report.html "$P/.specs/.gitignore")" = 1 ] && grep -qx mine "$P/.specs/.gitignore" || fail "re-install changed .gitignore"

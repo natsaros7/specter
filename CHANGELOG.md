@@ -5,6 +5,19 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+### Added
+- Feature `Status:` line (Proposed, In progress, Blocked on …, Done <date> (<PR>), Dropped <date> (<why>)) in the `requirements.md` template; the lint reads the first one before the first `## `.
+- Lint WARNs: no `Status:` line, unknown status, all tasks ticked but not Done/Dropped, Done with unticked tasks, Done without a date.
+- Merged-work detection: with `tracker_pattern` set, the lint WARNs when commits on `merged_ref` name a feature's key while its spec says Proposed, has no status, or has no task ticked. One `git log` per repo; exit code unchanged.
+- `spec-kit.json` keys `tracker_pattern` (default `null`) and `merged_ref` (default `origin/HEAD`, falls back to `HEAD`).
+- Report: status comes from the `Status:` line; a `merged, not closed` badge and a counter.
+- Close-out steps in `sync.md`, `next-task.md`, `refresh.md`, `AGENT_RULES.md` and the spec-rules Definition of Done.
+
+### Changed
+- The repo index for `--cites` and merged-work detection skips linked worktrees and submodules (`.git` is a file).
+- Specs without a `Status:` line now get one WARN per feature (exit code unchanged); `spec_report.py` infers the status as before for them.
+- The feature template moves the "Blocked on" note into `Status:`.
+
 ## [0.2.0] - 2026-10-28
 
 Specs you can see at a glance, and a citation checker that understands how people actually cite code.
