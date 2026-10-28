@@ -30,9 +30,11 @@ the spec" can't go unnoticed.
 ### [REQ-V030-01] Status field
 
 - The feature `requirements.md` template SHALL start with a `Status:` line right under the title, with one of:
-  `Proposed` · `In progress` · `Blocked on <what>` · `Done <YYYY-MM-DD> (<PR or commit>)` · `Dropped <YYYY-MM-DD> (<why>)`.
-- The lint SHALL read the first `Status:` line before the first `## ` heading (optional leading `>` and `**`). An
-  unknown value SHALL WARN `unknown status '<value>'`.
+  `Proposed` · `In progress` · `Blocked on <what>` · `Done <YYYY-MM-DD> (<branch, commit or PR>)` · `Dropped <YYYY-MM-DD> (<why>)`.
+  The reference can be the branch name when the status ships in the same commit as the code; the PR can be added later.
+- The lint SHALL read the first non-empty `Status:` field before the first `## ` heading, outside fenced blocks. The
+  colon is required; `Status:`, `**Status:**` and `**Status**:` are accepted, with an optional leading `>`. An unknown
+  value SHALL WARN `unknown status '<value>'`.
 
 ### [REQ-V030-02] Consistency checks
 
@@ -43,7 +45,7 @@ the spec" can't go unnoticed.
 | No `Status:` line | `no Status line (see the requirements template)` |
 | All tasks ticked, status not `Done`/`Dropped` | `all tasks ticked: close out (Status: Done <date> (<PR>), fold into domains/ per sync.md)` |
 | Status `Done`, some tasks unticked | `Status is Done but N task(s) are unticked` |
-| Status `Done` without a date | `Done needs a date and the PR or commit` |
+| Status `Done` without a date or a `(…)` reference | `Done needs a date and a (branch, commit or PR) reference` |
 
 ### [REQ-V030-03] Merged-work detection
 
@@ -56,7 +58,10 @@ the spec" can't go unnoticed.
 - WHEN commits exist AND the status is missing or `Proposed`, or (no task is ticked AND the status is not `Done` or
   `Dropped`) THEN it SHALL WARN
   `merged work found (<N> commit(s) in <repos>) but the spec says <status>, <done>/<total> tasks`.
-- The project root SHALL be labelled `.` in the repo list. The check SHALL NOT change the exit code.
+- The project root SHALL be labelled `.` in the repo list. The check SHALL NOT change the exit code, also when `git`
+  is missing (one WARN, check skipped) or `tracker_pattern` is invalid (one WARN, check skipped).
+- A key SHALL match only with no letter or digit on either side (`ABC-7` matches neither `ABC-70` nor `XABC-7`). Empty
+  matches are ignored.
 
 ### [REQ-V030-04] Close-out step in the playbooks
 
@@ -74,8 +79,8 @@ the spec" can't go unnoticed.
 
 ### [REQ-V030-05] Linked worktrees
 
-The repo index (`--cites` and REQ-V030-03) SHALL skip folders whose `.git` is a file (linked worktrees and
-submodules).
+The repo index (`--cites` and REQ-V030-03) SHALL skip linked worktrees: a `.git` file whose `gitdir:` points into
+another repo's `.git/worktrees/`. Submodules (a `.git` file pointing into `.git/modules/`) stay indexed.
 
 ### [REQ-V030-06] Report
 

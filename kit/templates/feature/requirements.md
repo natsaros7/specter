@@ -1,7 +1,7 @@
 # <ID> <Title> — Requirements
 
 Status: Proposed
-<!-- One of: Proposed · In progress · Blocked on <what> · Done <YYYY-MM-DD> (<PR or commit>) · Dropped <YYYY-MM-DD> (<why>) -->
+<!-- One of: Proposed · In progress · Blocked on <what> · Done <YYYY-MM-DD> (<branch, commit or PR>) · Dropped <YYYY-MM-DD> (<why>) -->
 
 Tracker: <ID or "none">. Branch `<type>/<ID>-<summary>`. Size <S/M/L>.
 

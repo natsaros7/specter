@@ -152,49 +152,63 @@ grep -q 'h%22%3E%3Ci%3Ex' "$K/r.html" && grep -q 'h&quot;&gt;&lt;i&gt;x' "$K/r.h
 rc=0; python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$K/nope" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && [ ! -e "$K/nope" ] || fail "missing specs dir: want exit 2 and nothing created"
 
-echo "5l. status checks, merged-work detection, linked worktrees, report badge"
-M="$TMP/merged"; mkdir -p "$M/.specs/features/abc-7-x"; gitq -C "$M" init
-printf '{"tracker_pattern": "ABC-[0-9]+"}\n' > "$M/.specs/spec-kit.json"
-F="$M/.specs/features/abc-7-x"
-printf '# X\n\nStatus: In progress\n\n[REQ-X-01] a\n' > "$F/requirements.md"; echo REQ-X-01 > "$F/design.md"
-printf -- '- [ ] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+echo "5l. status checks, merged-work detection, linked worktrees and submodules, report badge"
+M="$TMP/merged"; mkdir -p "$M/.specs/features/abc-7-x" "$M/.specs/features/abc-70-y" "$M/pkg"; gitq -C "$M" init
+F="$M/.specs/features/abc-7-x"; F2="$M/.specs/features/abc-70-y"
+cfg() { printf '{"tracker_pattern": "ABC-[0-9]+"%s}\n' "$1" > "$M/.specs/spec-kit.json"; }
+req() { printf '# X\n\n%s\n\n[REQ-X-01] a\n' "$1" > "$F/requirements.md"; }
+tasks() { printf -- '%s\n' "$1" > "$F/tasks.md"; }
+warns() { L --specs "$M/.specs" --json | python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join(d["warnings"] + [f["name"] + ": " + w for f in d["features"] for w in f["warns"]]))'; }
+cfg ""; req "Status: In progress"; tasks '- [ ] 1 a [REQ-X-01]'; echo REQ-X-01 > "$F/design.md"
+printf '# Y\n\nStatus: In progress\n\n[REQ-X-01] a\n' > "$F2/requirements.md"; echo REQ-X-01 > "$F2/design.md"; cp "$F/tasks.md" "$F2/tasks.md"
 echo a > "$M/a.txt"; gitq -C "$M" add a.txt; gitq -C "$M" commit -m "feat: thing (ABC-7)"
-out=$(L --specs "$M/.specs"); echo "$out" | grep -q "WARN merged work found (1 commit(s) in .) but the spec says In progress, 0/1 tasks" || fail "merged work not reported: $out"
-gitq -C "$M" commit --allow-empty -m "feat: other (ABC-70)"
-L --specs "$M/.specs" | grep -q "merged work found (1 commit(s)" || fail "ABC-70 counted for ABC-7"
-printf -- '- [x] 1 a [REQ-X-01]\n' > "$F/tasks.md"
+warns | grep -q "abc-7-x: merged work found (1 commit(s) in .) but the spec says In progress, 0/1 tasks" || fail "merged work not reported: $(warns)"
+echo b > "$M/b.txt"; gitq -C "$M" add b.txt; gitq -C "$M" commit -m "feat: other (ABC-70)"
+echo c > "$M/c.txt"; gitq -C "$M" add c.txt; gitq -C "$M" commit -m "chore: XABC-7 and ABC-7x are not it"
+warns | grep -q "abc-7-x: merged work found (1 commit(s) in .)" || fail "ABC-70 or XABC-7 counted for ABC-7: $(warns)"
+warns | grep -q "abc-70-y: merged work found (1 commit(s) in .)" || fail "ABC-70 feature got no warning: $(warns)"
 mkdir -p "$M/kid"; gitq -C "$M/kid" init; echo k > "$M/kid/k.txt"; gitq -C "$M/kid" add k.txt; gitq -C "$M/kid" commit -m "kid (ABC-7)"; gitq -C "$M/kid" branch -m trunk
 echo s >> "$M/.specs/note.md"; gitq -C "$M" add .specs/note.md; gitq -C "$M" commit -m "docs(specs): ABC-7 spec only"
-printf '{"tracker_pattern": "ABC-[0-9]+", "merged_ref": "main"}\n' > "$M/.specs/spec-kit.json"
-printf -- '- [ ] 1 a [REQ-X-01]\n' > "$F/tasks.md"
-out=$(L --specs "$M/.specs"); echo "$out" | grep -q "merged work found (1 commit(s) in .)" || fail "spec-only commit counted or skipped repo not skipped: $out"
-printf '# X\n\nStatus: Dropped 2026-01-02 (no)\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-L --specs "$M/.specs" | grep -q "merged work" && fail "Dropped feature got a merged-work WARN" || true
-printf '# X\n\nStatus: In progress\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-printf '{"tracker_pattern": "ABC-[0-9]+", "merged_ref": "nope/none"}\n' > "$M/.specs/spec-kit.json"
-printf -- '- [x] 1 a [REQ-X-01]\n' > "$F/tasks.md"
-out=$(L --specs "$M/.specs"); echo "$out" | grep -q "all tasks ticked: close out" || fail "no close-out warning"
-echo "$out" | grep -q "merged work" && fail "merged warning with a ticked task" || true
-printf '# X\n\nStatus: Done\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-L --specs "$M/.specs" | grep -q "Done needs a date" || fail "Done without a date accepted"
-printf -- '- [x] 1 a [REQ-X-01]\n- [ ] 2 b [REQ-X-01]\n' > "$F/tasks.md"
-L --specs "$M/.specs" | grep -q "Status is Done but 1 task(s) are unticked" || fail "unticked tasks under Done"
-printf '# X\n\n> **Status:** Done 2026-01-02 (PR 3)\n\n[REQ-X-01] a\n' > "$F/requirements.md"; printf -- '- [x] 1 a [REQ-X-01]\n' > "$F/tasks.md"
-L --specs "$M/.specs" | grep -q "^     WARN" && fail "clean Done feature warns" || true
-printf '# X\n\nStatus: Maybe\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-L --specs "$M/.specs" | grep -q "unknown status 'Maybe'" || fail "unknown status accepted"
-printf '# X\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-L --specs "$M/.specs" | grep -q "no Status line (see the requirements template)" || fail "missing status not reported"
-printf -- '- [ ] 1 a [REQ-X-01]\n' > "$F/tasks.md"
-printf '# X\n\nStatus: Proposed\n\n[REQ-X-01] a\n' > "$F/requirements.md"
-printf '{"tracker_pattern": "ABC-[0-9]+", "merged_ref": "main"}\n' > "$M/.specs/spec-kit.json"
+cfg ', "merged_ref": "main"'
+warns | grep -q "abc-7-x: merged work found (1 commit(s) in .)" || fail "spec-only commit counted or repo without merged_ref not skipped: $(warns)"
+req "Status: Dropped 2026-01-02 (no)"
+warns | grep -q "abc-7-x: merged work" && fail "Dropped feature got a merged-work WARN" || true
+req "Status: In progress"; tasks '- [x] 1 a [REQ-X-01]'
+warns | grep -q "abc-7-x: all tasks ticked: close out" || fail "no close-out warning"
+warns | grep -q "abc-7-x: merged work" && fail "merged warning with a ticked task" || true
+req "Status: Done"; warns | grep -q "Done needs a date and a (branch, commit or PR) reference" || fail "Done without a date accepted"
+req "Status: Done 2026-01-02"; warns | grep -q "Done needs a date and a" || fail "Done without a reference accepted"
+tasks '- [x] 1 a [REQ-X-01]
+- [ ] 2 b [REQ-X-01]'
+req "Status: Done 2026-01-02 (feat/x)"; warns | grep -q "Status is Done but 1 task(s) are unticked" || fail "unticked tasks under Done"
+req "> **Status:** Done 2026-01-02 (PR 3)"; tasks '- [x] 1 a [REQ-X-01]'
+warns | grep -q "^abc-7-x: " && fail "clean Done feature warns: $(warns)" || true
+req "**Status**: Maybe"; warns | grep -q "unknown status 'Maybe'" || fail "unknown status accepted"
+req "Status quo is bad."; warns | grep -q "abc-7-x: no Status line" || fail "'Status quo' read as a status"
+req '```
+Status: Done 2026-01-02 (x)
+```'; warns | grep -q "abc-7-x: no Status line" || fail "fenced Status read"
+req "Status:
+
+**Status:** Blocked on y"; warns | grep -Eq "abc-7-x: (no Status|unknown status)" && fail "empty Status field hid the real one: $(warns)" || true
+cfg ', "merged_ref": "main"'; req "Status: Proposed"; tasks '- [ ] 1 a [REQ-X-01]'
 python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$M/.specs" --out "$M/r.html" >/dev/null || fail "report"
 grep -q "merged, not closed" "$M/r.html" && grep -q "Merged, not closed" "$M/r.html" || fail "report lacks the merged badge"
 rc=0; L --specs "$M/.specs" >/dev/null || rc=$?; [ "$rc" = 0 ] || fail "merged warning changed the exit code"
-printf 'x\n' > "$M/.specs/note.txt"; seq 1 3 > "$M/w.txt"; gitq -C "$M" add w.txt .specs/note.txt; gitq -C "$M" commit -m "add w"
-gitq -C "$M" worktree add "$M/wt" -b side 2>/dev/null
+rc=0; out=$(PATH=/nonexistent "$(command -v python3)" "$KIT/kit/scripts/spec_lint.py" --specs "$M/.specs") || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available" || fail "missing git: $out"
+printf '{"tracker_pattern": "ABC-["}\n' > "$M/.specs/spec-kit.json"
+rc=0; out=$(L --specs "$M/.specs") || rc=$?
+[ "$rc" = 0 ] && [ "$(echo "$out" | grep -c 'invalid tracker_pattern')" = 1 ] || fail "invalid tracker_pattern: $out"
+mkdir -p "$M/pkg"; seq 1 3 > "$M/pkg/w.txt"; gitq -C "$M" add pkg/w.txt; gitq -C "$M" commit -m "add w"
+gitq -C "$M" worktree add "$M/wt" -b side; [ -e "$M/wt/.git" ] && [ -e "$M/wt/pkg/w.txt" ] || fail "worktree not created"
 printf '`w.txt:2`\n' > "$M/.specs/domains.md"
 L --specs "$M/.specs" --cites >/dev/null || fail "linked worktree made a citation ambiguous"
+mkdir -p "$M/libx" "$M/.git/modules"; git -c init.defaultBranch=main init -q --separate-git-dir "$M/.git/modules/libx" "$M/libx"
+grep -q "/.git/modules/libx" "$M/libx/.git" || fail "fake submodule not created"
+echo l > "$M/libx/l.txt"; gitq -C "$M/libx" add l.txt
+printf '`libx:l.txt:1`\n' > "$M/.specs/domains.md"
+L --specs "$M/.specs" --cites >/dev/null || fail "submodule-style repo not indexed"
 
 echo "6. uninstall keeps user content"
 printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null

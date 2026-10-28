@@ -28,15 +28,15 @@ task is ticked when it matches `[x]`/`[X]`.
 `lint_all` then checks each feature:
 
 1. It extracts keys from the folder name with `tracker_pattern` (case-insensitive) and normalises them to upper case.
-2. It counts the messages containing the key with `(?![0-9])`.
+2. It counts the messages containing the key with `(?<![A-Za-z0-9])KEY(?![A-Za-z0-9])`.
 3. It applies the REQ-V030-03 conditions.
 
 Cost: one `git log` per repo per lint run. A 30-repo workspace with long histories takes seconds; the lint already
 lists files with one `git ls-files` per repo.
 
-The repo index helper moves from `cites` into a shared `repos(root)` used by both checks. It returns paths whose
-`.git` **is a directory** (`p.is_dir()`), at depth 1 and 2, skipping hidden parts (already in 0.2.0). That excludes
-linked worktrees and submodules.
+The repo index helper moves from `cites` into a shared `repos(root)` used by both checks. It returns paths at depth 1 and 2 whose `.git` is a
+directory, or a file whose `gitdir:` doesn't contain `/worktrees/`, skipping hidden parts (already in 0.2.0). That
+excludes linked worktrees and keeps submodules.
 
 ## Playbooks and templates — [REQ-V030-04] [REQ-V030-07]
 

@@ -14,7 +14,7 @@ This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is 
 **Before you call it done**
 - The spec ships in the same commit as the code: follow `.specs/kit/playbooks/sync.md`.
 - If a spec statement becomes false and you can't fix it now, add a dated row to the Drift Register (`.specs/system/data-flows.md`). Don't leave the spec silently wrong.
-- When the last task lands, close the feature out (`Status: Done <date> (<PR>)`, per `sync.md`) before reporting it finished.
+- When the last task lands, close the feature out (`Status: Done <date> (<branch, commit or PR>)`, per `sync.md`) before reporting it finished.
 - Run `python3 .specs/kit/scripts/spec_lint.py`. It must exit 0.
 
 **Asking the user**

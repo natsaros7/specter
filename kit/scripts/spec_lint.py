@@ -42,19 +42,20 @@ DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
             "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
             "tracker_pattern": None, "merged_ref": None}
-STATUS = re.compile(r"^\s*>?\s*(\*\*)?Status:?(\*\*)?\s*(.+)$", re.I)
+STATUS = re.compile(r"^\s*>?\s*(?:\*\*Status:\*\*|\*\*Status\*\*:|Status:)\s*(.*)$", re.I)
 STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
 MERGED = "merged work found"
 
 
 def feature_status(text):
-    """First Status line before the first '## ': {"state", "date", "raw"}, or None. state is '' when the value is unknown."""
-    for line in text.splitlines():
+    """First non-empty Status field before the first '## ', outside fences: {"state", "date", "raw"}, or None.
+    state is '' when the value is unknown."""
+    for line in FENCE.sub("", text).splitlines():
         if line.startswith("## "):
             return None
         m = STATUS.match(line)
-        if m:
-            raw = m.group(3).replace("**", "").strip()
+        if m and m.group(1).replace("**", "").strip():
+            raw = m.group(1).replace("**", "").strip()
             state = next((name for prefix, name in STATES if raw.lower().startswith(prefix)), "")
             found = DATE.search(raw)
             return {"state": state, "date": found.group() if found else None, "raw": raw}
@@ -127,8 +128,8 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
     if state == "Done":
         if done < total:
             warns.append("Status is Done but " + str(total - done) + " task(s) are unticked")
-        if not status["date"]:
-            warns.append("Done needs a date and the PR or commit")
+        if not status["date"] or not re.search(r"\([^)]+\)", status["raw"]):
+            warns.append("Done needs a date and a (branch, commit or PR) reference")
     if config.get("upstream_req_pattern") and traceability is not None:
         upstream = re.compile(config["upstream_req_pattern"])
         unknown = sorted(set().union(*(upstream.findall(t) for t in docs.values())) - set(upstream.findall(traceability)))
@@ -155,22 +156,32 @@ def broken_links(specs):
 
 
 def repos(root):
-    """Child git repos up to two levels below root: `.git` is a directory (skips linked worktrees and submodules), no hidden parts."""
+    """Child git repos up to two levels below root, no hidden parts. Linked worktrees (`.git` file with a `gitdir:` into
+    `/worktrees/`) are skipped; submodules stay."""
+    def worktree(p):
+        try:
+            return p.is_file() and "/worktrees/" in p.read_text(errors="replace").replace("\\", "/")
+        except OSError:
+            return True
     return sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
-                   if p.is_dir() and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
+                   if not worktree(p) and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
 
 
 def merged_commits(root, child_repos, config):
     """{repo label: [commit message, ...]}, one git log per repo, ignoring commits that touch only .specs/.
-    Ref: merged_ref if set (a repo without it is skipped), else origin/HEAD, then HEAD."""
+    Ref: merged_ref if set (a repo without it is skipped), else origin/HEAD, then HEAD. None when git is missing or times out."""
     out = {}
     for label, path in [(".", root)] + [(r, root / r) for r in child_repos]:
         if not (path / ".git").exists():
             continue
-        git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace")
-        ref = next((r for r in ([config["merged_ref"]] if config["merged_ref"] else ["origin/HEAD", "HEAD"])
-                    if git("rev-parse", "--verify", "--quiet", r).returncode == 0), None)
-        log = git("log", ref, "--format=%x00%s%n%b", "--", ".", ":(exclude).specs") if ref else None
+        git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace",
+                                        timeout=60)
+        try:
+            ref = next((r for r in ([config["merged_ref"]] if config["merged_ref"] else ["origin/HEAD", "HEAD"])
+                        if git("rev-parse", "--verify", "--quiet", r).returncode == 0), None)
+            log = git("log", ref, "--format=%x00%s%n%b", "--", ".", ":(exclude).specs") if ref else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
         if log and log.returncode == 0:
             out[label] = [m for m in log.stdout.split("\0") if m.strip()]
     return out
@@ -223,15 +234,23 @@ def lint_all(specs, names=()):
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists() or "status: setup-incomplete" in profile.read_text():
         warnings.append("WARN setup incomplete: run .specs/kit/playbooks/setup.md")
-    features, commits = [], None
+    features, commits, tracker = [], None, None
+    if config["tracker_pattern"]:
+        try:
+            tracker = re.compile(config["tracker_pattern"], re.I)
+        except re.error as err:
+            warnings.append("WARN merged-work check skipped: invalid tracker_pattern (" + str(err) + ")")
     for feature in targets:
         if feature.is_dir():
             fails, warns = lint_feature(feature, config, traceability, domain_reqs)
-            keys = {m.group(0).upper() for m in re.finditer(config["tracker_pattern"], feature.name, re.I)} if config["tracker_pattern"] else set()
+            keys = {m.group(0).upper() for m in tracker.finditer(feature.name) if m.group(0)} if tracker else set()
             if keys and (feature / "requirements.md").exists():
                 if commits is None:
                     commits = merged_commits(specs.parent, repos(specs.parent), config)
-                hit = re.compile("|".join(re.escape(k) + "(?![0-9])" for k in sorted(keys)))
+                    if commits is None:
+                        commits = {}
+                        warnings.append("WARN merged-work check skipped: git not available")
+                hit = re.compile("|".join("(?<![A-Za-z0-9])" + re.escape(k) + "(?![A-Za-z0-9])" for k in sorted(keys)))
                 found = {r: sum(1 for m in msgs if hit.search(m.upper())) for r, msgs in commits.items()}
                 found = {r: n for r, n in found.items() if n}
                 status = feature_status((feature / "requirements.md").read_text())

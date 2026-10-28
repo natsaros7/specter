@@ -16,8 +16,8 @@ The spec ships **in the same commit** as the code, or the change isn't done. The
 Not finished until all five are done. The lint WARNs on "all tasks ticked" without `Done`, and on merged work in a spec
 that still says Proposed.
 
-1. Set `Status: Done <YYYY-MM-DD> (<PR or commit>)` in the feature's `requirements.md`.
-2. Tick the remaining tasks, or mark them dropped with a reason.
+1. Set `Status: Done <YYYY-MM-DD> (<branch, commit or PR>)` in the feature's `requirements.md`.
+2. Tick every task; for one you won't do, tick it and write `Dropped: <reason>` in its text.
 3. Fold the outcome into `domains/` (as-built state) and `system/`. The feature folder is now history: don't delete it,
    and don't keep editing it.
 4. Resolve the Drift Register rows it fixed (mark **RESOLVED YYYY-MM-DD**).
