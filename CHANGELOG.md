@@ -5,6 +5,10 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-28
+
+Specs you can see at a glance, and a citation checker that understands how people actually cite code.
+
 ### Added
 - `spec_report.py`: one self-contained HTML page (no JavaScript, light and dark) with feature progress, open drift, coverage and citation health; written to `.specs/report.html`.
 - `spec_lint.py --json` for the default and `--cites` modes (same exit codes).
@@ -21,6 +25,7 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 - Multi-range citations (`path:12-20,31`) used to be skipped silently; they are now checked, so existing projects can see new `--cites` failures.
 - `--cites` ambiguity can be resolved with `cite_ignore_globs`; a citation can name its repo.
 - `spec_lint.py` is split into collect and print (`lint_all`, `cites`) so the report reuses the checks.
+- `AGENTS.md` lists the contributor gates for changing specter itself; specter's own specs live in `.specs/`.
 
 ## [0.1.1] - 2026-10-27
 
