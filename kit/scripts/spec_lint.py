@@ -1,19 +1,30 @@
 #!/usr/bin/env python3
 """Script gate for the spec layer. Structural only: no AI and no network. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [feature-dir-name ...]
-       python3 .specs/kit/scripts/spec_lint.py [--specs DIR] --cites    check `path:line` citations only
+Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
+       python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
        default DIR = the .specs/ this script is installed in; default features = all
 
---cites resolves every `path:line` / `path:a-b` in backticks against the project (the folder holding .specs/).
-      Elided paths (`.../web/Foo.java:12`) match by suffix. FAIL: no such file, ambiguous, past EOF, or a blank cited line.
+--json prints one JSON object instead of text (same exit code): default mode {features, links, drift, warnings, fails},
+      --cites {count, problems}.
+
+--cites resolves every citation in backticks against the project (the folder holding .specs/). Notations:
+      `path:12`  `path:12-20`  `path:12-20,31,40-44`  `path#L12`  `path#L12-L20`  and `<repo>:path:12`, where <repo> is a
+      key of cite_aliases (spec-kit.json: {"NS": "tools/load-sim"}) or the folder name of an indexed repo. Git repos are
+      indexed up to two levels below the project. Elided paths (`.../web/Foo.java:12`) match by suffix; if several files
+      match, those matching cite_ignore_globs are dropped. Every listed range is checked on its own.
+      FAIL: no such file, ambiguous, unknown repo prefix, past EOF, or a blank cited range.
 
 FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature folder name is not kebab-case;
       a feature defines no [REQ-..]; a defined REQ is absent from design.md or tasks.md; a REQ is
       referenced but defined neither in the feature nor in domains/*/requirements.md; a relative markdown link under .specs/ points to nothing.
 WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missing; an upstream
-      requirement id used in a feature is not in system/traceability.md; setup is still incomplete.
+      requirement id used in a feature is not in system/traceability.md; setup is still incomplete; an unresolved
+      Drift Register row (any table with a Drift column; Logged optional) is older than drift_max_age_days (default 90, null = off),
+      or, once per file, has open rows without a Logged date.
 """
+import datetime
+import fnmatch
 import json
 import re
 import subprocess
@@ -24,7 +35,9 @@ TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FENCE = re.compile(r"^```.*?^```", re.M | re.S)
-DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {}}
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
+DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
+            "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90}
 
 
 def load_config(specs):
@@ -32,6 +45,12 @@ def load_config(specs):
     config = dict(DEFAULTS)
     if path.exists():
         config.update(json.loads(path.read_text()))
+    age = config["drift_max_age_days"]
+    if age is not None:
+        try:
+            config["drift_max_age_days"] = int(age)
+        except (TypeError, ValueError):
+            sys.exit("spec-kit.json: drift_max_age_days must be an integer or null, got " + json.dumps(age))
     return config
 
 
@@ -93,88 +112,198 @@ def broken_links(specs):
     return broken
 
 
-CITE = re.compile(r"`([^`\s]*?[\w-]+\.[A-Za-z0-9]+):(\d+)(?:-(\d+))?`")
 
 
-def check_cites(specs):
-    root = specs.parent
-    def ls(repo, prefix=""):
-        out = subprocess.run(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
-                             capture_output=True, text=True).stdout.splitlines()
-        return [prefix + f for f in out]
-    files = ls(root) + [f for child in sorted(root.glob("*/.git")) for f in ls(child.parent, child.parent.name + "/")]
-    files = files or [str(p.relative_to(root)) for p in root.rglob("*") if p.is_file()]
-    problems, count = [], 0
+def drift_rows(specs, max_age):
+    today, rows = datetime.date.today(), []
     for md in sorted(specs.rglob("*.md")):
-        if "kit" in md.relative_to(specs).parts[:1]:
+        if md.relative_to(specs).parts[0] == "kit":
             continue
-        for path, start, end in CITE.findall(FENCE.sub("", md.read_text())):
-            count += 1
-            where = str(md.relative_to(specs)) + ": `" + path + ":" + start + (("-" + end) if end else "") + "`"
-            tail = re.split(r"\.\.\./|…/", path)[-1].lstrip("./")
-            if (root / path).is_file():
-                target = root / path
-            else:
-                hits = [f for f in files if f == tail or f.endswith("/" + tail)]
-                parts = md.relative_to(specs).parts
-                if len(hits) > 1 and parts[0] == "domains":
-                    hits = [f for f in hits if parts[1] in f.split("/")[0]] or hits
-                if len(hits) != 1:
-                    problems.append(where + (" ambiguous (use the repo-relative path): " + ", ".join(hits[:3]) if hits else " no such file"))
-                    continue
-                target = root / hits[0]
-            lines = target.read_text(errors="replace").splitlines()
-            last = int(end or start)
-            if last > len(lines):
-                problems.append(where + " past end of file (" + str(len(lines)) + " lines)")
-            elif not any(line.strip() for line in lines[int(start) - 1:last]):
-                problems.append(where + (" cited lines are blank" if end else " cited line is blank"))
-    for p in problems:
-        print("FAIL cite " + p)
-    print("spec-lint --cites: " + str(len(problems)) + " FAIL of " + str(count) + " citation(s)")
-    return 1 if problems else 0
+        cols = None
+        for line in FENCE.sub("", md.read_text()).splitlines():
+            if not line.lstrip().startswith("|"):
+                cols = None
+                continue
+            cells = [c.strip() for c in line.strip().strip("|").replace("\\|", "\x00").split("|")]
+            lower = [c.lower() for c in cells]
+            if cols is None:
+                cols = {name: i for i, name in enumerate(lower)} if "drift" in lower else False
+                continue
+            if not cols or not cells[0] or set("".join(cells)) <= set("-: "):
+                continue
+            cell = lambda name: cells[cols[name]] if name in cols and cols[name] < len(cells) else ""
+            found = DATE.search(cell("logged"))
+            try:
+                logged = datetime.date.fromisoformat(found.group()) if found else None
+            except ValueError:
+                logged = None
+            sev = cell("sev")
+            rows.append({"file": str(md.relative_to(specs)), "id": cells[0], "sev": sev, "text": cell("drift").replace("\x00", "|"),
+                         "logged": str(logged) if logged else None,
+                         "age_days": (today - logged).days if logged else None, "resolved": "RESOLVED" in line})
+    return rows
 
 
-def main(argv):
-    specs = Path(__file__).resolve().parents[2]
-    if argv[:1] == ["--specs"]:
-        specs, argv = Path(argv[1]).resolve(), argv[2:]
-    if "--cites" in argv:
-        return check_cites(specs)
+def lint_all(specs, names=()):
     config = load_config(specs)
     features_dir = specs / "features"
     trace_path = specs / "system" / "traceability.md"
     traceability = trace_path.read_text() if trace_path.exists() else None
-    if argv:
-        targets = [features_dir / n for n in argv]
+    if names:
+        targets = [features_dir / n for n in names]
     elif features_dir.is_dir():
         targets = sorted(p for p in features_dir.iterdir() if p.is_dir())
     else:
         targets = []
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
     domain_reqs = frozenset(i for p in sorted(specs.glob("domains/*/requirements.md")) for i in defined_re.findall(p.read_text()))
-    total = 0
+    warnings = []
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists() or "status: setup-incomplete" in profile.read_text():
-        print("WARN setup incomplete: run .specs/kit/playbooks/setup.md")
+        warnings.append("WARN setup incomplete: run .specs/kit/playbooks/setup.md")
+    features = []
     for feature in targets:
-        if not feature.is_dir():
-            print("FAIL " + feature.name + ": no such feature directory")
-            total += 1
-            continue
-        fails, warns = lint_feature(feature, config, traceability, domain_reqs)
-        total += len(fails)
-        print(("FAIL " if fails else "OK   ") + feature.name)
-        for f in fails:
-            print("     FAIL " + f)
-        for w in warns:
-            print("     WARN " + w)
+        if feature.is_dir():
+            fails, warns = lint_feature(feature, config, traceability, domain_reqs)
+        else:
+            fails, warns = ["no such feature directory"], []
+        features.append({"name": feature.name, "ok": not fails, "fails": fails, "warns": warns})
     links = broken_links(specs)
-    for link in links:
+    max_age = config.get("drift_max_age_days")
+    drift = drift_rows(specs, max_age)
+    if max_age is not None:
+        undated = {}
+        for row in (r for r in drift if not r["resolved"]):
+            if row["age_days"] is None:
+                undated[row["file"]] = undated.get(row["file"], 0) + 1
+            elif row["age_days"] > max_age:
+                warnings.append("WARN drift " + row["file"] + " " + row["id"] + ": open " + str(row["age_days"]) + " days")
+        warnings += ["WARN drift " + f + ": " + str(n) + " open row(s) without a Logged date" for f, n in undated.items()]
+    total = sum(len(f["fails"]) for f in features) + len(links)
+    return {"features": features, "links": links, "drift": drift, "warnings": warnings, "fails": total}
+
+
+CITE = re.compile(r"`(?:([\w.-]+):)?([^`\s:#]*?[\w-]+\.[A-Za-z0-9]+)"
+                  r"(?::(\d+(?:-\d+)?(?:,\d+(?:-\d+)?)*)|#L(\d+)(?:-L?(\d+))?)`")
+
+
+def parse_ranges(colon, start, end):
+    if colon:
+        return [(int(r.split("-")[0]), int(r.split("-")[-1])) for r in colon.split(",")]
+    return [(int(start), int(end or start))]
+
+
+def cites(specs):
+    root, config = specs.parent, load_config(specs)
+    aliases, ignore = config["cite_aliases"], config["cite_ignore_globs"]
+    def ls(repo, prefix=""):
+        out = subprocess.run(["git", "-C", str(repo), "ls-files", "--cached", "--others", "--exclude-standard"],
+                             capture_output=True, text=True).stdout.splitlines()
+        return [prefix + f for f in out if not f.endswith("/")]
+    repos = sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
+                    if not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
+    files = list(dict.fromkeys(ls(root) + [f for repo in repos for f in ls(root / repo, repo + "/")]))
+    files = files or [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+    problems, count = [], 0
+    def resolve(md, prefix, path):
+        """Returns (file, None) or (None, reason)."""
+        scope, base = None, ""
+        if prefix:
+            scope = [aliases[prefix].strip("/")] if prefix in aliases else [r for r in repos if r.split("/")[-1] == prefix]
+            if not scope:
+                return None, "unknown repo prefix '" + prefix + "' (add it to cite_aliases)"
+            base = scope[0] + "/"
+        if (root / (base + path)).is_file():
+            return root / (base + path), None
+        pool = [f for f in files if any(f.startswith(s + "/") for s in scope)] if scope else files
+        pieces = [re.sub(r"^(\./)+", "", x) for x in re.split(r"\.\.\./|…/", path)]
+        tail, heads = pieces[-1], [x.strip("/").split("/") for x in pieces[:-1] if x.strip("/")]
+        def has_heads(f):
+            segs, at = f[:len(f) - len(tail)].strip("/").split("/"), 0
+            for head in heads:
+                runs = [i for i in range(at, len(segs) - len(head) + 1) if segs[i:i + len(head)] == head]
+                if not runs:
+                    return False
+                at = runs[0] + len(head)
+            return True
+        tails = [f for f in pool if f == tail or f.endswith("/" + tail)]
+        hits = [f for f in tails if has_heads(f)] or tails
+        parts = md.relative_to(specs).parts
+        if len(hits) > 1 and parts[0] == "domains":
+            hits = [f for f in hits if parts[1] in f.split("/")[0]] or hits
+        if len(hits) > 1 and ignore:
+            hits = [f for f in hits if not any(fnmatch.fnmatch(f, g) for g in ignore)] or hits
+        if len(hits) == 1:
+            return root / hits[0], None
+        return None, "ambiguous (use the repo-relative path): " + ", ".join(hits[:3]) if hits else "no such file"
+    for md in sorted(specs.rglob("*.md")):
+        if "kit" in md.relative_to(specs).parts[:1]:
+            continue
+        for m in CITE.finditer(FENCE.sub("", md.read_text())):
+            count += 1
+            prefix, path = m.group(1), m.group(2)
+            ranges = parse_ranges(m.group(3), m.group(4), m.group(5))
+            cite, file = m.group(0).strip("`"), str(md.relative_to(specs))
+            target, reason = resolve(md, prefix, path)
+            if reason:
+                problems.append({"file": file, "cite": cite, "reason": reason})
+                continue
+            try:
+                lines = target.read_text(errors="replace").splitlines()
+            except OSError:
+                problems.append({"file": file, "cite": cite, "reason": "no such file"})
+                continue
+            for a, b in ranges:
+                label = "range " + str(a) + ("-" + str(b) if b != a else "") + ": " if len(ranges) > 1 else ""
+                if b > len(lines):
+                    why = "past end of file (" + str(len(lines)) + " lines)"
+                elif not any(line.strip() for line in lines[a - 1:b]):
+                    why = "cited lines are blank" if b != a else "cited line is blank"
+                else:
+                    continue
+                problems.append({"file": file, "cite": cite, "reason": label + why})
+    return {"count": count, "problems": problems}
+
+
+def main(argv):
+    specs = Path(__file__).resolve().parents[2]
+    if "--specs" in argv:
+        i = argv.index("--specs")
+        specs, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
+    as_json = "--json" in argv
+    if "--cites" in argv:
+        result = cites(specs)
+        if as_json:
+            json.dump(result, sys.stdout)
+        else:
+            for p in result["problems"]:
+                print("FAIL cite " + p["file"] + ": `" + p["cite"] + "` " + p["reason"])
+            print("spec-lint --cites: " + str(len(result["problems"])) + " FAIL of " + str(result["count"]) + " citation(s)")
+        return 1 if result["problems"] else 0
+    names = [a for a in argv if not a.startswith("--")]
+    result = lint_all(specs, names)
+    if as_json:
+        json.dump(result, sys.stdout)
+        return 1 if result["fails"] else 0
+    drift_warns = [w for w in result["warnings"] if w.startswith("WARN drift")]
+    for w in result["warnings"]:
+        if w not in drift_warns:
+            print(w)
+    for f in result["features"]:
+        if f["fails"] == ["no such feature directory"]:
+            print("FAIL " + f["name"] + ": no such feature directory")
+            continue
+        print(("OK   " if f["ok"] else "FAIL ") + f["name"])
+        for text in f["fails"]:
+            print("     FAIL " + text)
+        for text in f["warns"]:
+            print("     WARN " + text)
+    for link in result["links"]:
         print("FAIL broken link: " + link)
-    total += len(links)
-    print("spec-lint: " + str(total) + " FAIL across " + str(len(targets)) + " feature(s)")
-    return 1 if total else 0
+    for w in drift_warns:
+        print(w)
+    print("spec-lint: " + str(result["fails"]) + " FAIL across " + str(len(result["features"])) + " feature(s)")
+    return 1 if result["fails"] else 0
 
 
 if __name__ == "__main__":

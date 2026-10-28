@@ -79,6 +79,34 @@ def drop_block(path):
             path.unlink()
 
 
+def ensure_line(path, line):
+    text = ""
+    if path.exists():
+        with open(path, newline="") as f:
+            text = f.read()
+    if line in text.splitlines():
+        return
+    nl = "\r\n" if "\r\n" in text else "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="") as f:
+        f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + line + nl)
+
+
+def drop_line(path, line):
+    if not path.exists():
+        return
+    with open(path, newline="") as f:
+        lines = f.read().splitlines(keepends=True)
+    kept = [l for l in lines if l.rstrip("\r\n") != line]
+    if len(kept) == len(lines):
+        return
+    if any(l.strip() for l in kept):
+        with open(path, "w", newline="") as f:
+            f.write("".join(kept))
+    else:
+        path.unlink()
+
+
 def git(target, *args):
     return subprocess.run(["git", "-C", str(target)] + list(args), capture_output=True, text=True)
 
@@ -140,6 +168,7 @@ def install(kit_home, target):
             say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
             config["kit_version"] = version
             config_path.write_text(json.dumps(config, indent=2) + "\n")
+    ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists():
         profile.parent.mkdir(parents=True, exist_ok=True)
@@ -198,6 +227,7 @@ def install(kit_home, target):
 def uninstall(target):
     specs = target / ".specs"
     shutil.rmtree(specs / "kit", ignore_errors=True)
+    drop_line(specs / ".gitignore", "report.html")
     for f in ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md", "GEMINI.md"):
         drop_block(target / f)
     for f in (".cursor/rules/spec-first.mdc",):
