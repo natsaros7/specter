@@ -4,6 +4,7 @@ This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is 
 
 **Before you change code**
 - If `.specs/steering/project-profile.md` is missing or still lists `status: setup-incomplete`, the spec system is not set up yet. Offer to run `.specs/kit/playbooks/setup.md`, and do nothing else spec-related until the user answers.
+- Adopted systems (`adopted:` in the profile): the project's `.specs/steering/spec-rules.md` wins where it differs from the kit.
 - Use the size threshold in `.specs/steering/spec-rules.md` §1. A non-trivial change (multi-file, any contract/schema/boundary change, or over the LOC threshold) needs a feature spec **before** code: follow `.specs/kit/playbooks/new-feature.md`.
 - Never assume an API, config key or feature exists. Verify it in code and cite `path:line`.
 

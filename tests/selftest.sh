@@ -4,6 +4,7 @@ set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/home"; export HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1  # the developer's real ~/.claude/agents must not change outcomes
 fail() { echo "FAIL: $*"; exit 1; }
 gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/dev/null; }
 
@@ -218,5 +219,109 @@ printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claud
 [ ! -e "$P/.specs/kit" ] && [ ! -e "$P/AGENTS.md" ] && [ ! -e "$P/.claude/agents/reviewer.md" ] && [ ! -e "$P/.git/hooks/pre-commit" ] || fail "uninstall left kit files"
 grep -qx mine "$P/.specs/.gitignore" && ! grep -q report.html "$P/.specs/.gitignore" || fail ".gitignore after uninstall"
 grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "specter" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
+
+echo "7. adopt: existing .specs untouched, dry run writes nothing, user-level agent kept, foreign kit refused, history demoted"
+X="$TMP/adopt"; mkdir -p "$X/.specs/features/a-1" "$X/.specs/steering" "$X/.claude"; gitq -C "$X" init
+printf '# Mine\n\nStatus: Proposed\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
+printf '# Rules\nmine\n' > "$X/.specs/steering/spec-rules.md"; printf '# Specs\n' > "$X/.specs/README.md"
+printf 'no trailing newline' > "$X/AGENTS.md"
+xsnap() { (cd "$X" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum | shasum); }
+mkdir -p "$HOME/.claude/agents"; echo "mine" > "$HOME/.claude/agents/planner.md"
+before=$(xsnap); (cd "$X" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum) > "$TMP/x.before"
+out=$("$KIT/install.sh" "$X" --dry-run) || fail "dry run failed"
+[ "$before" = "$(xsnap)" ] || fail "dry run wrote a file"
+[ ! -e "$X/.specs/kit" ] && [ ! -e "$X/.git/hooks/pre-commit" ] && [ ! -e "$X/.claude/skills" ] && [ ! -e "$X/.specs/.gitignore" ] || fail "dry run created paths"
+echo "$out" | grep -q "mode: adopt" && echo "$out" | grep -q "create .specs/kit" && echo "$out" | grep -q "modify .*AGENTS.md" || fail "dry run list: $out"
+echo "$out" | grep -q "user-level planner agent found: kept yours, project copy skipped" || fail "dry run silent on user-level agent"
+out=$("$KIT/install.sh" "$X") || fail "adopt install failed"
+echo "$out" | grep -q "mode: adopt" || fail "adopt not announced"
+(cd "$X" && sort "$TMP/x.before" | while read -r sum file; do printf '%s  %s\n' "$sum" "$file"; done | grep -v 'AGENTS.md' | shasum -c - >/dev/null) || fail "an existing file changed"
+head -c 19 "$X/AGENTS.md" | grep -q "no trailing newline" && grep -q "specter:begin" "$X/AGENTS.md" || fail "AGENTS.md not append-only"
+grep -q "^status: active" "$X/.specs/steering/project-profile.md" && grep -q "^adopted: " "$X/.specs/steering/project-profile.md" || fail "adopt profile"
+[ ! -e "$X/.claude/agents/planner.md" ] && [ -e "$X/.claude/agents/reviewer.md" ] || fail "user-level agent shadowed or reviewer missing"
+[ "$(cd "$X" && find .specs -type f -not -path '.specs/kit/*' | sort | tr '\n' ' ')" = ".specs/.gitignore .specs/features/a-1/requirements.md .specs/README.md .specs/spec-kit.json .specs/steering/project-profile.md .specs/steering/spec-rules.md " ] || fail "unexpected files under .specs"
+rc=0; python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs" >/dev/null || rc=$?; [ "$rc" = 1 ] || fail "incomplete live feature should FAIL"
+printf '# Mine\n\nStatus: Done 2026-01-01 (x)\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
+out=$(python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs") || fail "history FAIL not demoted: $out"
+echo "$out" | grep -q "WARN history: missing design.md" || fail "no history WARN: $out"
+out=$("$KIT/install.sh" "$X") && echo "$out" | grep -q "mode:" && fail "re-install announced a mode" || true
+F2="$TMP/foreign"; mkdir -p "$F2/.specs/kit"; echo keep > "$F2/.specs/kit/theirs.txt"
+rc=0; out=$("$KIT/install.sh" "$F2" 2>&1) || rc=$?
+[ "$rc" = 2 ] && echo "$out" | grep -q "isn't specter's" && [ "$(find "$F2" -type f | wc -l | tr -d ' ')" = 1 ] || fail "foreign kit: rc=$rc $out"
+rc=0; "$KIT/install.sh" "$F2" --dry-run >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "foreign kit dry run"
+rc=0; "$KIT/install.sh" "$X" --uninstall --dry-run >/dev/null || rc=$?; [ "$rc" = 2 ] && [ -e "$X/.specs/kit" ] || fail "uninstall --dry-run must refuse"
+H="$TMP/fresh-force"; mkdir -p "$H/.specs/steering"; gitq -C "$H" init
+"$KIT/install.sh" "$H" --fresh >/dev/null; grep -q "status: setup-incomplete" "$H/.specs/steering/project-profile.md" || fail "--fresh did not force fresh"
+
+echo "8. review round: links under Done, config and .gitignore kept, hook, ownership, byte-exact uninstall"
+printf '# Mine\n\nStatus: Done 2026-01-01 (x)\n\n[REQ-A-01] x [gone](nope.md)\n' > "$X/.specs/features/a-1/requirements.md"
+rc=0; out=$(python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "FAIL broken link" || fail "broken link under a Done feature must still FAIL"
+Y="$TMP/partial"; mkdir -p "$Y/.specs/features" "$Y/src"; gitq -C "$Y" init
+printf '{"tracker_pattern":"ABC-[0-9]+"}' > "$Y/.specs/spec-kit.json"; printf 'foo' > "$Y/.specs/.gitignore"
+cp "$Y/.specs/spec-kit.json" "$TMP/y.json"
+"$KIT/install.sh" "$Y" >/dev/null
+cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" || fail "existing spec-kit.json rewritten"
+[ ! -e "$Y/.git/hooks/pre-commit" ] || fail "adopt installed a hook without --hook"
+echo a > "$Y/src/a.java"; gitq -C "$Y" add src/a.java; gitq -C "$Y" commit -m "code" || fail "commit blocked after adopting a partial spec-kit.json"
+g1=$(shasum < "$Y/.specs/.gitignore"); "$KIT/install.sh" "$Y" >/dev/null
+cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" && [ "$g1" = "$(shasum < "$Y/.specs/.gitignore")" ] || fail "second install changed spec-kit.json or .gitignore"
+[ ! -e "$Y/.git/hooks/pre-commit" ] || fail "re-installing an adopted project added a hook without --hook"
+"$KIT/install.sh" "$Y" --hook >/dev/null; [ -x "$Y/.git/hooks/pre-commit" ] || fail "--hook did not install the hook"
+echo b > "$Y/src/b.java"; gitq -C "$Y" add src/b.java; gitq -C "$Y" commit -m "code 2" || fail "hook crashed on a partial spec-kit.json"
+"$KIT/install.sh" "$Y" --uninstall >/dev/null
+printf 'foo' > "$TMP/y.gi"
+cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" && cmp -s "$Y/.specs/.gitignore" "$TMP/y.gi" || fail "uninstall touched the user's config or .gitignore"
+Z="$TMP/owned"; mkdir -p "$Z/.claude/skills/spec-first" "$Z/.cursor/rules" "$Z/.claude/agents"; gitq -C "$Z" init
+echo mine > "$Z/.claude/skills/spec-first/SKILL.md"; echo mine > "$Z/.cursor/rules/spec-first.mdc"; echo mine > "$Z/.claude/agents/generator.md"
+out=$("$KIT/install.sh" "$Z" --agents=claude,cursor)
+for f in .claude/skills/spec-first/SKILL.md .cursor/rules/spec-first.mdc .claude/agents/generator.md; do
+  [ "$(cat "$Z/$f")" = mine ] && echo "$out" | grep -q "$f exists and is yours: kept it" || fail "user-owned $f not kept"
+done
+echo "$out" | grep -q "agents: reviewer (sub" || fail "summary lists agents it did not write: $out"
+echo "$out" | grep -q "skill spec-first -> .claude" && fail "summary claims a skill it did not write" || true
+"$KIT/install.sh" "$Z" --uninstall >/dev/null
+for f in .claude/skills/spec-first/SKILL.md .cursor/rules/spec-first.mdc .claude/agents/generator.md; do
+  [ "$(cat "$Z/$f")" = mine ] || fail "uninstall removed user-owned $f"
+done
+W="$TMP/bytes"; mkdir -p "$W"; gitq -C "$W" init
+printf 'a\r\nb' > "$W/AGENTS.md"; printf '\n\n# x\n\n' > "$W/CLAUDE.md"; cp "$W/AGENTS.md" "$TMP/w.agents"; cp "$W/CLAUDE.md" "$TMP/w.claude"
+"$KIT/install.sh" "$W" --agents=claude >/dev/null; grep -q "specter:begin" "$W/AGENTS.md" || fail "block not added"
+"$KIT/install.sh" "$W" --uninstall >/dev/null
+cmp -s "$W/AGENTS.md" "$TMP/w.agents" && cmp -s "$W/CLAUDE.md" "$TMP/w.claude" || fail "install then uninstall changed AGENTS.md or CLAUDE.md bytes"
+V="$TMP/foreignkit"; mkdir -p "$V/.specs/kit"; echo keep > "$V/.specs/kit/theirs.txt"; printf 'report.html\n' > "$V/.specs/.gitignore"
+"$KIT/install.sh" "$V" --uninstall >/dev/null
+[ -e "$V/.specs/kit/theirs.txt" ] && grep -qx report.html "$V/.specs/.gitignore" || fail "uninstall removed a foreign kit or the user's report.html line"
+V2="$TMP/halfkit"; mkdir -p "$V2/.specs/kit"; echo 0.1.0 > "$V2/.specs/kit/VERSION"; echo theirs > "$V2/.specs/kit/AGENT_RULES.md"
+rc=0; "$KIT/install.sh" "$V2" >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] && [ "$(cat "$V2/.specs/kit/AGENT_RULES.md")" = theirs ] || fail "foreign kit with only a VERSION file"
+H3="$TMP/fresh2"; mkdir -p "$H3/.specs/steering"; "$KIT/install.sh" "$H3" --fresh --dry-run | grep -q "forced by --fresh" || fail "--fresh claims no spec system"
+Y2="$TMP/p2"; mkdir -p "$Y2/.specs/steering"; gitq -C "$Y2" init
+"$KIT/install.sh" "$Y2" --from-go | grep -q "Setup interview skipped" || fail "--from-go in adopt mode"
+
+echo "9. rollback safety: edited config kept, version bump keeps config, byte-exact empty files, empty dirs, config types"
+N2="$TMP/seed-clean"; mkdir -p "$N2"; gitq -C "$N2" init; "$KIT/install.sh" "$N2" --agents=claude >/dev/null
+"$KIT/install.sh" "$N2" --uninstall >/dev/null
+[ ! -e "$N2/.specs/spec-kit.json" ] && [ ! -e "$N2/.specs/steering/project-profile.md" ] && [ ! -e "$N2/AGENTS.md" ] && [ ! -e "$N2/CLAUDE.md" ] && [ ! -e "$N2/.specs/.gitignore" ] || fail "uninstall left files it created"
+[ ! -d "$N2/.claude" ] && [ ! -d "$N2/.specs/steering" ] || fail "uninstall left empty directories"
+N3="$TMP/seed-edit"; mkdir -p "$N3"; gitq -C "$N3" init; "$KIT/install.sh" "$N3" >/dev/null
+sed 's/"spec_sync": "warn"/"spec_sync": "block"/' "$N3/.specs/spec-kit.json" > "$TMP/n3.json"; cmp -s "$TMP/n3.json" "$N3/.specs/spec-kit.json" && fail "test setup: spec_sync not edited"
+cp "$TMP/n3.json" "$N3/.specs/spec-kit.json"; "$KIT/install.sh" "$N3" --uninstall >/dev/null
+cmp -s "$TMP/n3.json" "$N3/.specs/spec-kit.json" || fail "uninstall removed an edited config"
+Q="$TMP/bump"; mkdir -p "$Q/.specs/features"; gitq -C "$Q" init; printf '{ "drift_max_age_days" : 5 }' > "$Q/.specs/spec-kit.json"; cp "$Q/.specs/spec-kit.json" "$TMP/q.json"
+"$KIT/install.sh" "$Q" >/dev/null; echo 0.0.1 > "$Q/.specs/kit/VERSION"; "$KIT/install.sh" "$Q" | grep -q "upgrade 0.0.1" || fail "version bump not seen"
+cmp -s "$Q/.specs/spec-kit.json" "$TMP/q.json" || fail "version-bump re-install rewrote spec-kit.json"
+E="$TMP/empties"; mkdir -p "$E/.specs"; gitq -C "$E" init; : > "$E/AGENTS.md"; printf '\r\n' > "$E/CLAUDE.md"; : > "$E/.specs/.gitignore"
+printf '' > "$TMP/e.empty"; printf '\r\n' > "$TMP/e.crlf"
+"$KIT/install.sh" "$E" --agents=claude >/dev/null; grep -q "specter:begin" "$E/AGENTS.md" || fail "block not added to an empty file"
+"$KIT/install.sh" "$E" --uninstall >/dev/null
+cmp -s "$E/AGENTS.md" "$TMP/e.empty" && cmp -s "$E/CLAUDE.md" "$TMP/e.crlf" && cmp -s "$E/.specs/.gitignore" "$TMP/e.empty" || fail "empty or whitespace-only files not restored byte for byte"
+Z2="$TMP/skill2"; mkdir -p "$Z2/.claude/skills/spec-first"; gitq -C "$Z2" init
+printf -- '---\nname: spec-first\n---\nuses .specs/kit/ but has no kit source line\n' > "$Z2/.claude/skills/spec-first/SKILL.md"; cp "$Z2/.claude/skills/spec-first/SKILL.md" "$TMP/z2.md"
+"$KIT/install.sh" "$Z2" --agents=claude >/dev/null; cmp -s "$Z2/.claude/skills/spec-first/SKILL.md" "$TMP/z2.md" || fail "skill without the Kit source line was replaced"
+S2="$TMP/badcfg"; mkdir -p "$S2/.specs/features" "$S2/src"; gitq -C "$S2" init; "$KIT/install.sh" "$S2" --hook >/dev/null
+for body in 'null' '[1]' '"str"' '{"code_globs": null}' '{"spec_sync": 5}' '{"code_globs": [1]}' '[["spec_sync","block"],["code_globs",["src/*"]]]'; do
+  printf '%s' "$body" > "$S2/.specs/spec-kit.json"; echo "$body" > "$S2/src/f.java"; gitq -C "$S2" add src/f.java
+  gitq -C "$S2" commit -m "c" 2>/dev/null || fail "hook blocked a commit on config $body"
+done
 
 echo "selftest: OK"

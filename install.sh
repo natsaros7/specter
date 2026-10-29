@@ -2,6 +2,9 @@
 # specter installer. Copies the kit into <target>/.specs/kit/ and wires the agents it finds.
 #
 #   ./install.sh <target>                 install or upgrade (safe to re-run)
+#   ... --dry-run                         list every path it would create, modify or replace, and the mode; writes nothing
+#   ... --fresh                           treat an existing .specs/ as new (default: keep it, "adopt mode")
+#   ... --hook                            adopt mode installs no git hook by default; this adds it
 #   ./install.sh --user                   add the spec-first skill at user level for every agent detected
 #   ... --agents=codex,claude             override agent detection (claude, codex, cursor, gemini, copilot)
 #   ./install.sh <target> --detect        show which agents would be wired, and why; changes nothing
