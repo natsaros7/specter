@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
-The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-kit.json` → `kit_version`).
+The installed version is stamped into each project (`.specs/kit/VERSION`; `spec-kit.json` → `kit_version` only in a config the installer creates).
 
 ## [Unreleased]
 
@@ -11,11 +11,21 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 - Lint: structural FAILs in `Done` and `Dropped` features are reported as `WARN history: ...` and don't count toward the exit code; broken links and citations still FAIL.
 - `AGENT_RULES.md`: for adopted systems the project's `steering/spec-rules.md` wins where it differs.
 - Selftest case 7 (adopt, dry run, user-level agent, foreign kit, history); the selftest now runs with a temporary `HOME`.
+- `--hook`: adopt mode installs no git hook unless it is given, and prints how to enable it.
+- Uninstall is as careful as install: it removes `.specs/kit/`, the skill, the Cursor rule and role agents only when specter wrote them, restores marker-block files byte for byte (CRLF included), removes only the `.gitignore` lines specter added (marked `# specter`), and removes the seeded profile and config when they were never edited.
+- `GO.md`: an adopt branch (dry run first, no setup interview); `--from-go` in adopt mode says setup was skipped.
 
 ### Changed
+- An existing `.specs/spec-kit.json` is never rewritten (before, an upgrade added `kit_version` and reformatted it).
+- A skill, Cursor rule or project role agent that specter didn't write is kept on install, with `<path> exists and is yours: kept it`; summary lines list only what was written.
+- A `.specs/kit/` counts as specter's only with `VERSION` and the specter marker in `AGENT_RULES.md`.
+- `install.sh` usage lists `--dry-run`, `--fresh`, `--hook`.
 - The installer never writes `.claude/agents/<role>.md` when `~/.claude/agents/<role>.md` exists (every mode).
 - A `.specs/kit/` without `VERSION` stops the install with exit 2 instead of being deleted.
 - Appending a marker block leaves existing file bytes (leading and trailing whitespace, CRLF) untouched.
+
+### Fixed
+- `spec_sync_check.py` crashed with a `KeyError` on a `spec-kit.json` without `code_globs`, blocking commits; missing keys now take defaults.
 
 ## [0.3.0] - 2026-10-28
 

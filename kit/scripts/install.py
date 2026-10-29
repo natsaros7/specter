@@ -11,6 +11,7 @@ BEGIN, END = "<!-- specter:begin -->", "<!-- specter:end -->"
 KIT_PARTS = ("AGENT_RULES.md", "playbooks", "templates", "roles", "scripts", "hooks", "docs")
 HOOK_TAG = "specter"
 ROLE_TAG = ".specs/kit/roles/"
+RULES_TAG = "Spec-first workflow (specter)"
 
 
 HOME = Path.home()
@@ -69,11 +70,7 @@ def say(msg, always=False):
 def write(path, kind, fn):
     """The only way install() touches disk. kind: create, modify or replace. In --dry-run: print and skip fn."""
     if dry():
-        try:
-            shown = path.relative_to(ROOT).as_posix() if ROOT else str(path)
-        except ValueError:
-            shown = str(path)
-        print("  " + kind + " " + shown)
+        print("  " + kind + " " + shown(path))
     else:
         fn()
 
@@ -108,7 +105,8 @@ def put_block(path, body, create=True):
     elif not text:
         new = block + nl
     else:
-        new = text + ("" if text.endswith(("\n", "\r")) else nl) + nl + block + nl
+        # a file with no trailing newline gets the block with no blank line and no final newline: drop_block restores exact bytes
+        new = text + nl + block + (nl if text.endswith(("\n", "\r")) else "")
     if new != text:
         def go():
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -119,15 +117,21 @@ def put_block(path, body, create=True):
 
 
 def drop_block(path):
+    """Remove the marker block and the separator newline put_block added; every other byte stays."""
     if path.exists():
-        text = re.sub(r"\n*" + re.escape(BEGIN) + ".*?" + re.escape(END) + r"\n?", "\n", path.read_text(), flags=re.S)
+        text = re.sub(r"(?:\r?\n)?" + re.escape(BEGIN) + ".*?" + re.escape(END) + r"(?:\r?\n)?", "", read_raw(path), count=1, flags=re.S)
         if text.strip():
-            path.write_text(text.lstrip("\n"))
+            with open(path, "w", newline="") as f:
+                f.write(text)
         else:
             path.unlink()
 
 
+GITIGNORE_TAG = "# specter"
+
+
 def ensure_line(path, line):
+    """Append line under a `# specter` comment, unless the file already has it (then it is the user's)."""
     text = read_raw(path) if path.exists() else ""
     if line in text.splitlines():
         return
@@ -135,16 +139,23 @@ def ensure_line(path, line):
     def go():
         path.parent.mkdir(parents=True, exist_ok=True)
         with open(path, "w", newline="") as f:
-            f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + line + nl)
+            f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + GITIGNORE_TAG + nl + line + nl)
     write(path, "modify" if text else "create", go)
 
 
 def drop_line(path, line):
+    """Remove only the line (and its `# specter` comment) that ensure_line added."""
     if not path.exists():
         return
     with open(path, newline="") as f:
         lines = f.read().splitlines(keepends=True)
-    kept = [l for l in lines if l.rstrip("\r\n") != line]
+    kept, i = [], 0
+    while i < len(lines):
+        if lines[i].rstrip("\r\n") == GITIGNORE_TAG and i + 1 < len(lines) and lines[i + 1].rstrip("\r\n") == line:
+            i += 2
+            continue
+        kept.append(lines[i])
+        i += 1
     if len(kept) == len(lines):
         return
     if any(l.strip() for l in kept):
@@ -162,9 +173,41 @@ def nested_repos(target):
     return sorted(p.parent.name for p in target.glob("*/.git"))
 
 
+def ours(path):
+    """True when specter wrote path (a missing file is not ours). Kit dir: VERSION plus the rules marker."""
+    if path.is_dir():
+        rules = path / "AGENT_RULES.md"
+        return (path / "VERSION").exists() and rules.exists() and RULES_TAG in rules.read_text()
+    if not path.is_file():
+        return False
+    text = path.read_text(errors="replace")
+    if path.name == "SKILL.md":
+        return "name: spec-first" in text and ".specs/kit/" in text
+    return (RULES_TAG if path.suffix == ".mdc" else ROLE_TAG) in text
+
+
+def writable(path):
+    """True when path is absent or ours; otherwise say it is the user's and keep it."""
+    if not path.exists() or ours(path):
+        return True
+    say(shown(path) + " exists and is yours: kept it", True)
+    return False
+
+
+def shown(path):
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except (ValueError, TypeError):
+        return str(path)
+
+
 def install_skill(kit_home, dest_dir):
+    dst = dest_dir / "spec-first" / "SKILL.md"
+    if not writable(dst):
+        return False
     src = (kit_home / "kit/skill/spec-first/SKILL.md").read_text()
-    put_file(dest_dir / "spec-first" / "SKILL.md", src.replace("{{KIT_HOME}}", str(kit_home)))
+    put_file(dst, src.replace("{{KIT_HOME}}", str(kit_home)))
+    return True
 
 
 def install_hook(kit_home, kit_rules_note):
@@ -182,10 +225,15 @@ def install_hook(kit_home, kit_rules_note):
     say("git pre-commit hook: spec-sync check (" + kit_rules_note + ")")
 
 
+def hook_ours(target):
+    hooks = git(target, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip()
+    return bool(hooks) and (Path(hooks) / "pre-commit").is_file() and HOOK_TAG in (Path(hooks) / "pre-commit").read_text()
+
+
 def mode(target):
     """upgrade (kit installed), adopt (a spec system exists, no kit) or fresh. --fresh forces fresh unless upgrading."""
     specs = target / ".specs"
-    if (specs / "kit/VERSION").exists():
+    if ours(specs / "kit"):
         return "upgrade"
     if "--fresh" in ARGS:
         return "fresh"
@@ -200,16 +248,19 @@ def install(kit_home, target):
     ROOT = target
     specs = target / ".specs"
     kit = specs / "kit"
-    if kit.exists() and not (kit / "VERSION").exists():
+    if kit.exists() and not ours(kit):
         print(".specs/kit/ exists and isn't specter's: move it, then re-run")
         return 2
     how = mode(target)
+    seed = specs / "steering/project-profile.md"
+    adopted = how == "adopt" or (how == "upgrade" and seed.exists() and "\nadopted:" in seed.read_text())
     src_kit = kit_home / "kit"
     print(("Dry run: nothing will be written. Planned changes for " if dry() else "Installing specter into ") + str(specs))
     if dry() or how == "adopt":
         print("  mode: " + how + {"adopt": " (existing spec system found: your .specs/ content is kept as is)",
                                   "upgrade": " (kit installed: it is replaced, your specs and settings kept)",
-                                  "fresh": " (no spec system yet)"}[how])
+                                  "fresh": " (forced by --fresh)" if "--fresh" in ARGS else " (no spec system yet)"}[how])
+    old_version = (kit / "VERSION").read_text().strip() if how == "upgrade" else None
     for part in KIT_PARTS:
         src, dst = src_kit / part, kit / part
         def go(src=src, dst=dst):
@@ -237,12 +288,8 @@ def install(kit_home, target):
             + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
     elif how == "adopt":
         say(".specs/spec-kit.json exists: untouched (set tracker_pattern and merged_ref yourself, see README)")
-    else:
-        config = json.loads(config_path.read_text())
-        if config.get("kit_version") != version:
-            say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
-            config["kit_version"] = version
-            put_file(config_path, json.dumps(config, indent=2) + "\n")
+    elif old_version and old_version != version:
+        say("upgrade " + old_version + " -> " + version + " (your settings kept)")
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists():
@@ -264,8 +311,8 @@ def install(kit_home, target):
         if on_machine:
             say("  installed on this machine: " + ", ".join(on_machine) + ". To wire some: --agents=" + ",".join(on_machine))
     for name in agents:
-        install_skill(kit_home, target / AGENTS[name][3])
-        say("skill spec-first -> " + AGENTS[name][3] + "/spec-first/")
+        if install_skill(kit_home, target / AGENTS[name][3]):
+            say("skill spec-first -> " + AGENTS[name][3] + "/spec-first/")
     if "claude" in agents:
         put_block(target / "CLAUDE.md", rules)
         say("CLAUDE.md: spec rules block")
@@ -274,18 +321,17 @@ def install(kit_home, target):
             if (HOME / ".claude/agents" / agent.name).exists():
                 say("user-level " + agent.stem + " agent found: kept yours, project copy skipped", True)
                 continue
-            wrote.append(agent.stem)
             dst = target / ".claude/agents" / agent.name
-            if dst.exists() and ROLE_TAG not in dst.read_text():
-                say(".claude/agents/" + agent.name + " exists and is yours: kept it", True)
-                continue
-            put_file(dst, agent.read_text())
+            if writable(dst):
+                put_file(dst, agent.read_text())
+                wrote.append(agent.stem)
         if wrote:
             say(".claude/agents: " + " / ".join(wrote) + " (sub-agents for .specs/kit/roles/)")
     if "cursor" in agents and (target / ".cursor").is_dir():
         header = (kit_home / "kit/adapters/cursor/spec-first.mdc").read_text()
-        put_file(target / ".cursor/rules/spec-first.mdc", header + rules)
-        say(".cursor/rules/spec-first.mdc")
+        if writable(target / ".cursor/rules/spec-first.mdc"):
+            put_file(target / ".cursor/rules/spec-first.mdc", header + rules)
+            say(".cursor/rules/spec-first.mdc")
     if put_block(target / ".github/copilot-instructions.md", rules, create=False):
         say(".github/copilot-instructions.md: spec rules block")
     if put_block(target / "GEMINI.md", rules, create=False):
@@ -294,6 +340,8 @@ def install(kit_home, target):
     if repos:
         say("multi-repo workspace (" + ", ".join(repos[:5]) + ("…" if len(repos) > 5 else "") + "): "
             "no git hook, since code commits happen in the child repos. Specs are kept in sync by the agent rules + review.")
+    elif adopted and "--hook" not in ARGS and not hook_ours(target):
+        say("no git hook: adopting never changes how commits behave. To enable the spec-sync check, re-run with --hook", True)
     elif is_repo:
         install_hook(kit_home, "mode from .specs/spec-kit.json")
     else:
@@ -301,6 +349,9 @@ def install(kit_home, target):
 
     if dry():
         print("\nDry run done (mode: " + how + "). Nothing was written.")
+    elif "--from-go" in ARGS and how == "adopt":
+        print("\nDone. Setup interview skipped: your specs were kept. Next: read the README section on adding specter to a "
+              "project that already has specs (tracker_pattern, merged_ref).")
     elif "--from-go" in ARGS:
         print("\nDone. Continue with .specs/kit/playbooks/setup.md (GO.md step 5).")
     elif how == "adopt":
@@ -311,24 +362,69 @@ def install(kit_home, target):
     return 0
 
 
+def untouched_seed(target):
+    """Config and profile exactly as the installer wrote them (never edited): safe to remove with the kit."""
+    specs, gone = target / ".specs", []
+    profile = specs / "steering/project-profile.md"
+    config = specs / "spec-kit.json"
+    tmpl = (Path(__file__).resolve().parent.parent / "templates/steering/project-profile.md")
+    if not (profile.exists() and tmpl.exists()):
+        return []
+    seed = re.escape(tmpl.read_text()).replace(re.escape("status: setup-incomplete"),
+                                               r"status: (?:setup-incomplete|active\nadopted: [^\n]*)", 1)
+    if not re.fullmatch(seed, read_raw(profile)):
+        return []  # set up since: the config holds confirmed settings too
+    gone.append(profile)
+    if config.exists():
+        try:
+            have = json.loads(config.read_text())
+            default = json.loads((Path(__file__).resolve().parent.parent / "spec-kit.json").read_text())
+        except (OSError, ValueError):
+            return gone
+        free = ("code_globs", "spec_sync", "kit_version")
+        if isinstance(have, dict) and have.get("kit_version") and {k: v for k, v in have.items() if k not in free} == {k: v for k, v in default.items() if k not in free}:
+            gone.append(config)
+    return gone
+
+
 def uninstall(target):
+    global ROOT
+    ROOT = target
     specs = target / ".specs"
-    shutil.rmtree(specs / "kit", ignore_errors=True)
+    kept = []
+    if (specs / "kit").exists():
+        if ours(specs / "kit"):
+            seeds = untouched_seed(target)
+            shutil.rmtree(specs / "kit", ignore_errors=True)
+            for f in seeds:
+                f.unlink()
+        else:
+            kept.append(".specs/kit/ (not specter's)")
     drop_line(specs / ".gitignore", "report.html")
     for f in ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md", "GEMINI.md"):
         drop_block(target / f)
-    for f in (".cursor/rules/spec-first.mdc",):
-        (target / f).unlink() if (target / f).exists() else None
+    rule = target / ".cursor/rules/spec-first.mdc"
+    if rule.exists():
+        rule.unlink() if ours(rule) else kept.append(shown(rule))
     for _, _, _, skill_dir, _ in AGENTS.values():
-        shutil.rmtree(target / skill_dir / "spec-first", ignore_errors=True)
+        skill = target / skill_dir / "spec-first" / "SKILL.md"
+        if skill.exists():
+            if ours(skill):
+                skill.unlink()
+                if not any(skill.parent.iterdir()):
+                    skill.parent.rmdir()
+            else:
+                kept.append(shown(skill))
     for agent in (target / ".claude/agents").glob("*.md"):
-        if ROLE_TAG in agent.read_text():
+        if ours(agent):
             agent.unlink()
     hooks = git(target, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip()
     hook = Path(hooks) / "pre-commit" if hooks else None
     if hook and hook.exists() and HOOK_TAG in hook.read_text():
         hook.unlink()
     print("Removed the kit, marker blocks, skill, role agents and hook. Your specs in .specs/ are kept.")
+    for k in kept:
+        print("  kept " + k)
 
 
 ARGS = []

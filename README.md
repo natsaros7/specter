@@ -186,7 +186,9 @@ When `.specs/` already holds `features/`, `domains/`, `system/` or `steering/` a
 
 - Nothing under `.specs/` is created or changed except `.specs/kit/`, `.specs/spec-kit.json` (only if absent), a `report.html` line appended to `.specs/.gitignore`, and a seeded `steering/project-profile.md` (only if absent) marked `status: active` with an `adopted:` line, so agents don't wait for the setup interview. The project's own `steering/spec-rules.md` wins over the kit's defaults.
 - `AGENTS.md`, `CLAUDE.md` and the other instruction files only get the marker block appended; your text stays byte for byte.
-- A role agent is not written into `.claude/agents/` when `~/.claude/agents/<role>.md` exists (any mode), so your user-level pins keep applying.
+- No git hook is installed (adopting never changes how commits behave). Add `--hook` to enable the spec-sync check.
+- An existing `spec-kit.json` is never rewritten, in any mode; the installed version is in `.specs/kit/VERSION`.
+- A role agent is not written into `.claude/agents/` when `~/.claude/agents/<role>.md` exists (any mode), so your user-level pins keep applying. A skill, Cursor rule or project agent that specter didn't write is kept, and uninstall leaves it too.
 - A `.specs/kit/` that isn't specter's stops the install with exit 2 before anything is written.
 - Features marked `Done` or `Dropped` are history: their structural lint FAILs show as `WARN history: ...` and don't fail the run. Broken links and citations still fail.
 
@@ -196,11 +198,11 @@ Afterwards, set `tracker_pattern` (your ticket key regex) and `merged_ref` in `.
 
 ```bash
 cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: replaces .specs/kit/, keeps your specs and settings
-./install.sh ~/code/my-project --uninstall                         # removes the kit, marker blocks, skills, hook; keeps .specs/ content
+./install.sh ~/code/my-project --uninstall                         # removes what specter wrote (only if still ours), marker blocks byte for byte; keeps .specs/ content
 ./install.sh ~/code/my-project --detect                            # which agents it would wire, and why
 ```
 
-The installed version is in `.specs/kit/VERSION` and in `spec-kit.json`. Changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
+The installed version is in `.specs/kit/VERSION` (and in the `spec-kit.json` the installer creates; an existing one is never rewritten). Changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
 Self-test, run locally: `tests/selftest.sh`.
 
 ## FAQ

@@ -11,5 +11,6 @@ Goal: 0.4.0 on `feat/0.4.0`; then roll out to the existing spec systems. Gate: G
 - [x] 5 History demotion in the lint — [REQ-V040-05]
 - [x] 6 Selftest case 7 — [REQ-V040-07]
 - [x] 7 README section and CHANGELOG — [REQ-V040-07]
+- [x] 7b Review round 1: hook (B1), config (M1), GO adopt branch (M2), ownership (M3), uninstall (M4) — [REQ-V040-01] [REQ-V040-02] [REQ-V040-03] [REQ-V040-08]
 - [ ] 8 Gate green; fresh-context review — [REQ-V040-01] [REQ-V040-04]
 - [ ] 9 Release 0.4.0 — [REQ-V040-07]

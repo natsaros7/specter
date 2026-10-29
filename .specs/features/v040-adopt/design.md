@@ -39,6 +39,18 @@ override it by setting the `HOME` environment variable.
 `dropped` it moves structural FAILs into warns, prefixed `history: `. Link checking is separate (`broken_links`) and
 stays FAIL. Citations already run separately.
 
+## Ownership and uninstall — [REQ-V040-02] [REQ-V040-08]
+
+One helper, `ours(path)`, decides whether specter owns a file:
+
+- skill: `SKILL.md` contains the kit's `name: spec-first` front matter and `.specs/kit/`;
+- Cursor rule, agents: the existing `ROLE_TAG` / rule header marker;
+- kit: `VERSION` plus the marker in `AGENT_RULES.md`.
+
+Install and uninstall both call it. `drop_block` reads and writes with `newline=""` and removes the block plus the separator line
+that `put_block` added. `ensure_line` writes `# specter` above the lines it adds, and `drop_line` removes only lines under that
+comment.
+
 ## Tests — [REQ-V040-07]
 
 Case 7 in `tests/selftest.sh` builds a fake project with an existing `.specs` (`features/a-1/` with files missing,

@@ -29,7 +29,13 @@ def matches(path, globs):
 
 def main(argv):
     specs = Path(__file__).resolve().parents[2]
-    config = json.loads((specs / "spec-kit.json").read_text())
+    config = {"spec_sync": "warn", "code_globs": [], "ignore_globs": []}
+    path = specs / "spec-kit.json"
+    try:
+        config.update(json.loads(path.read_text()) if path.exists() else {})
+    except ValueError:
+        print("spec-sync: " + str(path) + " is not valid JSON: check skipped")
+        return 0
     mode = config.get("spec_sync", "warn")
     if mode == "off" or os.environ.get("SPEC_SYNC_SKIP") == "1":
         return 0

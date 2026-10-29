@@ -36,16 +36,34 @@ anything that already works, and to see the exact change list before anything is
 - In adopt mode the installer SHALL NOT create or overwrite any file under `.specs/` except `.specs/kit/`,
   `.specs/spec-kit.json` (only when absent), `.specs/.gitignore` (append-only) and the seeded profile.
 - `--fresh` SHALL force the old behaviour.
+- In adopt mode the installer SHALL NOT install a git hook unless `--hook` is given. It SHALL print how to enable
+  it. Adopting never changes how commits behave.
+- An existing `.specs/spec-kit.json` SHALL never be rewritten, in any mode. The installed version lives in
+  `.specs/kit/VERSION`, and `kit_version` is written only into a config the installer creates.
+- With `--from-go`, adopt mode SHALL print that the setup interview is skipped and point to the README section.
+  `GO.md` SHALL have an adopt branch: run `--dry-run` first, show it, install on yes, and skip the setup step.
 
-### [REQ-V040-02] Never shadow user-level agents
+### [REQ-V040-02] Never shadow or overwrite what the user owns
 
 The installer SHALL NOT write `.claude/agents/<role>.md` when `~/.claude/agents/<role>.md` exists. It SHALL print
-`user-level <role> agent found: kept yours, project copy skipped`. This applies in every mode.
+`user-level <role> agent found: kept yours, project copy skipped`. This applies in every mode. The installer SHALL replace an existing
+`spec-first` skill folder, Cursor rule or project role agent only when specter wrote it, that is when it carries
+specter's marker. Otherwise it SHALL keep the file and print `<path> exists and is yours: kept it`. Summary lines list
+only what was actually written.
 
 ### [REQ-V040-03] Never delete a foreign kit
 
-The installer SHALL replace `.specs/kit/` only when `.specs/kit/VERSION` exists. Otherwise, if `.specs/kit/` exists,
+The installer SHALL replace `.specs/kit/` only when it is specter's: `.specs/kit/VERSION` exists AND
+`.specs/kit/AGENT_RULES.md` contains the specter marker. Otherwise, if `.specs/kit/` exists,
 it SHALL stop with exit 2 and `.specs/kit/ exists and isn't specter's: move it, then re-run`.
+
+### [REQ-V040-08] Uninstall is as careful as install
+
+`--uninstall` SHALL apply the same ownership rules:
+- it removes `.specs/kit/` only if it is specter's;
+- it removes the skill, Cursor rule and agents only if specter wrote them;
+- it removes marker blocks preserving the remaining bytes, line endings included;
+- it removes only the `.gitignore` lines specter added, which install marks with a `# specter` comment line.
 
 ### [REQ-V040-04] Dry run
 
@@ -69,13 +87,19 @@ defaults.
 
 - The README gets a section on adding specter to a project that already has specs: run `--dry-run` first, then
   install; what adopt mode keeps; how to set `tracker_pattern` and `merged_ref`. The CHANGELOG lists every change.
+- The usage text printed by `install.sh` lists `--dry-run`, `--fresh` and `--hook`.
 - The selftest covers:
   - adopt detection, with the profile seeded as active;
   - no file under an existing `.specs/` modified, by byte comparison except the allowed paths;
   - a user-level agent skipped (using a fake `HOME`);
   - a foreign kit refused with exit 2;
   - `--dry-run` writes nothing (tree identical) and lists paths;
-  - history FAIL demoted to WARN.
+  - history FAIL demoted to WARN, while broken links under a Done feature still FAIL;
+  - a second install on an adopted project leaves an existing `spec-kit.json` and `.specs/.gitignore` byte-identical;
+  - an adopted repo with a partial `spec-kit.json` can still commit (no hook by default; with `--hook`, no crash);
+  - a user-owned skill and Cursor rule are kept;
+  - install then uninstall on a CRLF `AGENTS.md` without a trailing newline restores it byte for byte;
+  - uninstall keeps a foreign kit and a user's own `report.html` line.
 
 ## Out of scope
 
