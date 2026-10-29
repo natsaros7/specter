@@ -196,7 +196,7 @@ python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$M/.specs" --out "$M/r.htm
 grep -q "merged, not closed" "$M/r.html" && grep -q "Merged, not closed" "$M/r.html" || fail "report lacks the merged badge"
 rc=0; L --specs "$M/.specs" >/dev/null || rc=$?; [ "$rc" = 0 ] || fail "merged warning changed the exit code"
 rc=0; out=$(PATH=/nonexistent "$(command -v python3)" "$KIT/kit/scripts/spec_lint.py" --specs "$M/.specs") || rc=$?
-[ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available" || fail "missing git: $out"
+[ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available or timed out" || fail "missing git: $out"
 printf '{"tracker_pattern": "ABC-["}\n' > "$M/.specs/spec-kit.json"
 rc=0; out=$(L --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && [ "$(echo "$out" | grep -c 'invalid tracker_pattern')" = 1 ] || fail "invalid tracker_pattern: $out"

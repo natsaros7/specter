@@ -149,7 +149,7 @@ python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec cha
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
-Git repos up to two levels below the project are indexed (linked worktrees and submodules, whose `.git` is a file, are skipped).
+Git repos up to two levels below the project are indexed (linked worktrees are skipped; submodules stay indexed).
 Each feature's `requirements.md` starts with a `Status:` line (Proposed, In progress, Blocked on …, Done <date> (<branch, commit or PR>),
 Dropped <date> (<why>)); the lint WARNs when it is missing or disagrees with the tasks. The report goes to `.specs/report.html` (git-ignored).
 

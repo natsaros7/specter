@@ -1,6 +1,6 @@
 # v030 Close-out: feature status, done checks, merged-work detection — Requirements
 
-Status: In progress
+Status: Done 2026-10-28 (v0.3.0)
 Tracker: none. Branch `feat/0.3.0`. Size M.
 
 ## Why

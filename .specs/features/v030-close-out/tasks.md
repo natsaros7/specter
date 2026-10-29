@@ -11,5 +11,5 @@ Goal: 0.3.0 on `feat/0.3.0`. Gate: G1–G4 in `AGENTS.md`.
 - [x] 5 Status lines in the example and specter's own specs; `tracker_pattern` and `merged_ref` in `kit/spec-kit.json` — [REQ-V030-07]
 - [x] 6 Selftest cases 1–7 from the design — [REQ-V030-07]
 - [x] 7 README and CHANGELOG — [REQ-V030-07]
-- [ ] 8 Gate green; fresh-context review — [REQ-V030-02] [REQ-V030-03]
-- [ ] 9 Release 0.3.0 (confirm first) — [REQ-V030-07]
+- [x] 8 Gate green; fresh-context review — [REQ-V030-02] [REQ-V030-03]
+- [x] 9 Release 0.3.0 (confirm first) — [REQ-V030-07]

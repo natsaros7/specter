@@ -160,7 +160,8 @@ def repos(root):
     `/worktrees/`) are skipped; submodules stay."""
     def worktree(p):
         try:
-            return p.is_file() and "/worktrees/" in p.read_text(errors="replace").replace("\\", "/")
+            return p.is_file() and bool(re.search(r"\.git/(modules/.+/)?worktrees/[^/]+\s*$",
+                                                  p.read_text(errors="replace").replace("\\", "/")))
         except OSError:
             return True
     return sorted({p.parent.relative_to(root).as_posix() for pat in ("*/.git", "*/*/.git") for p in root.glob(pat)
@@ -249,7 +250,7 @@ def lint_all(specs, names=()):
                     commits = merged_commits(specs.parent, repos(specs.parent), config)
                     if commits is None:
                         commits = {}
-                        warnings.append("WARN merged-work check skipped: git not available")
+                        warnings.append("WARN merged-work check skipped: git not available or timed out")
                 hit = re.compile("|".join("(?<![A-Za-z0-9])" + re.escape(k) + "(?![A-Za-z0-9])" for k in sorted(keys)))
                 found = {r: sum(1 for m in msgs if hit.search(m.upper())) for r, msgs in commits.items()}
                 found = {r: n for r, n in found.items() if n}
