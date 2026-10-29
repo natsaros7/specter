@@ -5,6 +5,23 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-28
+
+Every feature says whether it is proposed, in progress, blocked, done or dropped, and the lint tells you when that disagrees with the tasks or with what has been merged.
+
+### Added
+- Feature `Status:` line (Proposed, In progress, Blocked on …, Done <date> (<branch, commit or PR>), Dropped <date> (<why>)) in the `requirements.md` template; the lint reads the first non-empty `Status:` field (colon required) before the first `## `, outside fenced blocks.
+- Lint WARNs: no `Status:` line, unknown status, all tasks ticked but not Done/Dropped, Done with unticked tasks, Done without a date or a `(…)` reference.
+- Merged-work detection: with `tracker_pattern` set, the lint WARNs when commits on `merged_ref` name a feature's key while its spec says Proposed, has no status, or has no task ticked. Keys match with no letter or digit on either side. One `git log` per repo; exit code unchanged, also when git is missing or times out, or `tracker_pattern` is invalid (one WARN, check skipped).
+- `spec-kit.json` keys `tracker_pattern` (default `null`) and `merged_ref` (default `null`: `origin/HEAD`, then `HEAD`; when set, repos without it are skipped; `.specs`-only commits are ignored).
+- Report: status comes from the `Status:` line; a `merged, not closed` badge and a counter.
+- Close-out steps in `sync.md`, `next-task.md`, `refresh.md`, `AGENT_RULES.md` and the spec-rules Definition of Done.
+
+### Changed
+- The repo index for `--cites` and merged-work detection skips linked git worktrees (a stray worktree in a workspace no longer makes citations ambiguous); submodules stay indexed.
+- Specs without a `Status:` line now get one WARN per feature (exit code unchanged); `spec_report.py` infers the status as before for them.
+- The feature template moves the "Blocked on" note into `Status:`.
+
 ## [0.2.0] - 2026-10-28
 
 Specs you can see at a glance, and a citation checker that understands how people actually cite code.

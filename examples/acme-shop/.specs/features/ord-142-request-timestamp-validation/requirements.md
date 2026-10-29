@@ -1,6 +1,8 @@
 # ORD-142 Validate the request timestamp or amend the contract — Requirements
 
-Tracker: ORD-142. Branch `fix/ORD-142-request-timestamp-validation`. Size S. **Blocked on a product-owner decision.**
+Status: Blocked on a product-owner decision
+
+Tracker: ORD-142. Branch `fix/ORD-142-request-timestamp-validation`. Size S.
 
 ## Why
 

@@ -17,5 +17,6 @@ Execute a feature one task at a time. **Run on:** a mid-tier model is enough whe
 6. Tick `- [x]` only when code and tests are in and the gate is green. Update `▶ Resume here`.
 7. If the task changed an interface, config, schema or dependency, do the matching part of `sync.md` now, in the
    same commit.
+8. If this was the last task, run the close-out in `.specs/kit/playbooks/sync.md` before you say the feature is finished.
 
 Never tick a task because the code "looks right". Never commit on behalf of the user unless they asked you to.

@@ -1,6 +1,9 @@
 # <ID> <Title> — Requirements
 
-Tracker: <ID or "none">. Branch `<type>/<ID>-<summary>`. Size <S/M/L>. <Blocked on: …, if any>
+Status: Proposed
+<!-- One of: Proposed · In progress · Blocked on <what> · Done <YYYY-MM-DD> (<branch, commit or PR>) · Dropped <YYYY-MM-DD> (<why>) -->
+
+Tracker: <ID or "none">. Branch `<type>/<ID>-<summary>`. Size <S/M/L>.
 
 ## Why
 

@@ -1,5 +1,7 @@
 # v020 Report page, citation notations, drift aging, JSON output — Requirements
 
+Status: Done 2026-10-28 (v0.2.0)
+
 Tracker: none. Branch `feat/0.2.0`. Size M. Release: 0.2.0, after the Codex dry run, so its friction log ships in the same release.
 
 ## Why
