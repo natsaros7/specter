@@ -1,6 +1,6 @@
 # v041 Multi-line tasks count their continuation lines — Requirements
 
-Status: In progress
+Status: Done 2026-10-29 (v0.4.1)
 Tracker: none. Branch `fix/0.4.1`. Size S.
 
 ## Why

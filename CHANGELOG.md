@@ -5,6 +5,11 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-29
+
+### Fixed
+- A task whose REQ ID sits on an indented continuation line, or on a nested sub-item, counts as linked. A task ends at a blank line, a heading or the next item at its level (tabs count as 4 spaces). Ticked and total counts are unchanged.
+
 ## [0.4.0] - 2026-10-29
 
 Add specter to a project that already has specs without changing anything that works: preview with `--dry-run`, install, and roll back byte for byte with `--uninstall`.

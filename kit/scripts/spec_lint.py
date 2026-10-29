@@ -85,14 +85,15 @@ def load_config(specs):
 
 
 def task_blocks(text):
-    """(checkbox line, whole item) per task: the checkbox plus non-blank, non-heading lines indented deeper than its '-'."""
+    """(checkbox line, whole item) per task: the checkbox plus the non-blank, non-heading lines indented deeper
+    than it (tabs count as 4 spaces)."""
     blocks, lines = [], text.splitlines()
     for i, line in enumerate(lines):
         if not TASK.match(line):
             continue
-        indent, block = len(line) - len(line.lstrip()), [line]
+        indent, block = len(line.expandtabs(4)) - len(line.lstrip()), [line]
         for nxt in lines[i + 1:]:
-            if not nxt.strip() or nxt.lstrip().startswith("#") or len(nxt) - len(nxt.lstrip()) <= indent:
+            if not nxt.strip() or re.match(r"#{1,6}(\s|$)", nxt.lstrip()) or len(nxt.expandtabs(4)) - len(nxt.lstrip()) <= indent:
                 break
             block.append(nxt)
         blocks.append((line, "\n".join(block)))
