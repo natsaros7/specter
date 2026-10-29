@@ -1,6 +1,6 @@
 # v040 Adopt existing spec systems without breaking them — Requirements
 
-Status: In progress
+Status: Done 2026-10-29 (v0.4.0)
 Tracker: none. Branch `feat/0.4.0`. Size M.
 
 ## Why

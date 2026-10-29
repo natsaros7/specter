@@ -5,6 +5,10 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-29
+
+Add specter to a project that already has specs without changing anything that works: preview with `--dry-run`, install, and roll back byte for byte with `--uninstall`.
+
 ### Added
 - Adopt mode: a project with `features/`, `domains/`, `system/` or `steering/` under `.specs/` and no kit keeps everything it has. Only `.specs/kit/`, an absent `spec-kit.json`, an appended `.gitignore` line and a seeded profile (`status: active`, `adopted:` line) are written under `.specs/`. `--fresh` forces the old behaviour.
 - `--dry-run`: lists every path it would create, modify or replace, and the mode (fresh, adopt, upgrade); writes nothing. Refused together with `--uninstall`.
