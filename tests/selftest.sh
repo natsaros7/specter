@@ -324,4 +324,11 @@ for body in 'null' '[1]' '"str"' '{"code_globs": null}' '{"spec_sync": 5}' '{"co
   gitq -C "$S2" commit -m "c" 2>/dev/null || fail "hook blocked a commit on config $body"
 done
 
+echo "10. multi-line tasks: a REQ on a continuation line or a nested sub-item links the task"
+T10="$TMP/t10/.specs/features/m-1"; mkdir -p "$T10"
+printf '# m\n\n- [REQ-M-01] a\n' > "$T10/requirements.md"; printf 'REQ-M-01\n' > "$T10/design.md"
+printf '%b\n' '- [ ] 1 wrapped task' '  continues here — [REQ-M-01]' '- [ ] 2 parent' '  - [ ] 2a child — [REQ-M-01]' '- [ ] 3 bare task' '' '  not part of task 3 [REQ-M-01]' '- [ ] 4 issue ref' '  #12 follow-up [REQ-M-01]' '\t- [ ] 5 tabbed' '\t\tcontinued [REQ-M-01]' > "$T10/tasks.md"
+out=$(L --specs "$TMP/t10/.specs")
+echo "$out" | grep -q "1 task(s) without a REQ link, e.g. '- \[ \] 3 bare task'" || fail "multi-line tasks: $out"
+
 echo "selftest: OK"

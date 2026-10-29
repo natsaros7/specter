@@ -84,6 +84,22 @@ def load_config(specs):
     return config
 
 
+def task_blocks(text):
+    """(checkbox line, whole item) per task: the checkbox plus the non-blank, non-heading lines indented deeper
+    than it (tabs count as 4 spaces)."""
+    blocks, lines = [], text.splitlines()
+    for i, line in enumerate(lines):
+        if not TASK.match(line):
+            continue
+        indent, block = len(line.expandtabs(4)) - len(line.lstrip()), [line]
+        for nxt in lines[i + 1:]:
+            if not nxt.strip() or re.match(r"#{1,6}(\s|$)", nxt.lstrip()) or len(nxt.expandtabs(4)) - len(nxt.lstrip()) <= indent:
+                break
+            block.append(nxt)
+        blocks.append((line, "\n".join(block)))
+    return blocks
+
+
 def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
     fails, warns = [], []
     req = re.compile(config["req_id_pattern"])
@@ -112,7 +128,7 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
     if dangling:
         fails.append("referenced but never defined: " + ", ".join(dangling))
     if "tasks" in docs:
-        bare = [line.strip()[:70] for line in docs["tasks"].splitlines() if TASK.match(line) and not req.search(line)]
+        bare = [first.strip()[:70] for first, block in task_blocks(docs["tasks"]) if not req.search(block)]
         if bare:
             warns.append(str(len(bare)) + " task(s) without a REQ link, e.g. '" + bare[0] + "'")
     for name, headings in config.get("required_sections", {}).items():
