@@ -15,6 +15,9 @@ Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-d
       match, those matching cite_ignore_globs are dropped. Every listed range is checked on its own.
       FAIL: no such file, ambiguous, unknown repo prefix, past EOF, or a blank cited range.
 
+History: a feature whose Status is Done or Dropped reports its structural FAILs below as WARN `history: <message>` (exit code unaffected);
+      broken links and citations still FAIL everywhere.
+
 FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature folder name is not kebab-case;
       a feature defines no [REQ-..]; a defined REQ is absent from design.md or tasks.md; a REQ is
       referenced but defined neither in the feature nor in domains/*/requirements.md; a relative markdown link under .specs/ points to nothing.
@@ -244,6 +247,10 @@ def lint_all(specs, names=()):
     for feature in targets:
         if feature.is_dir():
             fails, warns = lint_feature(feature, config, traceability, domain_reqs)
+            req_path = feature / "requirements.md"
+            status = feature_status(req_path.read_text()) if req_path.exists() else None
+            if status and status["state"] in ("Done", "Dropped"):
+                fails, warns = [], ["history: " + f for f in fails] + warns
             keys = {m.group(0).upper() for m in tracker.finditer(feature.name) if m.group(0)} if tracker else set()
             if keys and (feature / "requirements.md").exists():
                 if commits is None:

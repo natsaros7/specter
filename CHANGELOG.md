@@ -5,6 +5,18 @@ The installed version is stamped into each project (`.specs/kit/VERSION`, `spec-
 
 ## [Unreleased]
 
+### Added
+- Adopt mode: a project with `features/`, `domains/`, `system/` or `steering/` under `.specs/` and no kit keeps everything it has. Only `.specs/kit/`, an absent `spec-kit.json`, an appended `.gitignore` line and a seeded profile (`status: active`, `adopted:` line) are written under `.specs/`. `--fresh` forces the old behaviour.
+- `--dry-run`: lists every path it would create, modify or replace, and the mode (fresh, adopt, upgrade); writes nothing. Refused together with `--uninstall`.
+- Lint: structural FAILs in `Done` and `Dropped` features are reported as `WARN history: ...` and don't count toward the exit code; broken links and citations still FAIL.
+- `AGENT_RULES.md`: for adopted systems the project's `steering/spec-rules.md` wins where it differs.
+- Selftest case 7 (adopt, dry run, user-level agent, foreign kit, history); the selftest now runs with a temporary `HOME`.
+
+### Changed
+- The installer never writes `.claude/agents/<role>.md` when `~/.claude/agents/<role>.md` exists (every mode).
+- A `.specs/kit/` without `VERSION` stops the install with exit 2 instead of being deleted.
+- Appending a marker block leaves existing file bytes (leading and trailing whitespace, CRLF) untouched.
+
 ## [0.3.0] - 2026-10-28
 
 Every feature says whether it is proposed, in progress, blocked, done or dropped, and the lint tells you when that disagrees with the tasks or with what has been merged.

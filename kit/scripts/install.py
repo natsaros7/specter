@@ -1,4 +1,5 @@
 """Installer logic for install.sh. Python 3.8+, stdlib only. Idempotent: every write is a full copy or a marker block."""
+import datetime
 import json
 import re
 import shutil
@@ -53,20 +54,67 @@ def detect_code_globs(target):
     return globs
 
 
-def say(msg):
-    print("  " + msg)
+ROOT = None
+
+
+def dry():
+    return "--dry-run" in ARGS
+
+
+def say(msg, always=False):
+    if always or not dry():
+        print("  " + msg)
+
+
+def write(path, kind, fn):
+    """The only way install() touches disk. kind: create, modify or replace. In --dry-run: print and skip fn."""
+    if dry():
+        try:
+            shown = path.relative_to(ROOT).as_posix() if ROOT else str(path)
+        except ValueError:
+            shown = str(path)
+        print("  " + kind + " " + shown)
+    else:
+        fn()
+
+
+def put_file(path, text):
+    """Write text unless the file already holds it. Returns True when a write was planned."""
+    old = path.read_text() if path.exists() else None
+    if old == text:
+        return False
+    def go():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+    write(path, "create" if old is None else "replace", go)
+    return True
+
+
+def read_raw(path):
+    with open(path, newline="") as f:
+        return f.read()
 
 
 def put_block(path, body, create=True):
-    """Insert or replace the marker block in path. Returns True if written."""
+    """Insert or replace the marker block in path. Appending never touches existing bytes. Returns False if skipped."""
     if not path.exists() and not create:
         return False
-    text = path.read_text() if path.exists() else ""
-    block = BEGIN + "\n" + body.strip() + "\n" + END
+    text = read_raw(path) if path.exists() else ""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    block = (BEGIN + "\n" + body.strip() + "\n" + END).replace("\n", nl)
     pattern = re.compile(re.escape(BEGIN) + ".*?" + re.escape(END), re.S)
-    text = pattern.sub(lambda _: block, text) if pattern.search(text) else (text.rstrip() + "\n\n" + block + "\n").lstrip()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text)
+    if pattern.search(text):
+        new = pattern.sub(lambda _: block, text)
+    elif not text:
+        new = block + nl
+    else:
+        new = text + ("" if text.endswith(("\n", "\r")) else nl) + nl + block + nl
+    if new != text:
+        def go():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with open(path, "w", newline="") as f:
+                f.write(new)
+        write(path, "modify" if text else "create", go)
     return True
 
 
@@ -80,16 +128,15 @@ def drop_block(path):
 
 
 def ensure_line(path, line):
-    text = ""
-    if path.exists():
-        with open(path, newline="") as f:
-            text = f.read()
+    text = read_raw(path) if path.exists() else ""
     if line in text.splitlines():
         return
     nl = "\r\n" if "\r\n" in text else "\n"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", newline="") as f:
-        f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + line + nl)
+    def go():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "w", newline="") as f:
+            f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + line + nl)
+    write(path, "modify" if text else "create", go)
 
 
 def drop_line(path, line):
@@ -116,37 +163,63 @@ def nested_repos(target):
 
 
 def install_skill(kit_home, dest_dir):
-    dest = dest_dir / "spec-first"
-    dest.mkdir(parents=True, exist_ok=True)
     src = (kit_home / "kit/skill/spec-first/SKILL.md").read_text()
-    (dest / "SKILL.md").write_text(src.replace("{{KIT_HOME}}", str(kit_home)))
+    put_file(dest_dir / "spec-first" / "SKILL.md", src.replace("{{KIT_HOME}}", str(kit_home)))
 
 
-def install_hook(target, kit_rules_note):
-    hooks = Path(git(target, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip())
+def install_hook(kit_home, kit_rules_note):
+    hooks = Path(git(ROOT, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip())
     hook = hooks / "pre-commit"
     if hook.exists() and HOOK_TAG not in hook.read_text():
-        say("pre-commit hook exists and isn't ours: add this line to it yourself:")
-        say('  python3 "$(git rev-parse --show-toplevel)/.specs/kit/scripts/spec_sync_check.py" || exit 1')
+        say("pre-commit hook exists and isn't ours: add this line to it yourself:", True)
+        say('  python3 "$(git rev-parse --show-toplevel)/.specs/kit/scripts/spec_sync_check.py" || exit 1', True)
         return
-    hooks.mkdir(parents=True, exist_ok=True)
-    shutil.copy(target / ".specs/kit/hooks/pre-commit", hook)
-    hook.chmod(0o755)
+    def go():
+        hooks.mkdir(parents=True, exist_ok=True)
+        shutil.copy(kit_home / "kit/hooks/pre-commit", hook)
+        hook.chmod(0o755)
+    write(hook, "replace" if hook.exists() else "create", go)
     say("git pre-commit hook: spec-sync check (" + kit_rules_note + ")")
 
 
+def mode(target):
+    """upgrade (kit installed), adopt (a spec system exists, no kit) or fresh. --fresh forces fresh unless upgrading."""
+    specs = target / ".specs"
+    if (specs / "kit/VERSION").exists():
+        return "upgrade"
+    if "--fresh" in ARGS:
+        return "fresh"
+    return "adopt" if any((specs / d).exists() for d in ADOPT_DIRS) else "fresh"
+
+
+ADOPT_DIRS = ("features", "domains", "system", "steering")
+
+
 def install(kit_home, target):
+    global ROOT
+    ROOT = target
     specs = target / ".specs"
     kit = specs / "kit"
-    print("Installing specter into " + str(specs))
+    if kit.exists() and not (kit / "VERSION").exists():
+        print(".specs/kit/ exists and isn't specter's: move it, then re-run")
+        return 2
+    how = mode(target)
+    src_kit = kit_home / "kit"
+    print(("Dry run: nothing will be written. Planned changes for " if dry() else "Installing specter into ") + str(specs))
+    if dry() or how == "adopt":
+        print("  mode: " + how + {"adopt": " (existing spec system found: your .specs/ content is kept as is)",
+                                  "upgrade": " (kit installed: it is replaced, your specs and settings kept)",
+                                  "fresh": " (no spec system yet)"}[how])
     for part in KIT_PARTS:
-        src, dst = kit_home / "kit" / part, kit / part
-        if dst.exists():
-            shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
-        dst.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
+        src, dst = src_kit / part, kit / part
+        def go(src=src, dst=dst):
+            if dst.exists():
+                shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
+        write(dst, "replace" if dst.exists() else "create", go)
     version = (kit_home / "VERSION").read_text().strip()
-    (kit / "VERSION").write_text(version + "\n")
+    put_file(kit / "VERSION", version + "\n")
     say(".specs/kit/ " + version + ": rules, playbooks, templates, roles, scripts, docs")
 
     config_path = specs / "spec-kit.json"
@@ -154,27 +227,32 @@ def install(kit_home, target):
     is_repo = bool(top) and Path(top).resolve() == target
     repos = nested_repos(target)
     if not config_path.exists():
-        config = json.loads((kit_home / "kit/spec-kit.json").read_text())
+        config = json.loads((src_kit / "spec-kit.json").read_text())
         if repos or not is_repo:
             config["spec_sync"] = "off"
         config["code_globs"] = detect_code_globs(target) or config["code_globs"]
         config["kit_version"] = version
-        config_path.write_text(json.dumps(config, indent=2) + "\n")
+        put_file(config_path, json.dumps(config, indent=2) + "\n")
         say(".specs/spec-kit.json (code paths: " + ", ".join(config["code_globs"][:4])
             + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
+    elif how == "adopt":
+        say(".specs/spec-kit.json exists: untouched (set tracker_pattern and merged_ref yourself, see README)")
     else:
         config = json.loads(config_path.read_text())
         if config.get("kit_version") != version:
             say("upgrade " + str(config.get("kit_version")) + " -> " + version + " (your settings kept)")
             config["kit_version"] = version
-            config_path.write_text(json.dumps(config, indent=2) + "\n")
+            put_file(config_path, json.dumps(config, indent=2) + "\n")
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists():
-        profile.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(kit / "templates/steering/project-profile.md", profile)
-        say(".specs/steering/project-profile.md (status: setup-incomplete)")
-    rules = (kit / "AGENT_RULES.md").read_text()
+        text = (src_kit / "templates/steering/project-profile.md").read_text()
+        if how == "adopt":
+            text = text.replace("status: setup-incomplete", "status: active\nadopted: " + datetime.date.today().isoformat()
+                                + ", existing spec system kept; setup interview not run", 1)
+        put_file(profile, text)
+        say(".specs/steering/project-profile.md (status: " + ("active, adopted" if how == "adopt" else "setup-incomplete") + ")")
+    rules = (src_kit / "AGENT_RULES.md").read_text()
     put_block(target / "AGENTS.md", rules)
     say("AGENTS.md: spec rules block (Codex, Cursor, Copilot, Gemini and others read this)")
 
@@ -191,18 +269,22 @@ def install(kit_home, target):
     if "claude" in agents:
         put_block(target / "CLAUDE.md", rules)
         say("CLAUDE.md: spec rules block")
+        wrote = []
         for agent in sorted((kit_home / "kit/adapters/claude/agents").glob("*.md")):
+            if (HOME / ".claude/agents" / agent.name).exists():
+                say("user-level " + agent.stem + " agent found: kept yours, project copy skipped", True)
+                continue
+            wrote.append(agent.stem)
             dst = target / ".claude/agents" / agent.name
             if dst.exists() and ROLE_TAG not in dst.read_text():
-                say(".claude/agents/" + agent.name + " exists and is yours: kept it")
+                say(".claude/agents/" + agent.name + " exists and is yours: kept it", True)
                 continue
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy(agent, dst)
-        say(".claude/agents: planner / generator / reviewer (sub-agents for .specs/kit/roles/)")
+            put_file(dst, agent.read_text())
+        if wrote:
+            say(".claude/agents: " + " / ".join(wrote) + " (sub-agents for .specs/kit/roles/)")
     if "cursor" in agents and (target / ".cursor").is_dir():
         header = (kit_home / "kit/adapters/cursor/spec-first.mdc").read_text()
-        (target / ".cursor/rules").mkdir(parents=True, exist_ok=True)
-        (target / ".cursor/rules/spec-first.mdc").write_text(header + rules)
+        put_file(target / ".cursor/rules/spec-first.mdc", header + rules)
         say(".cursor/rules/spec-first.mdc")
     if put_block(target / ".github/copilot-instructions.md", rules, create=False):
         say(".github/copilot-instructions.md: spec rules block")
@@ -213,15 +295,20 @@ def install(kit_home, target):
         say("multi-repo workspace (" + ", ".join(repos[:5]) + ("…" if len(repos) > 5 else "") + "): "
             "no git hook, since code commits happen in the child repos. Specs are kept in sync by the agent rules + review.")
     elif is_repo:
-        install_hook(target, "mode from .specs/spec-kit.json")
+        install_hook(kit_home, "mode from .specs/spec-kit.json")
     else:
         say("not a git repo: no hook. Run `git init` here if you want the specs versioned.")
 
-    if "--from-go" in ARGS:
+    if dry():
+        print("\nDry run done (mode: " + how + "). Nothing was written.")
+    elif "--from-go" in ARGS:
         print("\nDone. Continue with .specs/kit/playbooks/setup.md (GO.md step 5).")
+    elif how == "adopt":
+        print("\nDone. Your specs were kept. Next: read the README section on adding specter to a project that already has specs (tracker_pattern, merged_ref).")
     else:
         print("\nDone. Next: open your agent in " + str(target) + " and say:\n"
               "  \"Set up the spec system: follow .specs/kit/playbooks/setup.md\"")
+    return 0
 
 
 def uninstall(target):
@@ -276,10 +363,12 @@ def main(argv):
               + ("\non this machine: " + ",".join(on_machine) if on_machine else ""))
         return 0
     if "--uninstall" in args:
+        if "--dry-run" in args:
+            print("--dry-run works with install only; uninstall was not run.")
+            return 2
         uninstall(target)
-    else:
-        install(kit_home, target)
-    return 0
+        return 0
+    return install(kit_home, target)
 
 
 if __name__ == "__main__":

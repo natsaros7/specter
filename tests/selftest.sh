@@ -4,6 +4,7 @@ set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
+mkdir -p "$TMP/home"; export HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1  # the developer's real ~/.claude/agents must not change outcomes
 fail() { echo "FAIL: $*"; exit 1; }
 gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/dev/null; }
 
@@ -218,5 +219,38 @@ printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claud
 [ ! -e "$P/.specs/kit" ] && [ ! -e "$P/AGENTS.md" ] && [ ! -e "$P/.claude/agents/reviewer.md" ] && [ ! -e "$P/.git/hooks/pre-commit" ] || fail "uninstall left kit files"
 grep -qx mine "$P/.specs/.gitignore" && ! grep -q report.html "$P/.specs/.gitignore" || fail ".gitignore after uninstall"
 grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "specter" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
+
+echo "7. adopt: existing .specs untouched, dry run writes nothing, user-level agent kept, foreign kit refused, history demoted"
+X="$TMP/adopt"; mkdir -p "$X/.specs/features/a-1" "$X/.specs/steering" "$X/.claude"; gitq -C "$X" init
+printf '# Mine\n\nStatus: Proposed\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
+printf '# Rules\nmine\n' > "$X/.specs/steering/spec-rules.md"; printf '# Specs\n' > "$X/.specs/README.md"
+printf 'no trailing newline' > "$X/AGENTS.md"
+xsnap() { (cd "$X" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum | shasum); }
+mkdir -p "$HOME/.claude/agents"; echo "mine" > "$HOME/.claude/agents/planner.md"
+before=$(xsnap); (cd "$X" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum) > "$TMP/x.before"
+out=$("$KIT/install.sh" "$X" --dry-run) || fail "dry run failed"
+[ "$before" = "$(xsnap)" ] || fail "dry run wrote a file"
+[ ! -e "$X/.specs/kit" ] && [ ! -e "$X/.git/hooks/pre-commit" ] && [ ! -e "$X/.claude/skills" ] && [ ! -e "$X/.specs/.gitignore" ] || fail "dry run created paths"
+echo "$out" | grep -q "mode: adopt" && echo "$out" | grep -q "create .specs/kit" && echo "$out" | grep -q "modify .*AGENTS.md" || fail "dry run list: $out"
+echo "$out" | grep -q "user-level planner agent found: kept yours, project copy skipped" || fail "dry run silent on user-level agent"
+out=$("$KIT/install.sh" "$X") || fail "adopt install failed"
+echo "$out" | grep -q "mode: adopt" || fail "adopt not announced"
+(cd "$X" && sort "$TMP/x.before" | while read -r sum file; do printf '%s  %s\n' "$sum" "$file"; done | grep -v 'AGENTS.md' | shasum -c - >/dev/null) || fail "an existing file changed"
+head -c 19 "$X/AGENTS.md" | grep -q "no trailing newline" && grep -q "specter:begin" "$X/AGENTS.md" || fail "AGENTS.md not append-only"
+grep -q "^status: active" "$X/.specs/steering/project-profile.md" && grep -q "^adopted: " "$X/.specs/steering/project-profile.md" || fail "adopt profile"
+[ ! -e "$X/.claude/agents/planner.md" ] && [ -e "$X/.claude/agents/reviewer.md" ] || fail "user-level agent shadowed or reviewer missing"
+[ "$(cd "$X" && find .specs -type f -not -path '.specs/kit/*' | sort | tr '\n' ' ')" = ".specs/.gitignore .specs/features/a-1/requirements.md .specs/README.md .specs/spec-kit.json .specs/steering/project-profile.md .specs/steering/spec-rules.md " ] || fail "unexpected files under .specs"
+rc=0; python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs" >/dev/null || rc=$?; [ "$rc" = 1 ] || fail "incomplete live feature should FAIL"
+printf '# Mine\n\nStatus: Done 2026-01-01 (x)\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
+out=$(python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs") || fail "history FAIL not demoted: $out"
+echo "$out" | grep -q "WARN history: missing design.md" || fail "no history WARN: $out"
+out=$("$KIT/install.sh" "$X") && echo "$out" | grep -q "mode:" && fail "re-install announced a mode" || true
+F2="$TMP/foreign"; mkdir -p "$F2/.specs/kit"; echo keep > "$F2/.specs/kit/theirs.txt"
+rc=0; out=$("$KIT/install.sh" "$F2" 2>&1) || rc=$?
+[ "$rc" = 2 ] && echo "$out" | grep -q "isn't specter's" && [ "$(find "$F2" -type f | wc -l | tr -d ' ')" = 1 ] || fail "foreign kit: rc=$rc $out"
+rc=0; "$KIT/install.sh" "$F2" --dry-run >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "foreign kit dry run"
+rc=0; "$KIT/install.sh" "$X" --uninstall --dry-run >/dev/null || rc=$?; [ "$rc" = 2 ] && [ -e "$X/.specs/kit" ] || fail "uninstall --dry-run must refuse"
+H="$TMP/fresh-force"; mkdir -p "$H/.specs/steering"; gitq -C "$H" init
+"$KIT/install.sh" "$H" --fresh >/dev/null; grep -q "status: setup-incomplete" "$H/.specs/steering/project-profile.md" || fail "--fresh did not force fresh"
 
 echo "selftest: OK"
