@@ -103,7 +103,7 @@ def put_block(path, body, create=True):
     if pattern.search(text):
         new = pattern.sub(lambda _: block, text)
     elif not text:
-        new = block + nl
+        new = block + ("" if path.exists() else nl)  # an existing empty file gets no final newline: drop_block tells them apart
     else:
         # a file with no trailing newline gets the block with no blank line and no final newline: drop_block restores exact bytes
         new = text + nl + block + (nl if text.endswith(("\n", "\r")) else "")
@@ -112,57 +112,70 @@ def put_block(path, body, create=True):
             path.parent.mkdir(parents=True, exist_ok=True)
             with open(path, "w", newline="") as f:
                 f.write(new)
-        write(path, "modify" if text else "create", go)
+        write(path, "modify" if path.exists() else "create", go)
     return True
 
 
 def drop_block(path):
-    """Remove the marker block and the separator newline put_block added; every other byte stays."""
-    if path.exists():
-        text = re.sub(r"(?:\r?\n)?" + re.escape(BEGIN) + ".*?" + re.escape(END) + r"(?:\r?\n)?", "", read_raw(path), count=1, flags=re.S)
-        if text.strip():
-            with open(path, "w", newline="") as f:
-                f.write(text)
-        else:
-            path.unlink()
+    """Remove the marker block and the separator newline put_block added; every other byte stays. A file is deleted only
+    when it held nothing but a block that ends in a newline, which is how put_block writes a file it created."""
+    if not path.exists():
+        return False
+    raw = read_raw(path)
+    m = re.search(r"(?:\r?\n)?" + re.escape(BEGIN) + ".*?" + re.escape(END) + r"(\r?\n)?", raw, re.S)
+    if not m:
+        return False
+    rest = raw[:m.start()] + raw[m.end():]
+    if rest == "" and m.start() == 0 and m.group(1):
+        path.unlink()
+    else:
+        with open(path, "w", newline="") as f:
+            f.write(rest)
+    return True
 
 
 GITIGNORE_TAG = "# specter"
 
 
 def ensure_line(path, line):
-    """Append line under a `# specter` comment, unless the file already has it (then it is the user's)."""
+    """Append line under a `# specter` comment, unless the file already has it (then it is the user's). A file without a
+    trailing newline (or empty) gets no final newline, so drop_line can restore the exact bytes."""
     text = read_raw(path) if path.exists() else ""
     if line in text.splitlines():
         return
     nl = "\r\n" if "\r\n" in text else "\n"
     def go():
         path.parent.mkdir(parents=True, exist_ok=True)
+        tail = nl if (not path.exists() or text.endswith(("\n", "\r"))) else ""
         with open(path, "w", newline="") as f:
-            f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + GITIGNORE_TAG + nl + line + nl)
-    write(path, "modify" if text else "create", go)
+            f.write(text + ("" if not text or text.endswith(("\n", "\r")) else nl) + GITIGNORE_TAG + nl + line + tail)
+    write(path, "modify" if path.exists() else "create", go)
 
 
 def drop_line(path, line):
-    """Remove only the line (and its `# specter` comment) that ensure_line added."""
+    """Remove only the line (and its `# specter` comment) that ensure_line added, restoring the bytes around it."""
     if not path.exists():
-        return
+        return False
     with open(path, newline="") as f:
         lines = f.read().splitlines(keepends=True)
-    kept, i = [], 0
+    kept, i, ended = [], 0, True
     while i < len(lines):
         if lines[i].rstrip("\r\n") == GITIGNORE_TAG and i + 1 < len(lines) and lines[i + 1].rstrip("\r\n") == line:
+            ended = lines[i + 1].endswith(("\n", "\r"))
             i += 2
             continue
         kept.append(lines[i])
         i += 1
     if len(kept) == len(lines):
-        return
-    if any(l.strip() for l in kept):
+        return False
+    if not ended and kept and kept[-1].endswith(("\n", "\r")):
+        kept[-1] = kept[-1].rstrip("\r\n")
+    if kept or not ended:
         with open(path, "w", newline="") as f:
             f.write("".join(kept))
     else:
         path.unlink()
+    return True
 
 
 def git(target, *args):
@@ -182,7 +195,8 @@ def ours(path):
         return False
     text = path.read_text(errors="replace")
     if path.name == "SKILL.md":
-        return "name: spec-first" in text and ".specs/kit/" in text
+        return ("name: spec-first" in text and ".specs/kit/" in text
+                and re.search(r"^Kit source: `(?!\{\{)[^`]+`", text, re.M) is not None)
     return (RULES_TAG if path.suffix == ".mdc" else ROLE_TAG) in text
 
 
@@ -378,11 +392,15 @@ def untouched_seed(target):
     if config.exists():
         try:
             have = json.loads(config.read_text())
-            default = json.loads((Path(__file__).resolve().parent.parent / "spec-kit.json").read_text())
+            expect = json.loads((Path(__file__).resolve().parent.parent / "spec-kit.json").read_text())
         except (OSError, ValueError):
             return gone
-        free = ("code_globs", "spec_sync", "kit_version")
-        if isinstance(have, dict) and have.get("kit_version") and {k: v for k, v in have.items() if k not in free} == {k: v for k, v in default.items() if k not in free}:
+        top = git(target, "rev-parse", "--show-toplevel").stdout.strip()
+        if nested_repos(target) or not (top and Path(top).resolve() == target):
+            expect["spec_sync"] = "off"
+        expect["code_globs"] = detect_code_globs(target) or expect["code_globs"]
+        # only kit_version may differ from what the installer wrote: any other edited key keeps the config
+        if isinstance(have, dict) and have.get("kit_version") and have == dict(expect, kit_version=have["kit_version"]):
             gone.append(config)
     return gone
 
@@ -391,26 +409,35 @@ def uninstall(target):
     global ROOT
     ROOT = target
     specs = target / ".specs"
-    kept = []
+    removed, kept = [], []
     if (specs / "kit").exists():
         if ours(specs / "kit"):
             seeds = untouched_seed(target)
             shutil.rmtree(specs / "kit", ignore_errors=True)
+            removed.append(".specs/kit/")
             for f in seeds:
                 f.unlink()
+                removed.append(shown(f))
         else:
             kept.append(".specs/kit/ (not specter's)")
-    drop_line(specs / ".gitignore", "report.html")
+    if drop_line(specs / ".gitignore", "report.html"):
+        removed.append(".specs/.gitignore line")
     for f in ("AGENTS.md", "CLAUDE.md", ".github/copilot-instructions.md", "GEMINI.md"):
-        drop_block(target / f)
+        if drop_block(target / f):
+            removed.append(f + " block")
     rule = target / ".cursor/rules/spec-first.mdc"
     if rule.exists():
-        rule.unlink() if ours(rule) else kept.append(shown(rule))
+        if ours(rule):
+            rule.unlink()
+            removed.append(shown(rule))
+        else:
+            kept.append(shown(rule))
     for _, _, _, skill_dir, _ in AGENTS.values():
         skill = target / skill_dir / "spec-first" / "SKILL.md"
         if skill.exists():
             if ours(skill):
                 skill.unlink()
+                removed.append(shown(skill))
                 if not any(skill.parent.iterdir()):
                     skill.parent.rmdir()
             else:
@@ -418,13 +445,23 @@ def uninstall(target):
     for agent in (target / ".claude/agents").glob("*.md"):
         if ours(agent):
             agent.unlink()
+            removed.append(shown(agent))
+        else:
+            kept.append(shown(agent))
     hooks = git(target, "rev-parse", "--path-format=absolute", "--git-path", "hooks").stdout.strip()
     hook = Path(hooks) / "pre-commit" if hooks else None
     if hook and hook.exists() and HOOK_TAG in hook.read_text():
         hook.unlink()
-    print("Removed the kit, marker blocks, skill, role agents and hook. Your specs in .specs/ are kept.")
-    for k in kept:
-        print("  kept " + k)
+        removed.append("git pre-commit hook")
+    for d in (".claude/agents", ".claude/skills", ".claude", ".specs/steering"):
+        try:
+            (target / d).rmdir()  # only when empty
+        except OSError:
+            pass
+    print("Removed: " + (", ".join(removed) or "nothing"))
+    if kept:
+        print("Kept (not specter's): " + ", ".join(kept))
+    print("Your specs in .specs/ are kept.")
 
 
 ARGS = []

@@ -270,7 +270,8 @@ cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" && [ "$g1" = "$(shasum < "$Y/.spe
 "$KIT/install.sh" "$Y" --hook >/dev/null; [ -x "$Y/.git/hooks/pre-commit" ] || fail "--hook did not install the hook"
 echo b > "$Y/src/b.java"; gitq -C "$Y" add src/b.java; gitq -C "$Y" commit -m "code 2" || fail "hook crashed on a partial spec-kit.json"
 "$KIT/install.sh" "$Y" --uninstall >/dev/null
-cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" && [ "$(cat "$Y/.specs/.gitignore")" = "foo" ] || fail "uninstall touched the user's config or .gitignore"
+printf 'foo' > "$TMP/y.gi"
+cmp -s "$Y/.specs/spec-kit.json" "$TMP/y.json" && cmp -s "$Y/.specs/.gitignore" "$TMP/y.gi" || fail "uninstall touched the user's config or .gitignore"
 Z="$TMP/owned"; mkdir -p "$Z/.claude/skills/spec-first" "$Z/.cursor/rules" "$Z/.claude/agents"; gitq -C "$Z" init
 echo mine > "$Z/.claude/skills/spec-first/SKILL.md"; echo mine > "$Z/.cursor/rules/spec-first.mdc"; echo mine > "$Z/.claude/agents/generator.md"
 out=$("$KIT/install.sh" "$Z" --agents=claude,cursor)
@@ -296,5 +297,31 @@ rc=0; "$KIT/install.sh" "$V2" >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] && [ "$(ca
 H3="$TMP/fresh2"; mkdir -p "$H3/.specs/steering"; "$KIT/install.sh" "$H3" --fresh --dry-run | grep -q "forced by --fresh" || fail "--fresh claims no spec system"
 Y2="$TMP/p2"; mkdir -p "$Y2/.specs/steering"; gitq -C "$Y2" init
 "$KIT/install.sh" "$Y2" --from-go | grep -q "Setup interview skipped" || fail "--from-go in adopt mode"
+
+echo "9. rollback safety: edited config kept, version bump keeps config, byte-exact empty files, empty dirs, config types"
+N2="$TMP/seed-clean"; mkdir -p "$N2"; gitq -C "$N2" init; "$KIT/install.sh" "$N2" --agents=claude >/dev/null
+"$KIT/install.sh" "$N2" --uninstall >/dev/null
+[ ! -e "$N2/.specs/spec-kit.json" ] && [ ! -e "$N2/.specs/steering/project-profile.md" ] && [ ! -e "$N2/AGENTS.md" ] && [ ! -e "$N2/CLAUDE.md" ] && [ ! -e "$N2/.specs/.gitignore" ] || fail "uninstall left files it created"
+[ ! -d "$N2/.claude" ] && [ ! -d "$N2/.specs/steering" ] || fail "uninstall left empty directories"
+N3="$TMP/seed-edit"; mkdir -p "$N3"; gitq -C "$N3" init; "$KIT/install.sh" "$N3" >/dev/null
+sed 's/"spec_sync": "warn"/"spec_sync": "block"/' "$N3/.specs/spec-kit.json" > "$TMP/n3.json"; cmp -s "$TMP/n3.json" "$N3/.specs/spec-kit.json" && fail "test setup: spec_sync not edited"
+cp "$TMP/n3.json" "$N3/.specs/spec-kit.json"; "$KIT/install.sh" "$N3" --uninstall >/dev/null
+cmp -s "$TMP/n3.json" "$N3/.specs/spec-kit.json" || fail "uninstall removed an edited config"
+Q="$TMP/bump"; mkdir -p "$Q/.specs/features"; gitq -C "$Q" init; printf '{ "drift_max_age_days" : 5 }' > "$Q/.specs/spec-kit.json"; cp "$Q/.specs/spec-kit.json" "$TMP/q.json"
+"$KIT/install.sh" "$Q" >/dev/null; echo 0.0.1 > "$Q/.specs/kit/VERSION"; "$KIT/install.sh" "$Q" | grep -q "upgrade 0.0.1" || fail "version bump not seen"
+cmp -s "$Q/.specs/spec-kit.json" "$TMP/q.json" || fail "version-bump re-install rewrote spec-kit.json"
+E="$TMP/empties"; mkdir -p "$E/.specs"; gitq -C "$E" init; : > "$E/AGENTS.md"; printf '\r\n' > "$E/CLAUDE.md"; : > "$E/.specs/.gitignore"
+printf '' > "$TMP/e.empty"; printf '\r\n' > "$TMP/e.crlf"
+"$KIT/install.sh" "$E" --agents=claude >/dev/null; grep -q "specter:begin" "$E/AGENTS.md" || fail "block not added to an empty file"
+"$KIT/install.sh" "$E" --uninstall >/dev/null
+cmp -s "$E/AGENTS.md" "$TMP/e.empty" && cmp -s "$E/CLAUDE.md" "$TMP/e.crlf" && cmp -s "$E/.specs/.gitignore" "$TMP/e.empty" || fail "empty or whitespace-only files not restored byte for byte"
+Z2="$TMP/skill2"; mkdir -p "$Z2/.claude/skills/spec-first"; gitq -C "$Z2" init
+printf -- '---\nname: spec-first\n---\nuses .specs/kit/ but has no kit source line\n' > "$Z2/.claude/skills/spec-first/SKILL.md"; cp "$Z2/.claude/skills/spec-first/SKILL.md" "$TMP/z2.md"
+"$KIT/install.sh" "$Z2" --agents=claude >/dev/null; cmp -s "$Z2/.claude/skills/spec-first/SKILL.md" "$TMP/z2.md" || fail "skill without the Kit source line was replaced"
+S2="$TMP/badcfg"; mkdir -p "$S2/.specs/features" "$S2/src"; gitq -C "$S2" init; "$KIT/install.sh" "$S2" --hook >/dev/null
+for body in 'null' '[1]' '"str"' '{"code_globs": null}' '{"spec_sync": 5}' '{"code_globs": [1]}' '[["spec_sync","block"],["code_globs",["src/*"]]]'; do
+  printf '%s' "$body" > "$S2/.specs/spec-kit.json"; echo "$body" > "$S2/src/f.java"; gitq -C "$S2" add src/f.java
+  gitq -C "$S2" commit -m "c" 2>/dev/null || fail "hook blocked a commit on config $body"
+done
 
 echo "selftest: OK"

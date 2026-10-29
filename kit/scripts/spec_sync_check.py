@@ -32,9 +32,15 @@ def main(argv):
     config = {"spec_sync": "warn", "code_globs": [], "ignore_globs": []}
     path = specs / "spec-kit.json"
     try:
-        config.update(json.loads(path.read_text()) if path.exists() else {})
-    except ValueError:
-        print("spec-sync: " + str(path) + " is not valid JSON: check skipped")
+        data = json.loads(path.read_text()) if path.exists() else {}
+        if not isinstance(data, dict):
+            raise TypeError("not an object")
+        config.update(data)
+        lists = (config["code_globs"], config["ignore_globs"])
+        if not all(isinstance(g, list) and all(isinstance(x, str) for x in g) for g in lists) or not isinstance(config["spec_sync"], str):
+            raise TypeError("wrong type")
+    except (TypeError, ValueError, AttributeError):
+        print("spec-sync: " + str(path) + " is not a usable config: check skipped")
         return 0
     mode = config.get("spec_sync", "warn")
     if mode == "off" or os.environ.get("SPEC_SYNC_SKIP") == "1":

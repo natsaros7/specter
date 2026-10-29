@@ -1,7 +1,7 @@
 # Changelog
 
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
-The installed version is stamped into each project (`.specs/kit/VERSION`; `spec-kit.json` → `kit_version` only in a config the installer creates).
+The installed version is stamped into each project (`.specs/kit/VERSION`; a `spec-kit.json` the installer creates records the first-install version in `kit_version`, and is never rewritten).
 
 ## [Unreleased]
 
@@ -12,7 +12,7 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; `spec-
 - `AGENT_RULES.md`: for adopted systems the project's `steering/spec-rules.md` wins where it differs.
 - Selftest case 7 (adopt, dry run, user-level agent, foreign kit, history); the selftest now runs with a temporary `HOME`.
 - `--hook`: adopt mode installs no git hook unless it is given, and prints how to enable it.
-- Uninstall is as careful as install: it removes `.specs/kit/`, the skill, the Cursor rule and role agents only when specter wrote them, restores marker-block files byte for byte (CRLF included), removes only the `.gitignore` lines specter added (marked `# specter`), and removes the seeded profile and config when they were never edited.
+- Uninstall is as careful as install: it removes `.specs/kit/`, the skill, the Cursor rule and role agents only when specter wrote them, restores marker-block files byte for byte (CRLF included), removes only the `.gitignore` lines specter added (marked `# specter`), removes the seeded profile and config only when neither was edited (any edited key keeps the config), restores files without a trailing newline or empty files byte for byte, removes empty directories it leaves, and lists what it removed and kept.
 - `GO.md`: an adopt branch (dry run first, no setup interview); `--from-go` in adopt mode says setup was skipped.
 
 ### Changed
@@ -25,7 +25,8 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; `spec-
 - Appending a marker block leaves existing file bytes (leading and trailing whitespace, CRLF) untouched.
 
 ### Fixed
-- `spec_sync_check.py` crashed with a `KeyError` on a `spec-kit.json` without `code_globs`, blocking commits; missing keys now take defaults.
+- `spec_sync_check.py` crashed with a `KeyError` on a `spec-kit.json` without `code_globs`, blocking commits; missing keys take defaults, and an unusable config (null, a list, wrong types) skips the check instead of blocking the commit.
+- A skill counts as specter's only with the substituted `Kit source:` line too.
 
 ## [0.3.0] - 2026-10-28
 

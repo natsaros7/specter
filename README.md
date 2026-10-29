@@ -202,7 +202,7 @@ cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: re
 ./install.sh ~/code/my-project --detect                            # which agents it would wire, and why
 ```
 
-The installed version is in `.specs/kit/VERSION` (and in the `spec-kit.json` the installer creates; an existing one is never rewritten). Changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
+The installed version is in `.specs/kit/VERSION`. The `spec-kit.json` the installer creates records the first-install version in `kit_version`; it is never rewritten afterwards, and an existing config is never touched. Changes are listed in [`CHANGELOG.md`](CHANGELOG.md).
 Self-test, run locally: `tests/selftest.sh`.
 
 ## FAQ
