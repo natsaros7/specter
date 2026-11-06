@@ -7,6 +7,7 @@ This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is 
 - Adopted systems (`adopted:` in the profile): the project's `.specs/steering/spec-rules.md` wins where it differs from the kit.
 - Use the size threshold in `.specs/steering/spec-rules.md` §1. A non-trivial change (multi-file, any contract/schema/boundary change, or over the LOC threshold) needs a feature spec **before** code: follow `.specs/kit/playbooks/new-feature.md`.
 - Never assume an API, config key or feature exists. Verify it in code and cite `path:line`.
+- If `.specs/steering/decisions.md` exists, don't reopen a settled decision. To change one, propose a new dated row that supersedes it.
 
 **While you change code**
 - Work one task from `tasks.md` at a time (`.specs/kit/playbooks/next-task.md`). Tick a task only when its code and tests are in and the project's gate is green.
@@ -17,6 +18,7 @@ This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is 
 - If a spec statement becomes false and you can't fix it now, add a dated row to the Drift Register (`.specs/system/data-flows.md`). Don't leave the spec silently wrong.
 - When the last task lands, close the feature out (`Status: Done <date> (<branch, commit or PR>)`, per `sync.md`) before reporting it finished.
 - Run `python3 .specs/kit/scripts/spec_lint.py`. It must exit 0.
+- State the change's deploy impact (`Deploy impact: none` or `<job or env>: <what changes>`). If it is not `none`, say the people who run CI/CD must hear before the merge.
 
 **Asking the user**
 Ask in chat and wait for the answer. Ask at most 5 questions per round. For each question, say what the answer changes and give your best guess as the default. Record each answer in `.specs/steering/project-profile.md` so nobody asks it again.

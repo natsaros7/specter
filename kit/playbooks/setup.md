@@ -59,7 +59,7 @@ libraries too thin to deserve a domain.
 
 ## Phase 3: Interview (gaps only)
 
-Ask only what Phases 1–2 left at low or medium confidence, or what the code can't answer. Typically 4–8 questions in
+Ask only what Phases 1–2 left at low or medium confidence, or what the code can't answer. Typically 5–9 questions in
 1–2 rounds. **Must-ask** questions are always asked unless the evidence is conclusive. **Ask-if-unclear** questions
 are skipped when you have a confident default, which you then record as `assumed` in the interview log.
 
@@ -73,8 +73,10 @@ are skipped when you have a confident default, which you then record as `assumed
 | Q6 | ask-if-unclear | Which changes need a spec first? Default: multi-file, any contract/schema/boundary change, or more than 15 LOC. | `spec_threshold_loc`; spec-rules §1 |
 | Q7 | ask-if-unclear | Git hook when code changes without a spec update: warn or block? Code paths = `<detected globs>`? | `spec_sync`, `code_globs` |
 | Q8 | ask-if-unclear | Anything already known to be wrong or stale (docs vs reality)? | Seeds the Drift Register |
+| Q9 | must-ask | How does CI/CD consume this repository: a pinned artifact or image, or the default branch directly? Which jobs? | Whether a merge reaches a job before any release; the `Deploy impact` rule in spec-rules §7. Don't assume pinned: a job that clones the default branch runs every merge on its next run |
 
-Record each answer in the profile's **Interview log** as you get it. Set `phase: 3`.
+Record each answer in the profile's **Interview log** as you get it, and Q9's also as a **Facts** row
+(`CI/CD consumes: <pinned artifact or image | default branch>, <jobs>`). Set `phase: 3`.
 
 ## Phase 4: Approve (the one approval)
 
@@ -97,8 +99,10 @@ From `.specs/kit/templates/`:
 5. `domains/<domain>/design.md` (as-built: stack, behaviour, public interface, data, config, local drift) and
    `domains/<domain>/requirements.md` (capabilities with `[REQ-<PREFIX>-NN]` ids, each with evidence). Leave out
    template fields that don't apply (a version for a merged domain, the Upstream column when there's no traceability).
-6. `steering/spec-rules.md`: copy the template and put in the threshold (Q6), the gate commands (Q4) and the decision
-   authority (Q3).
+6. `steering/spec-rules.md`: copy the template and put in the threshold (Q6), the gate commands (Q4) as rows of the §7
+   Gates table (one command per row, exactly as the project runs it), the CI/CD answer (Q9) and the decision
+   authority (Q3). Settled decisions the interview turned up go in `steering/decisions.md` (from the template);
+   otherwise the first settled decision creates it.
 7. `steering/code-standards.md`: link to the project's existing standards and CI gate. Don't restate them.
 8. Update `.specs/spec-kit.json`: `upstream_req_pattern` (Q1), `spec_threshold_loc` (Q6), `spec_sync` and `code_globs` (Q7).
 
@@ -111,7 +115,10 @@ From `.specs/kit/templates/`:
 4. Every Mermaid block is fenced with `mermaid` and parses (if no renderer is available, check the syntax by eye).
 5. Nothing outside `.specs/` changed apart from the installer's files (`git status`).
    Only now set the profile to `status: active` and `phase: done`.
-6. **Report** (≤ 8 lines): domains created, open UNKNOWNs, the top 3 Drift Register rows, the three highest-value
+6. **Offer an onboarding page.** Ask: "Generate `.specs/ONBOARDING.md` for new contributors?" (default: yes for a team,
+   no for a solo project). On yes, fill `.specs/kit/templates/ONBOARDING.md` from what setup learned, replace every
+   `<placeholder>` (or delete the line), add a router row ("New here → `ONBOARDING.md`"), and rerun step 2.
+7. **Report** (≤ 8 lines): domains created, open UNKNOWNs, the top 3 Drift Register rows, the three highest-value
    next steps, and the four everyday phrases ("Spec this", "Next task on", "Sync specs", "Refresh the specs").
 
 ## Re-running
