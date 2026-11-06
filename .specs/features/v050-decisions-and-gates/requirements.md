@@ -1,6 +1,6 @@
 # v050 Decisions log, resolving ids, names denylist, deploy impact, gate summary — Requirements
 
-Status: In progress
+Status: Done 2026-11-06 (v0.5.0)
 Tracker: none. Branch `feat/0.5.0`. Size M.
 
 ## Why

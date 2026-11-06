@@ -5,6 +5,8 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-06
+
 Settled decisions recorded once and cited by id, every cited id checked, names kept out of shared specs, deploy impact
 stated per change, and the gates run by a script. All opt-in: a 0.4.1 project lints with the same exit code.
 
