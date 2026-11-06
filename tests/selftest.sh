@@ -376,4 +376,17 @@ rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "templa
 printf '# no table\n' > "$GR"; rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "no Gates table" || fail "missing table: rc=$rc $out"
 rm "$GR"; rc=0; gates >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "missing spec-rules.md: rc=$rc"
 
+echo "12. review round: other-format decisions.md, D- id bounds, strict config, REQ WARN shape, sub-headings, hash-term, gates.py args"
+S="$TMP/t12/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"; DEC="$S/steering/decisions.md"
+printf '# d\n\nStatus: In progress\n\n### [REQ-D-01] a\n\n#### Acceptance\n\nLands D-1.\n' > "$S/features/d-1/requirements.md"
+printf 'REQ-D-01\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-D-01]\n' > "$S/features/d-1/tasks.md"
+printf '# Decisions\n\nWe chose Postgres. D-DAY, D-1 and D-7 came up.\n\n| ID | Decision | Date |\n|---|---|---|\n| D-7 | x | 2026-01-01 |\n' > "$DEC"
+out=$(L --specs "$S") || fail "decisions.md in another format changed the exit code: $out"
+echo "$out" | grep -q "has no row" && fail "decisions.md without a decision row was checked: $out" || true
+printf '| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | x | y | REQ-D-01 | |\n' > "$DEC"
+printf 'Not ids: [REQ-D-01] ADR-D-1 TLS-D-9 PO-D-3 D-1.md D-DAY D-ROM. Ids: D-9, D-N7 and D-R2C5.\n' > "$S/system/notes.md"
+rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] || fail "unresolved ids passed: $out"
+for d in D-9 D-N7 D-R2C5; do echo "$out" | grep -q "notes.md:1: $d is cited" || fail "$d not seen: $out"; done
+[ "$(echo "$out" | grep -c 'is cited but has no row')" = 3 ] || fail "D- matched inside another id or a file name: $out"
+printf '{"decisions": {"enabled": false}}\n' > "$S/spec-kit.json"; out=$(L --specs "$S") || fail "decisions.enabled false still checks: $out"
 echo "selftest: OK"

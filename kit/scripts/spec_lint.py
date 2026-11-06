@@ -22,7 +22,8 @@ History: a feature whose Status is Done or Dropped reports its structural FAILs 
 FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature folder name is not kebab-case;
       a feature defines no [REQ-..]; a defined REQ is absent from design.md or tasks.md; a REQ is
       referenced but defined neither in the feature nor in domains/*/requirements.md; a relative markdown link under .specs/ points to nothing.
-      Opt-in, with file:line: when the decisions log exists (decisions.file, default steering/decisions.md), a cited D-<id>
+      Opt-in, with file:line: when the decisions log (decisions.file, default steering/decisions.md) holds at least one
+      decision row and decisions.enabled is not false, a cited D-<id> (standalone, with a digit)
       has no row, or a row's "Where it lands" names an undefined REQ (rows a later row supersedes are skipped); with
       decisions.backlinks true (or "warn": WARN), such a REQ's definition does not cite the decision; with denylist_sha256
       set, a token (dots kept; each run of dot segments; each adjacent pair joined by '-') hashes to a listed digest.
@@ -93,7 +94,7 @@ def load_config(specs):
         sys.exit("spec-kit.json: denylist_sha256 must be a list of hex digests, got " + json.dumps(deny))
     if not isinstance(dec, dict):
         sys.exit("spec-kit.json: decisions must be an object, got " + json.dumps(dec))
-    config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False}, **dec)
+    config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False, "enabled": True}, **dec)
     return config
 
 
@@ -187,7 +188,9 @@ def broken_links(specs):
 
 
 
-DREF = re.compile(r"\bD-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
+# a decision id stands alone (not inside REQ-D-01 or ADR-D-1, not a file name like D-1.md) and holds a digit, so prose
+# such as D-DAY is not an id
+DREF = re.compile(r"(?<![\w-])D-(?=[A-Z0-9-]*[0-9])[A-Z0-9]+(?:-[A-Z0-9]+)*(?![\w-]|\.\w)")
 TOKEN = re.compile(r"[a-z0-9]+(?:\.[a-z0-9]+)*")
 
 
@@ -243,7 +246,8 @@ def refs(specs, config, req_defs):
     fails, warns = [], []
     req, dec = re.compile(config["req_id_pattern"]), config["decisions"]
     dec_path = specs / dec["file"]
-    rows = decision_rows(unfenced(dec_path.read_text()).splitlines()) if dec_path.is_file() else None
+    # on only when the file holds at least one decision row: a decisions.md in another format lints as before
+    rows = (decision_rows(unfenced(dec_path.read_text()).splitlines()) or None) if dec["enabled"] and dec_path.is_file() else None
     ids = {r[0] for r in rows or ()}
     digests = {d.lower() for d in config["denylist_sha256"]}
     for md in sorted(specs.rglob("*.md")):
