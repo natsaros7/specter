@@ -94,7 +94,16 @@ def load_config(specs):
         sys.exit("spec-kit.json: denylist_sha256 must be a list of hex digests, got " + json.dumps(deny))
     if not isinstance(dec, dict):
         sys.exit("spec-kit.json: decisions must be an object, got " + json.dumps(dec))
-    config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False, "enabled": True}, **dec)
+    dec = config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False, "enabled": True}, **dec)
+    unknown = sorted(set(dec) - {"file", "backlinks", "enabled"})
+    if unknown:
+        sys.exit("spec-kit.json: decisions has unknown key(s) " + ", ".join(unknown) + " (known: file, backlinks, enabled)")
+    if not isinstance(dec["file"], str):
+        sys.exit("spec-kit.json: decisions.file must be a path string, got " + json.dumps(dec["file"]))
+    if not (isinstance(dec["backlinks"], bool) or dec["backlinks"] == "warn"):
+        sys.exit('spec-kit.json: decisions.backlinks must be false, "warn" or true, got ' + json.dumps(dec["backlinks"]))
+    if not isinstance(dec["enabled"], bool):
+        sys.exit("spec-kit.json: decisions.enabled must be true or false, got " + json.dumps(dec["enabled"]))
     return config
 
 
@@ -230,11 +239,13 @@ def decision_rows(lines):
 
 
 def req_block(lines, i, defined_re):
-    """The definition of the REQ on line index i: its heading section, or the line and the non-blank lines after it up to
-    the next heading or definition."""
-    heading, block = lines[i].startswith("#"), [lines[i]]
+    """The definition of the REQ on line index i: its heading section (sub-headings included), or the line and the
+    non-blank lines after it up to the next heading or definition."""
+    level = len(re.match(r"#*", lines[i]).group())
+    block = [lines[i]]
     for nxt in lines[i + 1:]:
-        if nxt.startswith("#") or (not heading and (not nxt.strip() or defined_re.search(nxt))):
+        sub = re.match(r"(#+)\s", nxt)
+        if (sub and (not level or len(sub.group(1)) <= level)) or (not level and (not nxt.strip() or defined_re.search(nxt))):
             break
         block.append(nxt)
     return "\n".join(block)

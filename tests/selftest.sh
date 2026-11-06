@@ -389,4 +389,10 @@ rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] || fail "unresolved ids pass
 for d in D-9 D-N7 D-R2C5; do echo "$out" | grep -q "notes.md:1: $d is cited" || fail "$d not seen: $out"; done
 [ "$(echo "$out" | grep -c 'is cited but has no row')" = 3 ] || fail "D- matched inside another id or a file name: $out"
 printf '{"decisions": {"enabled": false}}\n' > "$S/spec-kit.json"; out=$(L --specs "$S") || fail "decisions.enabled false still checks: $out"
+printf 'See D-1.\n' > "$S/system/notes.md"; printf '{"decisions": {"backlinks": true}}\n' > "$S/spec-kit.json"
+out=$(L --specs "$S") || fail "back-link under a #### sub-heading not found: $out"
+for cfg in '{"backlinks": "off"}' '{"backlinks": "false"}' '{"backlinks": 1}' '{"file": 3}' '{"backlink": true}' '{"enabled": "no"}' '[]'; do
+  printf '{"decisions": %s}\n' "$cfg" > "$S/spec-kit.json"; rc=0; out=$(L --specs "$S" 2>&1) || rc=$?
+  [ "$rc" != 0 ] && echo "$out" | grep -q "spec-kit.json: decisions" || fail "bad decisions config $cfg accepted: rc=$rc $out"
+done
 echo "selftest: OK"
