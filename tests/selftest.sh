@@ -1,5 +1,5 @@
 #!/bin/sh
-# Self-test: example specs lint clean; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
+# Self-test: example specs lint clean; decisions, ids and denylist; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
 set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -331,4 +331,33 @@ printf '%b\n' '- [ ] 1 wrapped task' '  continues here — [REQ-M-01]' '- [ ] 2 
 out=$(L --specs "$TMP/t10/.specs")
 echo "$out" | grep -q "1 task(s) without a REQ link, e.g. '- \[ \] 3 bare task'" || fail "multi-line tasks: $out"
 
+echo "11. decisions log, cited ids, denylist, 0.4.1-shaped project"
+S="$TMP/t11/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"
+printf '# d\n\nStatus: In progress\n\n### [REQ-DL-01] a\n\nLands D-1.\n\n### [REQ-DL-02] b\n\nNo back-link.\n' > "$S/features/d-1/requirements.md"
+printf 'REQ-DL-01 REQ-DL-02\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-DL-01] [REQ-DL-02]\n' > "$S/features/d-1/tasks.md"
+printf 'See D-9 and the Zork.io gateway at Big Corp.\n' > "$S/system/notes.md"
+out=$(L --specs "$S") || fail "0.4.1-shaped project (no decisions file, no denylist) no longer exits 0: $out"
+echo "$out" | grep -v "^spec-lint:" | grep -q "FAIL\|D-9\|denylist" && fail "0.4.1-shaped project got a new FAIL: $out" || true
+printf 'Cites REQ-DL-77.\n' >> "$S/system/notes.md"
+out=$(L --specs "$S") || fail "unresolved REQ outside a feature must not FAIL"
+echo "$out" | grep -q "WARN system/notes.md:2: REQ-DL-77 is cited but defined in no requirements.md" || fail "unresolved REQ not warned: $out"
+DEC="$S/steering/decisions.md"; deccfg() { printf '{"decisions": {"backlinks": %s}%s}\n' "$1" "${2:-}" > "$S/spec-kit.json"; }
+printf '# Decisions\n\n| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | x | y | REQ-DL-01, REQ-DL-02 | |\n' > "$DEC"
+rc=0; out=$(L --specs "$S") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "FAIL system/notes.md:1: D-9 is cited but has no row in steering/decisions.md" || fail "unresolved D- id: rc=$rc $out"
+printf 'See D-1.\n' > "$S/system/notes.md"; out=$(L --specs "$S") || fail "resolved D- id still fails: $out"
+echo "$out" | grep -q "back-link" && fail "back-links checked while off: $out" || true
+deccfg '"warn"'; out=$(L --specs "$S") || fail "backlinks warn changed the exit code"
+echo "$out" | grep -q "WARN features/d-1/requirements.md:9: REQ-DL-02 does not cite D-1, which lands on it" || fail "back-link warn: $out"
+echo "$out" | grep -q "REQ-DL-01 does not cite" && fail "present back-link reported: $out" || true
+deccfg true; rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL features/d-1/requirements.md:9: REQ-DL-02 does not cite D-1" || fail "back-link fail: rc=$rc $out"
+deccfg false; printf '| D-2 | x | y | REQ-DL-99 | |\n' >> "$DEC"
+rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL steering/decisions.md:6: D-2 lands on REQ-DL-99, which no requirements.md defines" || fail "undefined landing REQ: rc=$rc $out"
+printf '| D-3 | x | y | REQ-DL-01 | D-2 |\n' >> "$DEC"; out=$(L --specs "$S") || fail "superseded row still checked: $out"
+Z1=$(printf %s zork | shasum -a 256 | cut -c1-64); Z2=$(printf %s big-corp | shasum -a 256 | cut -c1-64); [ "$(L --hash-term "Big Corp")" = "$Z2" ] || fail "--hash-term pair"
+[ "$(L --hash-term ZORK)" = "$Z1" ] || fail "--hash-term digest"
+printf 'See D-1, the Zork.io gateway at Big Corp.\n' > "$S/system/notes.md"; deccfg false ", \"denylist_sha256\": [\"$Z1\", \"$Z2\"]"
+rc=0; out=$(L --specs "$S") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "FAIL system/notes.md:1: denylisted term (token #5)" && echo "$out" | grep -q "denylisted term (token #8)" || fail "denylist: rc=$rc $out"
+echo "$out" | grep -qi "zork\|big" && fail "denylist echoed the term: $out" || true
 echo "selftest: OK"

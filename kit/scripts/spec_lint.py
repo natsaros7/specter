@@ -3,9 +3,10 @@
 
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
        python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
+       python3 .specs/kit/scripts/spec_lint.py --hash-term <word>               digest to add to denylist_sha256
        default DIR = the .specs/ this script is installed in; default features = all
 
---json prints one JSON object instead of text (same exit code): default mode {features, links, drift, warnings, fails},
+--json prints one JSON object instead of text (same exit code): default mode {features, links, refs, drift, warnings, fails},
       --cites {count, problems}.
 
 --cites resolves every citation in backticks against the project (the folder holding .specs/). Notations:
@@ -21,7 +22,12 @@ History: a feature whose Status is Done or Dropped reports its structural FAILs 
 FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature folder name is not kebab-case;
       a feature defines no [REQ-..]; a defined REQ is absent from design.md or tasks.md; a REQ is
       referenced but defined neither in the feature nor in domains/*/requirements.md; a relative markdown link under .specs/ points to nothing.
-WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missing; an upstream
+      Opt-in, with file:line: when the decisions log exists (decisions.file, default steering/decisions.md), a cited D-<id>
+      has no row, or a row's "Where it lands" names an undefined REQ (rows a later row supersedes are skipped); with
+      decisions.backlinks true (or "warn": WARN), such a REQ's definition does not cite the decision; with denylist_sha256
+      set, a token (dots kept; each run of dot segments; each adjacent pair joined by '-') hashes to a listed digest.
+WARN: a REQ cited outside a feature's requirements/design/tasks.md is defined in no requirements.md (file:line);
+      a task checkbox without a REQ; a required section (spec-kit.json) is missing; an upstream
       requirement id used in a feature is not in system/traceability.md; setup is still incomplete; an unresolved
       Drift Register row (any table with a Drift column; Logged optional) is older than drift_max_age_days (default 90, null = off),
       or, once per file, has open rows without a Logged date; a feature has no `Status:` line, an unknown status, or a status that
@@ -31,6 +37,7 @@ WARN: a task checkbox without a REQ; a required section (spec-kit.json) is missi
 """
 import datetime
 import fnmatch
+import hashlib
 import json
 import re
 import subprocess
@@ -44,7 +51,7 @@ FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
             "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
-            "tracker_pattern": None, "merged_ref": None}
+            "tracker_pattern": None, "merged_ref": None, "decisions": {}, "denylist_sha256": []}
 STATUS = re.compile(r"^\s*>?\s*(?:\*\*Status:\*\*|\*\*Status\*\*:|Status:)\s*(.*)$", re.I)
 STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
 MERGED = "merged work found"
@@ -81,6 +88,12 @@ def load_config(specs):
             config["drift_max_age_days"] = int(age)
         except (TypeError, ValueError):
             sys.exit("spec-kit.json: drift_max_age_days must be an integer or null, got " + json.dumps(age))
+    deny, dec = config["denylist_sha256"], config["decisions"]
+    if not isinstance(deny, list) or not all(isinstance(d, str) for d in deny):
+        sys.exit("spec-kit.json: denylist_sha256 must be a list of hex digests, got " + json.dumps(deny))
+    if not isinstance(dec, dict):
+        sys.exit("spec-kit.json: decisions must be an object, got " + json.dumps(dec))
+    config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False}, **dec)
     return config
 
 
@@ -174,6 +187,98 @@ def broken_links(specs):
 
 
 
+DREF = re.compile(r"\bD-[A-Z0-9]+(?:-[A-Z0-9]+)*\b")
+TOKEN = re.compile(r"[a-z0-9]+(?:\.[a-z0-9]+)*")
+
+
+def unfenced(text):
+    """text with fenced blocks blanked, line numbers kept."""
+    return FENCE.sub(lambda m: "\n" * m.group().count("\n"), text)
+
+
+def deny_hits(line, digests):
+    """1-based numbers of the tokens in line that hit a digest: the token, any run of its dot segments (a host, an IP
+    prefix), or the token joined to the next one with '-'."""
+    toks, hits = TOKEN.findall(line.lower()), []
+    for n, tok in enumerate(toks, 1):
+        parts = tok.split(".")
+        cands = {".".join(parts[i:j]) for i in range(len(parts)) for j in range(i + 1, len(parts) + 1)}
+        if n < len(toks):
+            cands.add(tok + "-" + toks[n])
+        if any(hashlib.sha256(c.encode()).hexdigest() in digests for c in cands):
+            hits.append(n)
+    return hits
+
+
+def decision_rows(lines):
+    """(id, line no, Where it lands, Supersedes) per row whose first cell is a D- id, in tables with a Where it lands column."""
+    rows, head = [], None
+    for no, line in enumerate(lines, 1):
+        if not line.lstrip().startswith("|"):
+            head = None
+            continue
+        c = [x.strip() for x in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        if head is None:
+            head = [x.lower() for x in c]
+        elif "where it lands" in head and DREF.fullmatch(c[0]):
+            cell = lambda name: c[head.index(name)] if name in head and head.index(name) < len(c) else ""
+            rows.append((c[0], no, cell("where it lands"), cell("supersedes")))
+    return rows
+
+
+def req_block(lines, i, defined_re):
+    """The definition of the REQ on line index i: its heading section, or the line and the non-blank lines after it up to
+    the next heading or definition."""
+    heading, block = lines[i].startswith("#"), [lines[i]]
+    for nxt in lines[i + 1:]:
+        if nxt.startswith("#") or (not heading and (not nxt.strip() or defined_re.search(nxt))):
+            break
+        block.append(nxt)
+    return "\n".join(block)
+
+
+def refs(specs, config, req_defs):
+    """Checks across files, each 'file:line: message': cited REQ and D- ids resolve, decision rows land on defined REQs
+    that cite them back, no denylisted term. Returns (fails, warns)."""
+    fails, warns = [], []
+    req, dec = re.compile(config["req_id_pattern"]), config["decisions"]
+    dec_path = specs / dec["file"]
+    rows = decision_rows(unfenced(dec_path.read_text()).splitlines()) if dec_path.is_file() else None
+    ids = {r[0] for r in rows or ()}
+    digests = {d.lower() for d in config["denylist_sha256"]}
+    for md in sorted(specs.rglob("*.md")):
+        rel = md.relative_to(specs)
+        if rel.parts[0] == "kit":
+            continue
+        raw = md.read_text()
+        # lint_feature already FAILs undefined REQs in these three
+        own = len(rel.parts) == 3 and rel.parts[0] == "features" and rel.name in ("requirements.md", "design.md", "tasks.md")
+        for no, line in enumerate(unfenced(raw).splitlines(), 1):
+            at = rel.as_posix() + ":" + str(no) + ": "
+            warns += [at + r + " is cited but defined in no requirements.md"
+                      for r in dict.fromkeys(req.findall(line)) if not own and r not in req_defs]
+            if rows is not None:
+                fails += [at + d + " is cited but has no row in " + dec["file"] for d in dict.fromkeys(DREF.findall(line)) if d not in ids]
+        if digests:
+            fails += [rel.as_posix() + ":" + str(no) + ": denylisted term (token #" + str(n) + ")"
+                      for no, line in enumerate(raw.splitlines(), 1) for n in deny_hits(line, digests)]
+    superseded = {d for r in rows or () for d in DREF.findall(r[3])}
+    defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
+    for d, no, lands, _ in rows or ():
+        if d in superseded:
+            continue
+        for r in dict.fromkeys(req.findall(lands)):
+            if r not in req_defs:
+                fails.append(dec["file"] + ":" + str(no) + ": " + d + " lands on " + r + ", which no requirements.md defines")
+                continue
+            path, line_no = req_defs[r]
+            block = req_block((specs / path).read_text().splitlines(), line_no - 1, defined_re)
+            if dec["backlinks"] and not re.search(r"(?<![\w-])" + re.escape(d) + r"(?![\w-])", block):
+                (warns if dec["backlinks"] == "warn" else fails).append(
+                    path + ":" + str(line_no) + ": " + r + " does not cite " + d + ", which lands on it")
+    return fails, warns
+
+
 def repos(root):
     """Child git repos up to two levels below root, no hidden parts. Linked worktrees (`.git` file with a `gitdir:` into
     `/worktrees/`) are skipped; submodules stay."""
@@ -250,6 +355,11 @@ def lint_all(specs, names=()):
         targets = []
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
     domain_reqs = frozenset(i for p in sorted(specs.glob("domains/*/requirements.md")) for i in defined_re.findall(p.read_text()))
+    req_defs = {}
+    for p in sorted(specs.glob("features/*/requirements.md")) + sorted(specs.glob("domains/*/requirements.md")):
+        for no, line in enumerate(p.read_text().splitlines(), 1):
+            for r in defined_re.findall(line):
+                req_defs.setdefault(r, (p.relative_to(specs).as_posix(), no))
     warnings = []
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists() or "status: setup-incomplete" in profile.read_text():
@@ -289,6 +399,8 @@ def lint_all(specs, names=()):
             fails, warns = ["no such feature directory"], []
         features.append({"name": feature.name, "ok": not fails, "fails": fails, "warns": warns})
     links = broken_links(specs)
+    ref_fails, ref_warns = refs(specs, config, req_defs)
+    warnings += ["WARN " + w for w in ref_warns]
     max_age = config.get("drift_max_age_days")
     drift = drift_rows(specs, max_age)
     if max_age is not None:
@@ -299,8 +411,8 @@ def lint_all(specs, names=()):
             elif row["age_days"] > max_age:
                 warnings.append("WARN drift " + row["file"] + " " + row["id"] + ": open " + str(row["age_days"]) + " days")
         warnings += ["WARN drift " + f + ": " + str(n) + " open row(s) without a Logged date" for f, n in undated.items()]
-    total = sum(len(f["fails"]) for f in features) + len(links)
-    return {"features": features, "links": links, "drift": drift, "warnings": warnings, "fails": total}
+    total = sum(len(f["fails"]) for f in features) + len(links) + len(ref_fails)
+    return {"features": features, "links": links, "refs": ref_fails, "drift": drift, "warnings": warnings, "fails": total}
 
 
 CITE = re.compile(r"`(?:([\w.-]+):)?([^`\s:#]*?[\w-]+\.[A-Za-z0-9]+)"
@@ -389,6 +501,13 @@ def main(argv):
     if "--specs" in argv:
         i = argv.index("--specs")
         specs, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
+    if "--hash-term" in argv:
+        words = argv[argv.index("--hash-term") + 1:][:1]
+        toks = TOKEN.findall(words[0].lower()) if words else []
+        if not 1 <= len(toks) <= 2:
+            sys.exit("usage: --hash-term <term of one or two words>")
+        print(hashlib.sha256("-".join(toks).encode()).hexdigest())
+        return 0
     as_json = "--json" in argv
     if "--cites" in argv:
         result = cites(specs)
@@ -419,6 +538,8 @@ def main(argv):
             print("     WARN " + text)
     for link in result["links"]:
         print("FAIL broken link: " + link)
+    for ref in result["refs"]:
+        print("FAIL " + ref)
     for w in drift_warns:
         print(w)
     print("spec-lint: " + str(result["fails"]) + " FAIL across " + str(len(result["features"])) + " feature(s)")
