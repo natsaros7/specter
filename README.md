@@ -146,6 +146,7 @@ python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation e
 python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdout (also with --cites)
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
+python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -161,13 +162,44 @@ New `.specs/spec-kit.json` keys (all optional):
 | `cite_ignore_globs` | `[]` | fnmatch on the root-relative path; drops these files when a citation matches several |
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 | `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
+| `decisions` | `{}` | `file` (default `steering/decisions.md`), `backlinks` (`false`, `"warn"` or `true`) and `enabled` (default `true`); any other value or key stops the lint; see below |
+| `unresolved_req` | `"warn"` | `"off"` silences the WARN for REQ ids cited in `.specs/` but defined nowhere |
+| `denylist_sha256` | `[]` | SHA-256 digests of terms that must not appear in `.specs/`; see below |
 | `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count |
+
+### Decisions, names, deploy impact, gates
+
+A 0.4.1 project keeps its exit code: the new checks are off until their file or config key exists. The one new
+default is a WARN for REQ ids that are cited but defined nowhere.
+
+- **Decisions log.** `.specs/steering/decisions.md` (template in `kit/templates/steering/`) is a table of settled
+  decisions: `| ID | Decision | Why | Where it lands | Supersedes |`. A decision changes only by a new dated row that
+  supersedes it. Ids hold a digit (`D-7`, `D-AUTH-2`; `D-DAY` in prose is not one). Once the file holds a decision row
+  (and unless `"decisions": {"enabled": false}`), the lint FAILs on a cited `D-<id>` without a row and on a "Where it lands" REQ
+  that isn't defined. With `"decisions": {"backlinks": true}` (or `"warn"`), each such REQ must cite the decision back.
+  A REQ cited anywhere in `.specs/` (outside inline code) that is defined nowhere WARNs once per id, with up to three
+  `file:line` locations; `"unresolved_req": "off"` silences it.
+- **Names denylist.** For specs that several teams or clients read: put `sha256` digests in `denylist_sha256`, so the
+  config never names what it protects. A hit FAILs as `denylisted term (token #n)` and never prints the word. Get a
+  digest with `python3 .specs/kit/scripts/spec_lint.py --hash-term <one or two words>`. Tokens are letters of any script
+  and digits, lower-cased (`José` stays `josé`); a two-word term matches only on one line, not across a line break.
+- **Deploy impact.** Each change states `Deploy impact: none` or `<job or env>: <what changes>`. If it isn't `none`,
+  the people who run CI/CD hear before the merge. Setup asks how CI/CD consumes the repo: a job that runs from the
+  default branch picks up every merge.
+- **Gates.** `gates.py` executes, with `sh -c` from the project root, the commands in this project's own
+  `| # | Gate | Command |` table of `steering/spec-rules.md` (or `--file`), in order, and nothing else. Whoever can edit
+  that table decides what runs, so treat it like code: read it before you run `gates.py` on a branch you didn't write.
+  It stops at the first failure and prints a `### Gates` block with the commit as it was before the run (`+dirty` when
+  the tree had changes; `none` outside git). It never guesses a command: no table, no run.
+- **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
+  [`kit/docs/review-loop.md`](kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
 
 ## Example
 
 [`examples/acme-shop/.specs/`](examples/acme-shop/.specs/README.md) is the whole system on a fictional shop:
 
 - the router, architecture, flows with a Drift Register, and traceability against a client contract;
+- a decisions log with back-links (one row superseded), a Gates table and an onboarding page;
 - a filled-in interview profile and one as-built domain;
 - two features:
   - **[ord-142](examples/acme-shop/.specs/features/ord-142-request-timestamp-validation/requirements.md):** a small

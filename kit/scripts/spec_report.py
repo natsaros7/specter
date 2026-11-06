@@ -90,6 +90,7 @@ def build(specs, out):
     miss = "tasks.md does not trace "
     findings = [("FAIL ", f["name"] + ": " + t) for f in lint["features"] for t in f["fails"] if not t.startswith(miss)] + \
                [("FAIL ", "broken link: " + l) for l in lint["links"]] + \
+               [("FAIL ", r) for r in lint["refs"]] + \
                [("WARN ", f["name"] + ": " + t) for f in lint["features"] for t in f["warns"]] + \
                [("", w) for w in lint["warnings"]]
     uncovered = [f["name"] + ": " + t[len(miss):] for f in lint["features"] for t in f["fails"] if t.startswith(miss)]

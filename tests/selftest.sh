@@ -1,5 +1,5 @@
 #!/bin/sh
-# Self-test: example specs lint clean; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
+# Self-test: example specs lint clean; decisions, ids and denylist; gates.py; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
 set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -330,5 +330,94 @@ printf '# m\n\n- [REQ-M-01] a\n' > "$T10/requirements.md"; printf 'REQ-M-01\n' >
 printf '%b\n' '- [ ] 1 wrapped task' '  continues here — [REQ-M-01]' '- [ ] 2 parent' '  - [ ] 2a child — [REQ-M-01]' '- [ ] 3 bare task' '' '  not part of task 3 [REQ-M-01]' '- [ ] 4 issue ref' '  #12 follow-up [REQ-M-01]' '\t- [ ] 5 tabbed' '\t\tcontinued [REQ-M-01]' > "$T10/tasks.md"
 out=$(L --specs "$TMP/t10/.specs")
 echo "$out" | grep -q "1 task(s) without a REQ link, e.g. '- \[ \] 3 bare task'" || fail "multi-line tasks: $out"
+
+echo "11. decisions log, cited ids, denylist, gates.py, 0.4.1-shaped project"
+S="$TMP/t11/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"
+printf '# d\n\nStatus: In progress\n\n### [REQ-DL-01] a\n\nLands D-1.\n\n### [REQ-DL-02] b\n\nNo back-link.\n' > "$S/features/d-1/requirements.md"
+printf 'REQ-DL-01 REQ-DL-02\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-DL-01] [REQ-DL-02]\n' > "$S/features/d-1/tasks.md"
+printf 'See D-9 and the Zork.io gateway at Big Corp.\n' > "$S/system/notes.md"
+out=$(L --specs "$S") || fail "0.4.1-shaped project (no decisions file, no denylist) no longer exits 0: $out"
+echo "$out" | grep -v "^spec-lint:" | grep -q "FAIL\|D-9\|denylist" && fail "0.4.1-shaped project got a new FAIL: $out" || true
+printf 'Cites REQ-DL-77.\n' >> "$S/system/notes.md"
+out=$(L --specs "$S") || fail "unresolved REQ outside a feature must not FAIL"
+echo "$out" | grep -q "WARN REQ-DL-77 is cited but defined in no requirements.md: system/notes.md:2$" || fail "unresolved REQ not warned: $out"
+DEC="$S/steering/decisions.md"; deccfg() { printf '{"decisions": {"backlinks": %s}%s}\n' "$1" "${2:-}" > "$S/spec-kit.json"; }
+printf '# Decisions\n\n| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | x | y | REQ-DL-01, REQ-DL-02 | |\n' > "$DEC"
+rc=0; out=$(L --specs "$S") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "FAIL system/notes.md:1: D-9 is cited but has no row in steering/decisions.md" || fail "unresolved D- id: rc=$rc $out"
+printf 'See D-1.\n' > "$S/system/notes.md"; out=$(L --specs "$S") || fail "resolved D- id still fails: $out"
+echo "$out" | grep -q "back-link" && fail "back-links checked while off: $out" || true
+deccfg '"warn"'; out=$(L --specs "$S") || fail "backlinks warn changed the exit code"
+echo "$out" | grep -q "WARN features/d-1/requirements.md:9: REQ-DL-02 does not cite D-1, which lands on it" || fail "back-link warn: $out"
+echo "$out" | grep -q "REQ-DL-01 does not cite" && fail "present back-link reported: $out" || true
+deccfg true; rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL features/d-1/requirements.md:9: REQ-DL-02 does not cite D-1" || fail "back-link fail: rc=$rc $out"
+deccfg false; printf '| D-2 | x | y | REQ-DL-99 | |\n' >> "$DEC"
+rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL steering/decisions.md:6: D-2 lands on REQ-DL-99, which no requirements.md defines" || fail "undefined landing REQ: rc=$rc $out"
+printf '| D-3 | x | y | REQ-DL-01 | D-2 |\n' >> "$DEC"; out=$(L --specs "$S") || fail "superseded row still checked: $out"
+Z1=$(printf %s zork | shasum -a 256 | cut -c1-64); Z2=$(printf %s big-corp | shasum -a 256 | cut -c1-64); [ "$(L --hash-term "Big Corp")" = "$Z2" ] || fail "--hash-term pair"
+[ "$(L --hash-term ZORK)" = "$Z1" ] || fail "--hash-term digest"
+printf 'See D-1, the Zork.io gateway at Big Corp.\n' > "$S/system/notes.md"; deccfg false ", \"denylist_sha256\": [\"$Z1\", \"$Z2\"]"
+rc=0; out=$(L --specs "$S") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "FAIL system/notes.md:1: denylisted term (token #5)" && echo "$out" | grep -q "denylisted term (token #8)" || fail "denylist: rc=$rc $out"
+echo "$out" | grep -qi "zork\|big" && fail "denylist echoed the term: $out" || true
+GT="$TMP/t11g"; mkdir -p "$GT/.specs/steering"; gitq -C "$GT" init; echo x > "$GT/x"; gitq -C "$GT" add x; gitq -C "$GT" commit -m x
+GR="$GT/.specs/steering/spec-rules.md"; gates() { python3 "$KIT/kit/scripts/gates.py" --specs "$GT/.specs" "$@"; }
+printf '## Gates\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo first ok` |\n| G2 | bad | `echo broke; exit 3` |\n| G3 | never | `touch ran3` |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "GATE FAILED: G2 bad (exit 3)" && echo "$out" | grep -q broke && [ ! -e "$GT/ran3" ] || fail "gates.py did not stop at G2: rc=$rc $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo one` |\n| G2 | pipe | `printf "a\\n\\n" && echo x \\| tr x y` |\n' > "$GR"
+out=$(gates 2>/dev/null) || fail "gates.py failed a green table"
+printf '### Gates\n- G1 ok: one\n- G2 pipe: y\n' > "$TMP/g.want"; echo "$out" | head -3 | cmp -s - "$TMP/g.want" || fail "gates block: $out"
+echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}\+dirty$" || fail "gates commit line: $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `touch ran1` |\n| G2 | prose | run the tests |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && [ ! -e "$GT/ran1" ] && echo "$out" | grep -q "G2" || fail "row without a command: rc=$rc $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | tests | `<exact command>` |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "template placeholder" || fail "placeholder ran: rc=$rc $out"
+printf '# no table\n' > "$GR"; rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "no Gates table" || fail "missing table: rc=$rc $out"
+rm "$GR"; rc=0; gates >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "missing spec-rules.md: rc=$rc"
+
+echo "12. review round: other-format decisions.md, D- id bounds, strict config, REQ WARN shape, sub-headings, hash-term, gates.py args"
+S="$TMP/t12/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"; DEC="$S/steering/decisions.md"
+printf '# d\n\nStatus: In progress\n\n### [REQ-D-01] a\n\n#### Acceptance\n\nLands D-1.\n' > "$S/features/d-1/requirements.md"
+printf 'REQ-D-01\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-D-01]\n' > "$S/features/d-1/tasks.md"
+printf '# Decisions\n\nWe chose Postgres. D-DAY, D-1 and D-7 came up.\n\n| ID | Decision | Date |\n|---|---|---|\n| D-7 | x | 2026-01-01 |\n' > "$DEC"
+out=$(L --specs "$S") || fail "decisions.md in another format changed the exit code: $out"
+echo "$out" | grep -q "has no row" && fail "decisions.md without a decision row was checked: $out" || true
+printf '| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | x | y | REQ-D-01 | |\n' > "$DEC"
+printf 'Not ids: [REQ-D-01] ADR-D-1 TLS-D-9 PO-D-3 D-1.md D-DAY D-ROM. Ids: D-9, D-N7 and D-R2C5.\n' > "$S/system/notes.md"
+rc=0; out=$(L --specs "$S") || rc=$?; [ "$rc" = 1 ] || fail "unresolved ids passed: $out"
+for d in D-9 D-N7 D-R2C5; do echo "$out" | grep -q "notes.md:1: $d is cited" || fail "$d not seen: $out"; done
+[ "$(echo "$out" | grep -c 'is cited but has no row')" = 3 ] || fail "D- matched inside another id or a file name: $out"
+printf '{"decisions": {"enabled": false}}\n' > "$S/spec-kit.json"; out=$(L --specs "$S") || fail "decisions.enabled false still checks: $out"
+printf 'See D-1.\n' > "$S/system/notes.md"; printf '{"decisions": {"backlinks": true}}\n' > "$S/spec-kit.json"
+out=$(L --specs "$S") || fail "back-link under a #### sub-heading not found: $out"
+for cfg in '{"backlinks": "off"}' '{"backlinks": "false"}' '{"backlinks": 1}' '{"file": 3}' '{"backlink": true}' '{"enabled": "no"}' '[]'; do
+  printf '{"decisions": %s}\n' "$cfg" > "$S/spec-kit.json"; rc=0; out=$(L --specs "$S" 2>&1) || rc=$?
+  [ "$rc" != 0 ] && echo "$out" | grep -q "spec-kit.json: decisions" || fail "bad decisions config $cfg accepted: rc=$rc $out"
+done
+printf '{"unresolved_req": "loud"}\n' > "$S/spec-kit.json"; rc=0; L --specs "$S" >/dev/null 2>&1 || rc=$?; [ "$rc" != 0 ] || fail "bad unresolved_req accepted"
+rm "$S/spec-kit.json"
+printf 'An example: `REQ-OLD-01`.\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\n' > "$S/system/old.md"
+out=$(L --specs "$S") || fail "unresolved REQ changed the exit code"
+echo "$out" | grep -q "REQ-OLD-01" && fail "REQ in inline code warned: $out" || true
+[ "$(echo "$out" | grep -c 'REQ-OLD-02')" = 1 ] && echo "$out" | grep -q "WARN REQ-OLD-02 is cited but defined in no requirements.md: system/old.md:2, system/old.md:3, system/old.md:4 and 2 more" || fail "unresolved REQ WARN shape: $out"
+printf '{"unresolved_req": "off"}\n' > "$S/spec-kit.json"; out=$(L --specs "$S") || fail "unresolved_req off"
+echo "$out" | grep -q "REQ-OLD" && fail "unresolved_req off still warns: $out" || true
+rm "$S/spec-kit.json" "$S/system/old.md"
+[ "$(L --hash-term Big Corp)" = "$(printf %s big-corp | shasum -a 256 | cut -c1-64)" ] || fail "--hash-term ignored a word"
+J=$(printf %s 'josé' | shasum -a 256 | cut -c1-64); [ "$(L --hash-term 'José')" = "$J" ] || fail "--hash-term dropped a non-ASCII letter"
+printf 'José came. Jos stayed.\n' > "$S/system/notes.md"; printf '{"denylist_sha256": ["%s"]}\n' "$J" > "$S/spec-kit.json"
+out=$(L --specs "$S" 2>&1 || true); echo "$out" | grep -q "notes.md:1: denylisted term (token #1)" && ! echo "$out" | grep -q "token #3" || fail "non-ASCII tokenising: $out"
+rm "$S/spec-kit.json"; printf 'See D-1.\n' > "$S/system/notes.md"
+GT="$TMP/t12g"; mkdir -p "$GT/.specs/steering"; gitq -C "$GT" init
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | makes output | `touch out.log; echo made` |\n' > "$GT/.specs/steering/spec-rules.md"
+gitq -C "$GT" add .; gitq -C "$GT" commit -m x
+gates() { python3 "$KIT/kit/scripts/gates.py" --specs "$GT/.specs" "$@"; }
+for a in --bogus --file=x; do rc=0; out=$(gates "$a" 2>&1) || rc=$?; [ "$rc" = 2 ] && [ ! -e "$GT/out.log" ] || fail "gates.py ran with unknown argument $a: rc=$rc $out"; done
+rc=0; out=$(gates --help 2>&1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "^Usage:" && [ ! -e "$GT/out.log" ] || fail "gates.py --help: rc=$rc $out"
+out=$(gates 2>/dev/null) || fail "gates.py green run"; echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}$" || fail "commit taken after the gates ran: $out"
+I="$TMP/t12i"; mkdir -p "$I"; gitq -C "$I" init; "$KIT/install.sh" "$I" >/dev/null
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | where | `pwd -P` |\n' > "$I/.specs/steering/spec-rules.md"
+out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: $(cd "$I" && pwd -P)$" || fail "installed gates.py root: $out"
 
 echo "selftest: OK"

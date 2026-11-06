@@ -17,6 +17,8 @@ Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering
 | To make a non-trivial change | [`steering/spec-rules.md`](steering/spec-rules.md), then `kit/playbooks/new-feature.md` |
 | Standards and gates | [`steering/code-standards.md`](steering/code-standards.md) |
 | What setup learned, and the open UNKNOWNs | [`steering/project-profile.md`](steering/project-profile.md) |
+| What is already settled, and why | [`steering/decisions.md`](steering/decisions.md) |
+| New here | [`ONBOARDING.md`](ONBOARDING.md) |
 
 **Domains:** `orders-api` (sync REST + gRPC, owns orders) · `fulfilment-worker` (async, consumes `order-events`) ·
 `catalog-cache` (read proxy) · `web` (UI) · `shop-common` (shared lib). Only `orders-api` is written out in this example.
@@ -26,7 +28,7 @@ Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering
 | Feature | Shows |
 |---|---|
 | [`ord-142-request-timestamp-validation`](features/ord-142-request-timestamp-validation/requirements.md) | Small change, verified "why", **decision gate before code**, config-flag rollout, `AGENT_PROMPT.md` hand-off |
-| [`ord-120-service-transaction-boundary`](features/ord-120-service-transaction-boundary/requirements.md) | Cross-cutting refactor: **safety net first**, measured baseline, behaviour-delta sign-off, ratchet, `▶ Resume here` |
+| [`ord-120-service-transaction-boundary`](features/ord-120-service-transaction-boundary/requirements.md) | Cross-cutting refactor: **safety net first**, measured baseline, behaviour-delta sign-off recorded as decisions (one superseded), ratchet, `▶ Resume here`, a `Deploy impact` that is not `none` |
 
 ## Sources of truth outside `.specs/`
 

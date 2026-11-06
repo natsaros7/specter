@@ -30,7 +30,9 @@ Refactors are characterised first: a safety net on the unchanged code, in its ow
 ## 4. Decision authority
 
 <ADRs in `<path>` / architecture doc `<path>` / <role>>. A design that needs a new architectural decision
-raises one (an ADR, or the project's equivalent) before implementation.
+raises one (an ADR, or the project's equivalent) before implementation. Settled decisions that are not ADRs go in
+`steering/decisions.md` (template `kit/templates/steering/decisions.md`): cite them by id, and change one only by a new
+dated row that supersedes it.
 
 ## 5. Domains vs features
 
@@ -43,9 +45,20 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 
 ## 7. Definition of Done
 
-1. Gate: `<exact commands, e.g. ./gradlew check / npm test && npm run lint>`
-2. `python3 .specs/kit/scripts/spec_lint.py` exits 0.
-3. `tasks.md` fully ticked and `Status: Done <date> (<branch, commit or PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
+1. Every gate below exits 0. `python3 .specs/kit/scripts/gates.py` runs them in order, stops at the first failure and
+   prints a `### Gates` block for the PR description. One command per row, in backticks; write a `|` inside a command
+   as `\|`. `gates.py` executes these commands with `sh -c` from the project root, and nothing else: treat this table
+   like code, and read it before running `gates.py` on a branch you didn't write.
+
+   | # | Gate | Command |
+   |---|---|---|
+   | G1 | <build and tests> | `<exact command, e.g. ./gradlew check or npm test && npm run lint>` |
+   | G2 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
+
+2. `tasks.md` fully ticked and `Status: Done <date> (<branch, commit or PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
+3. The change states `Deploy impact: none` or `Deploy impact: <job or env>: <what changes>`. CI/CD here consumes
+   <a pinned artifact or image | the default branch directly> (setup Q9). If it is not `none`, the people who run CI/CD
+   hear before the merge.
 4. <review rule, e.g. fresh-context review on the diff; security paths get the strongest reviewer>
 
 ## 8. Keep specs in sync
