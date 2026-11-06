@@ -1,5 +1,7 @@
 # ORD-120 Service transaction boundary — Tasks
 
+Deploy impact: orders-api: gRPC responses now wait for the commit, and `OrderCancelled` is published after it (D-1). Ops heard on 2026-11-02, before the merge.
+
 ## ▶ Resume here (updated 2026-11-03)
 
 **Goal:** ADR-012: adapters own no transaction and touch no entity. **Status: DONE**, PR #88 merged 2026-11-03.

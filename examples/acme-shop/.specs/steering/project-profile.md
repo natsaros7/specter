@@ -15,6 +15,7 @@ agent: Claude Code (deep tier) for setup; refreshed by Codex on 2026-11-03
 | Requirements come from a supply contract | `docs/README.md` mentions "Annex B" | low → answered Q1 | — |
 | ADRs in `docs/adr/` (12, 3 Proposed) | folder listing | high | — |
 | CI gate = `./mvnw verify` + Sonar | `.github/workflows/ci.yml` | high | coverage threshold → Q5 |
+| CI/CD consumes: pinned image tags (Argo CD, `deploy/`); the nightly `catalog-sync` job builds from `main` | answered Q9 | high | — |
 
 ## Domain map (approved 2026-10-20)
 
@@ -35,6 +36,7 @@ agent: Claude Code (deep tier) for setup; refreshed by Codex on 2026-11-03
 | 2026-10-20 | Q4 | Gate? | `./mvnw verify`, Sonar new-code coverage ≥ 80 % | spec-rules §7 |
 | 2026-10-20 | Q6 | Spec threshold? | assumed: default (15 LOC / multi-file / contract) | spec-rules §1 |
 | 2026-10-20 | Q7 | Hook warn or block? Code paths? | Warn for now, block after a month; paths as detected | `spec_sync: warn`, `code_globs` |
+| 2026-10-20 | Q9 | How does CI/CD consume the repo? | Services: pinned image tags; but `catalog-sync` builds from `main` every night | spec-rules §7 Deploy impact |
 | 2026-10-20 | Phase 4 | Domain map + file list OK? | go, but keep `shop-common` separate (it carries the security filter) | 5 domains |
 
 ## UNKNOWN

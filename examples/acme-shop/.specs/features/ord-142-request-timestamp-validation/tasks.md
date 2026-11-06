@@ -1,5 +1,7 @@
 # ORD-142 Validate the request timestamp or amend the contract — Tasks
 
+Deploy impact: orders-api: none while `acme.security.timestamp.enforce` is `false` (the default); switching it on in an environment is announced to the ops lead and partner support first.
+
 - [ ] 1 Gate: decision (A or B, and `W`) recorded on ORD-142; delete the unused option from this spec — [REQ-TSV-01]
 - [ ] 2 (A) Properties record + `Clock` bean + binding test — [REQ-TSV-03]
 - [ ] 3 (A) `validateTimestamp` with reflective getter, skipped when absent — [REQ-TSV-02] [REQ-TSV-04]

@@ -24,9 +24,9 @@ Measured on main 2026-10-01 (`b71d0e3`) with `ServiceBoundaryTest` in report mod
 | ID | Requirement | Acceptance |
 |---|---|---|
 | [REQ-STB-01] | Adapters (`..rest..`, `..grpc..`) don't depend on JPA entities or `jakarta.persistence`. | `ServiceBoundaryTest` strict; report shows 0. |
-| [REQ-STB-02] | The transaction boundary is the service method, never the adapter. | No `@Transactional` in adapters (ArchUnit); queries are `readOnly`. |
+| [REQ-STB-02] | The transaction boundary is the service method, never the adapter. Decision: D-1. | No `@Transactional` in adapters (ArchUnit); queries are `readOnly`. |
 | [REQ-STB-03] | Services take commands/DTOs and return DTOs/records. | No public service method has an entity in its signature (ArchUnit). |
-| [REQ-STB-04] | No functional change: REST/gRPC contracts, schema, events and authorisation are unchanged. | The safety net (REQ-STB-05) passes unchanged after each domain. |
+| [REQ-STB-04] | No functional change: REST/gRPC contracts, schema, events and authorisation are unchanged, apart from the signed-off deltas below. Decisions: D-1, D-3. | The safety net (REQ-STB-05) passes unchanged after each domain. |
 | [REQ-STB-05] | A safety net on the **unchanged** code, per domain, before it is touched. | Golden responses for every endpoint (success, 400, 403, 404); SQL statement count ≤ baseline; role × endpoint auth matrix; event payloads equal. Committed in its own PR first. |
 | [REQ-STB-06] | Progress is ratcheted: a clean domain can't regress; the end state is one global rule. | `CLEAN_DOMAINS` list in `ServiceBoundaryTest`, replaced at the end by a global strict rule. |
 
@@ -36,9 +36,9 @@ Moving the boundary changes some failure modes. Each was accepted before phase 1
 
 | Delta | Impact | Decision |
 |---|---|---|
-| gRPC: commit happens **before** the response is sent (it used to be after) | Removes a false-success window | Accepted as a bug fix — tech lead, 2026-10-02 |
+| gRPC: commit happens **before** the response is sent (it used to be after) | Removes a false-success window | Accepted as a bug fix — tech lead, 2026-10-02 (D-1) |
 | `OrderCancelled` is published after the commit (it used to be before) | Fixes an event for a cancel that was rolled back | Accepted — tech lead, 2026-10-02 |
-| Service-level timeouts start applying | A long query could now time out | Decided: align to today's effective values, so nothing changes |
+| Service-level timeouts start applying | A long query could now time out | Decided: align to today's effective values, so nothing changes (D-3, superseding D-2) |
 
 ## Out of scope
 
