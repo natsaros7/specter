@@ -5,6 +5,27 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+Settled decisions recorded once and cited by id, every cited id checked, names kept out of shared specs, deploy impact
+stated per change, and the gates run by a script. All opt-in: a 0.4.1 project lints with the same exit code.
+
+### Added
+- Decisions log: `kit/templates/steering/decisions.md` (`| ID | Decision | Why | Where it lands | Supersedes |`, ids `D-<id>`, a decision changes only by a new dated row that supersedes it). Once `.specs/steering/decisions.md` exists (or `decisions.file`), the lint FAILs with `file:line` on a cited `D-<id>` without a row and on a "Where it lands" REQ that no `requirements.md` defines; rows a later row supersedes are skipped.
+- `spec-kit.json` `decisions.backlinks` (`false` default, `"warn"`, `true`): each REQ a decision lands on must cite the decision in its definition.
+- Lint WARN with `file:line` for a REQ cited outside a feature's own `requirements.md`, `design.md` and `tasks.md` (router, `system/`, `steering/`, `AGENT_PROMPT.md`, domain designs) that is defined in no `requirements.md`.
+- Names denylist: `spec-kit.json` `denylist_sha256` (default `[]`). The lint tokenises `.specs/**/*.md` outside `kit/` (dots kept in tokens, each run of dot segments, adjacent pairs joined by `-`) and FAILs as `denylisted term (token #n)` without printing the word. `spec_lint.py --hash-term "<one or two words>"` prints the digest.
+- `kit/scripts/gates.py`: runs the Gates table (`| # | Gate | Command |`) of `steering/spec-rules.md`, or `--file`, in order from the project root. It stops at the first failure (exit 1, naming the gate) and prints a `### Gates` block with `commit: <sha>[+dirty]`. It exits 2 without running anything on a missing file or table, a row without exactly one code span, or an unfilled template placeholder.
+- `kit/templates/ONBOARDING.md`: what the project is, read order, rules not to break, how to work a change, gotchas, four starter prompts for any agent. Setup offers to generate it as `.specs/ONBOARDING.md`.
+- `Deploy impact: none | <job or env>: <what changes>` in the tasks template; the spec-rules Definition of Done, `AGENT_RULES.md` and the review loop say the people who run CI/CD hear before the merge when it isn't `none`.
+- Setup question Q9 (must-ask): how CI/CD consumes the repository (a pinned artifact or image, or the default branch directly), recorded in the profile.
+- `kit/docs/review-loop.md`: "Grill the artifact": independent reviewers attack a spec or plan with recommended answers they try to refute, in rounds until one finds nothing material; settled answers go into the decisions log.
+- Example: decisions log with back-links and a superseded row, `Deploy impact:` lines, a Gates table, `ONBOARDING.md`.
+- Selftest case 11.
+
+### Changed
+- The spec-rules template's Definition of Done holds the gates as a `| # | Gate | Command |` table, and §4 points to the decisions log. Setup writes the gate commands into that table.
+- `AGENT_RULES.md`: don't reopen a settled decision; state the deploy impact.
+- `spec_lint.py --json` has a `refs` list (the new `file:line` FAILs, counted in `fails`); `spec_report.py` lists them with the other findings.
+
 ## [0.4.1] - 2026-10-29
 
 ### Fixed
