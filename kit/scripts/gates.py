@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
 """Run the project's gates in order and print a summary block for the PR description. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/gates.py [--specs DIR] [--file PATH]
+Usage: python3 .specs/kit/scripts/gates.py [--specs DIR] [--file PATH] | --help
        default DIR = the .specs/ this script is installed in; default PATH = DIR/steering/spec-rules.md
+
+It executes, with `sh -c` from the project root, every command in that Gates table and nothing else: whoever can edit
+the table decides what runs. Treat the table like code, and read it before running gates.py on a branch you didn't write.
 
 Reads the first table whose header has a Gate and a Command column (a # column is optional and joins the label).
 Each row's Command cell holds exactly one `code span`: that is the command, with \\| read as |. Commands run with
 `sh -c` from the folder holding .specs/, in table order.
-Exit 0: all green; stdout gets a `### Gates` block, one line per gate (its last output line) and `commit: <sha>[+dirty]`.
+Exit 0: all green; stdout gets a `### Gates` block, one line per gate (its last output line) and `commit: <sha>[+dirty]`,
+        taken before the gates ran (`none` outside git, e.g. a workspace folder that is not a repo). Stdin is closed.
 Exit 1: a gate failed; its output and `GATE FAILED: <gate> (exit N)` go to stderr and later gates don't run.
 Exit 2: no file, no table, a row without exactly one code span, or a template placeholder (`<...>`) left in. Nothing
         runs: commands are never guessed.
@@ -55,21 +59,29 @@ def commit(root):
     return sha.stdout.strip() + ("+dirty" if dirty else "")
 
 
+USAGE = "usage: gates.py [--specs DIR] [--file PATH] | --help"
+
+
 def refuse(msg):
     print("gates: " + msg + ". Nothing run", file=sys.stderr)
     return 2
 
 
 def main(argv):
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
     specs = Path(__file__).resolve().parents[2]
     rules = None
     for flag in ("--specs", "--file"):
         if flag in argv:
             i = argv.index(flag)
             if i + 1 >= len(argv):
-                return refuse("usage: gates.py [--specs DIR] [--file PATH]")
+                return refuse(USAGE)
             value, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
             specs, rules = (value, rules) if flag == "--specs" else (specs, value)
+    if argv:
+        return refuse("unknown argument(s) " + " ".join(argv) + "; " + USAGE)
     rules = rules or specs / "steering" / "spec-rules.md"
     try:
         rows = gate_rows(rules.read_text())
@@ -82,17 +94,19 @@ def main(argv):
     root, summary = specs.parent, []
     if not root.is_dir():
         return refuse("no project folder " + str(root))
+    sha = commit(root)  # before the gates: output they write must not make the tree look dirty
     for label, cmd in rows:
         print(">> " + label + ": " + cmd, file=sys.stderr)
-        run = subprocess.run(["sh", "-c", cmd], cwd=str(root), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                             encoding="utf-8", errors="replace")
+        # stdin closed: a gate that prompts fails instead of hanging. shortcut: no timeout, add one if a gate can hang
+        run = subprocess.run(["sh", "-c", cmd], cwd=str(root), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, encoding="utf-8", errors="replace")
         if run.returncode:
             sys.stderr.write(run.stdout)
             print("GATE FAILED: " + label + " (exit " + str(run.returncode) + ")", file=sys.stderr)
             return 1
         last = [l for l in run.stdout.splitlines() if l.strip()]
         summary.append("- " + label + ": " + (last[-1].strip() if last else "exit 0"))
-    print("### Gates\n" + "\n".join(summary) + "\n- commit: " + commit(root))
+    print("### Gates\n" + "\n".join(summary) + "\n- commit: " + sha)
     return 0
 
 

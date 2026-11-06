@@ -409,4 +409,15 @@ J=$(printf %s 'josé' | shasum -a 256 | cut -c1-64); [ "$(L --hash-term 'José')
 printf 'José came. Jos stayed.\n' > "$S/system/notes.md"; printf '{"denylist_sha256": ["%s"]}\n' "$J" > "$S/spec-kit.json"
 out=$(L --specs "$S" 2>&1 || true); echo "$out" | grep -q "notes.md:1: denylisted term (token #1)" && ! echo "$out" | grep -q "token #3" || fail "non-ASCII tokenising: $out"
 rm "$S/spec-kit.json"; printf 'See D-1.\n' > "$S/system/notes.md"
+GT="$TMP/t12g"; mkdir -p "$GT/.specs/steering"; gitq -C "$GT" init
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | makes output | `touch out.log; echo made` |\n' > "$GT/.specs/steering/spec-rules.md"
+gitq -C "$GT" add .; gitq -C "$GT" commit -m x
+gates() { python3 "$KIT/kit/scripts/gates.py" --specs "$GT/.specs" "$@"; }
+for a in --bogus --file=x; do rc=0; out=$(gates "$a" 2>&1) || rc=$?; [ "$rc" = 2 ] && [ ! -e "$GT/out.log" ] || fail "gates.py ran with unknown argument $a: rc=$rc $out"; done
+rc=0; out=$(gates --help 2>&1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "^Usage:" && [ ! -e "$GT/out.log" ] || fail "gates.py --help: rc=$rc $out"
+out=$(gates 2>/dev/null) || fail "gates.py green run"; echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}$" || fail "commit taken after the gates ran: $out"
+I="$TMP/t12i"; mkdir -p "$I"; gitq -C "$I" init; "$KIT/install.sh" "$I" >/dev/null
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | where | `pwd -P` |\n' > "$I/.specs/steering/spec-rules.md"
+out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: $(cd "$I" && pwd -P)$" || fail "installed gates.py root: $out"
+
 echo "selftest: OK"
