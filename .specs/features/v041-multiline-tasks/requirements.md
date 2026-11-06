@@ -7,7 +7,7 @@ Tracker: none. Branch `fix/0.4.1`. Size S.
 
 Verified on `main` 2026-10-29 (`4552f40`):
 
-- `kit/scripts/spec_lint.py:115` checks only the checkbox line of a task for a REQ link. Tasks that wrap, with the REQ
+- `kit/scripts/spec_lint.py` (line 115 at `4552f40`) checked only the checkbox line of a task for a REQ link. Tasks that wrap, with the REQ
   ID on an indented continuation line, are reported as unlinked. During the 0.4.0 rollout, a real project got
   `12 task(s) without a REQ link` although every task carried its ID on its second line.
 

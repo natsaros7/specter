@@ -7,14 +7,14 @@ Tracker: none. Branch `feat/0.5.0`. Size M.
 
 Verified on `main` 2026-11-06 (`6578fb1`), and on a multi-team refactor plan written with specter 0.4.1:
 
-- `kit/scripts/spec_lint.py:126-129` resolves a REQ only inside its own feature (plus `domains/`). A REQ cited from
+- `kit/scripts/spec_lint.py:139-142` resolves a REQ only inside its own feature (plus `domains/`). A REQ cited from
   `system/`, `steering/` or a router is never checked, and nothing knows about decision ids. The refactor needed its
   own checker for settled decisions (`D-<id>` rows, about 160 of them) to keep cited ids, landing REQs and back-links
   consistent.
 - Nothing stops a team, client or person name from landing in specs that several teams read. The refactor kept a
   hashed denylist so the list itself named nobody.
 - The refactor assumed CI/CD ran pinned images. A job actually ran from the default branch, so a merge reached a
-  production job without warning. The setup interview (`kit/playbooks/setup.md:66-75`) never asks how CI/CD consumes
+  production job without warning. The setup interview (`kit/playbooks/setup.md`, Phase 3 at `6578fb1`) never asks how CI/CD consumes
   the repository.
 - Every PR pasted gate results by hand. `kit/templates/steering/spec-rules.md` §7 lists the gate as free text, so no
   script can run it.
