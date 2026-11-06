@@ -169,7 +169,8 @@ New `.specs/spec-kit.json` keys (all optional):
 
 ### Decisions, names, deploy impact, gates
 
-All opt-in; a project that adds none of them lints exactly as before.
+A 0.4.1 project keeps its exit code: the new checks are off until their file or config key exists. The one new
+default is a WARN for REQ ids that are cited but defined nowhere.
 
 - **Decisions log.** `.specs/steering/decisions.md` (template in `kit/templates/steering/`) is a table of settled
   decisions: `| ID | Decision | Why | Where it lands | Supersedes |`. A decision changes only by a new dated row that
@@ -185,9 +186,11 @@ All opt-in; a project that adds none of them lints exactly as before.
 - **Deploy impact.** Each change states `Deploy impact: none` or `<job or env>: <what changes>`. If it isn't `none`,
   the people who run CI/CD hear before the merge. Setup asks how CI/CD consumes the repo: a job that runs from the
   default branch picks up every merge.
-- **Gates.** `gates.py` runs the `| # | Gate | Command |` table of `steering/spec-rules.md` (or `--file`) in order. It
-  stops at the first failure and prints a `### Gates` block with the commit (`+dirty` when the tree has changes). It
-  never guesses a command: no table, no run.
+- **Gates.** `gates.py` executes, with `sh -c` from the project root, the commands in this project's own
+  `| # | Gate | Command |` table of `steering/spec-rules.md` (or `--file`), in order, and nothing else. Whoever can edit
+  that table decides what runs, so treat it like code: read it before you run `gates.py` on a branch you didn't write.
+  It stops at the first failure and prints a `### Gates` block with the commit as it was before the run (`+dirty` when
+  the tree had changes; `none` outside git). It never guesses a command: no table, no run.
 - **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
   [`kit/docs/review-loop.md`](kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
 

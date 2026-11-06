@@ -33,28 +33,33 @@ without any of it changing a project that doesn't opt in.
 - The kit SHALL ship `templates/steering/decisions.md`: one table `| ID | Decision | Why | Where it lands | Supersedes |`,
   ids `D-<id>`, rows grouped under dated headings, and the rule that a decision changes only by a new dated row that
   supersedes the old one.
-- When the decisions file exists (`steering/decisions.md`, or `decisions.file` in `spec-kit.json`), the lint SHALL
+- When the decisions file (`steering/decisions.md`, or `decisions.file` in `spec-kit.json`) holds at least one
+  decision row and `decisions.enabled` is not `false`, the lint SHALL
   FAIL, with `file:line`, on each REQ named in a row's "Where it lands" that no `requirements.md` defines. Rows that a
   later row supersedes are skipped.
-- `decisions.backlinks` (default `false`): `"warn"` WARNs and `true` FAILs when such a REQ's definition does not cite
-  the decision id.
+- `decisions.backlinks` (default `false`): `"warn"` WARNs and `true` FAILs when such a REQ's definition (a heading
+  section includes its sub-headings) does not cite the decision id. Any other `decisions` value or key stops the lint
+  with a message.
+- A decision id stands alone (not inside `REQ-D-01`, `ADR-D-1` or a file name like `D-1.md`) and holds a digit, so
+  `D-DAY` in prose is not one.
 
 ### [REQ-V050-02] Every cited id resolves
 
 - Every REQ id in `.specs/**/*.md` outside `kit/` SHALL resolve to a `[REQ-…]` definition in a feature or domain
   `requirements.md`. Unresolved ids outside a feature's own `requirements.md`, `design.md` and `tasks.md` (which keep
-  their FAIL) SHALL WARN with `file:line`.
-- When the decisions file exists, every `D-<id>` cited in `.specs/**/*.md` outside `kit/` SHALL resolve to a row, or
+  their FAIL), and outside inline code, SHALL WARN once per id with up to three `file:line` locations.
+  `unresolved_req: "off"` silences it.
+- With decision checks on, every `D-<id>` cited in `.specs/**/*.md` outside `kit/` SHALL resolve to a row, or
   the lint FAILs with `file:line`.
 - Fenced blocks are skipped, as for links.
 
 ### [REQ-V050-03] Names denylist
 
 - `spec-kit.json` `denylist_sha256` (default `[]`) holds SHA-256 digests of lower-cased terms.
-- The lint SHALL tokenise every line of `.specs/**/*.md` outside `kit/`: lower-cased `[a-z0-9]+` runs with dots kept
-  inside tokens, each dotted token also as every run of its segments, and each adjacent pair joined with `-`. A hit
+- The lint SHALL tokenise every line of `.specs/**/*.md` outside `kit/`: lower-cased runs of letters (any script, NFC)
+  and digits with dots kept inside tokens, each dotted token also as every run of its segments, and each adjacent pair joined with `-`. A hit
   FAILs as `file:line: denylisted term (token #n)` and never prints the term.
-- `spec_lint.py --hash-term <word>` SHALL print the digest to add.
+- `spec_lint.py --hash-term <one or two words>` SHALL print the digest to add, tokenised the same way.
 
 ### [REQ-V050-04] Deploy impact
 
@@ -70,8 +75,9 @@ without any of it changing a project that doesn't opt in.
   (or `--file`), take each row's command from its single code span, and run the rows in order from the project root.
 - It SHALL stop at the first non-zero exit, naming the gate, and exit 1.
 - When all pass it SHALL print a `### Gates` block, one line per gate plus `commit: <sha>[+dirty]`.
-- It SHALL exit 2 without running anything when the file, the table or a row's single code span is missing. It never
-  invents a command.
+- It SHALL exit 2 without running anything when the file, the table or a row's single code span is missing, or on an
+  unknown argument. It never invents a command, and the docs say it executes the table's commands through the shell.
+- The commit line SHALL be read before the gates run.
 - The spec-rules template SHALL hold the Gates table in that shape.
 
 ### [REQ-V050-06] Onboarding template

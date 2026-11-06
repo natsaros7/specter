@@ -38,7 +38,8 @@ An online shop for partner retailers. `orders-api` takes orders over REST (web) 
 3. **Test first.** The failing test is your first commit. A refactor starts with its safety net on unchanged code.
 4. **Implement** the task's REQs, and nothing else (`.specs/kit/playbooks/next-task.md`).
 5. **Gates.** Run `python3 .specs/kit/scripts/gates.py` from the repo root and paste its `### Gates` block into the PR
-   description. Sonar runs in CI.
+   description. It executes the commands in the spec-rules Gates table through the shell: read that table before
+   running it on a branch you didn't write. Sonar runs in CI.
 6. **Docs.** The spec ships with the code: `domains/` and `system/` updates per `.specs/kit/playbooks/sync.md`, and
    `CHANGELOG.md`, in the same PR.
 7. **Review.** Someone who did not write the change approves it; the tech lead for anything under `shop-common/security`.

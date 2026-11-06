@@ -17,19 +17,21 @@ Projects without the file get none of the decision checks, so a 0.4.1 project is
 ## Config — [REQ-V050-01] [REQ-V050-03]
 
 `DEFAULTS` gains `"decisions": {}` and `"denylist_sha256": []`. `load_config` fills `decisions` with
-`{"file": "steering/decisions.md", "backlinks": false}` and exits with a message on a non-list denylist, as it already
+`{"file": "steering/decisions.md", "backlinks": false, "enabled": true}`, rejects unknown keys and wrong types, and exits
+with a message on a non-list denylist or an `unresolved_req` other than `"warn"`/`"off"`, as it already
 does for `drift_max_age_days`. `kit/spec-kit.json` is unchanged, so `untouched_seed` in the installer keeps working.
 
 ## One pass over the specs — [REQ-V050-01] [REQ-V050-02] [REQ-V050-03]
 
-`refs(specs, config, req_defs)` returns `(fails, warns)`, each a `file:line: message` string:
+`refs(specs, config, req_defs)` returns `(fails, warns)`. It calls `cited_ids`, `landings` and `denylisted`, one per
+job:
 
 | Check | Source | Level |
 |---|---|---|
-| REQ cited, not defined | every `req_id_pattern` match outside fences, outside the three files `lint_feature` already checks | WARN |
-| `D-<id>` cited, no row | `\bD-[A-Z0-9]+(?:-[A-Z0-9]+)*\b` outside fences, when the decisions file exists | FAIL |
+| REQ cited, not defined | every `req_id_pattern` match outside fences and inline code, outside the three files `lint_feature` already checks; one WARN per id, up to 3 locations | WARN (`unresolved_req: "off"`) |
+| `D-<id>` cited, no row | `(?<![\w-])D-` + id with a digit + `(?![\w-]\|\.\w)` outside fences, when the decisions file holds a decision row | FAIL |
 | REQ in "Where it lands", not defined | rows of every table whose header has `Where it lands` and whose first cell is a `D-` id; rows named in a later "Supersedes" cell are skipped | FAIL |
-| Back-link missing | the REQ's definition block (the heading section, or the line and its following non-blank lines up to the next definition) lacks the id | per `decisions.backlinks` |
+| Back-link missing | the REQ's definition block (the heading section with its sub-headings, or the line and its following non-blank lines up to the next definition) lacks the id | per `decisions.backlinks` |
 | Denylisted term | every line, fences included (a name in a code block leaks too) | FAIL when the list is set |
 
 `req_defs` maps each `[REQ-…]` defined in `features/*/requirements.md` and `domains/*/requirements.md` to its
@@ -37,13 +39,15 @@ does for `drift_max_age_days`. `kit/spec-kit.json` is unchanged, so `untouched_s
 WARNs to `warnings`. `spec_report.py` lists `refs` with the other findings. `--hash-term <word>` prints
 `sha256(word.lower())` and exits 0 before any linting.
 
-The tokeniser is `re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)*", line.lower())`. Each token also counts as every run of its
+The tokeniser is `re.findall(r"[^\W_]+(?:\.[^\W_]+)*", nfc(line).lower())`. Each token also counts as every run of its
 dot segments (an IP prefix, a host name), and as `token-next` for the adjacent pair. A hit prints only the token
 number.
 
 ## `gates.py` — [REQ-V050-05]
 
-`python3 .specs/kit/scripts/gates.py [--specs DIR] [--file PATH]`. Root = the folder holding `.specs/`.
+`python3 .specs/kit/scripts/gates.py [--specs DIR] [--file PATH] | --help`. Root = the folder holding `.specs/`. Any
+other argument exits 2. It reads the commit and dirty state first, so output the gates write doesn't count, and gives
+the gates a closed stdin.
 
 1. Read `--file`, else `<specs>/steering/spec-rules.md`. Find the first table whose header cells include `gate` and
    `command` (case-insensitive; a `#` column is optional and joins the label). Cells split on unescaped `|`, and `\|`

@@ -8,7 +8,8 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 ## [0.5.0] - 2026-11-06
 
 Settled decisions recorded once and cited by id, every cited id checked, names kept out of shared specs, deploy impact
-stated per change, and the gates run by a script. All opt-in: a 0.4.1 project lints with the same exit code.
+stated per change, and the gates run by a script. A 0.4.1 project keeps its exit code: new checks are off until their
+file or config exists, and the one new default output is a WARN for REQ ids cited but defined nowhere.
 
 ### Added
 - Decisions log: `kit/templates/steering/decisions.md` (`| ID | Decision | Why | Where it lands | Supersedes |`, ids `D-<id>`, a decision changes only by a new dated row that supersedes it). Once `.specs/steering/decisions.md` (or `decisions.file`) holds at least one decision row, the lint FAILs with `file:line` on a cited `D-<id>` without a row (an id stands alone and holds a digit: not `REQ-D-01`, `D-1.md` or `D-DAY`) and on a "Where it lands" REQ that no `requirements.md` defines; rows a later row supersedes are skipped.

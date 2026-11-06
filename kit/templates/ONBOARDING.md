@@ -35,7 +35,8 @@ without a deprecation".>
    deliberately broken copy.
 4. **Implement** the task's REQs, and nothing else (`.specs/kit/playbooks/next-task.md`).
 5. **Gates.** Run `python3 .specs/kit/scripts/gates.py` from the repo root and paste its `### Gates` block into the PR
-   description. It runs the Gates table of `steering/spec-rules.md` in order and stops at the first failure.
+   description. It executes, through the shell, the commands in the Gates table of `steering/spec-rules.md`, in order,
+   and stops at the first failure. Read that table before running it on a branch you didn't write.
 6. **Docs.** The spec ships with the code: `domains/` and `system/` updates per `.specs/kit/playbooks/sync.md`, plus
    <CHANGELOG or other project docs>, in the same PR.
 7. **Review.** Someone who did not write the change approves it. <Who; which paths get the strongest reviewer.>
