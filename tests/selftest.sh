@@ -1,5 +1,5 @@
 #!/bin/sh
-# Self-test: example specs lint clean; decisions, ids and denylist; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
+# Self-test: example specs lint clean; decisions, ids and denylist; gates.py; install is idempotent; hook warns; multi-repo skips the hook; uninstall is clean.
 set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
@@ -331,7 +331,7 @@ printf '%b\n' '- [ ] 1 wrapped task' '  continues here — [REQ-M-01]' '- [ ] 2 
 out=$(L --specs "$TMP/t10/.specs")
 echo "$out" | grep -q "1 task(s) without a REQ link, e.g. '- \[ \] 3 bare task'" || fail "multi-line tasks: $out"
 
-echo "11. decisions log, cited ids, denylist, 0.4.1-shaped project"
+echo "11. decisions log, cited ids, denylist, gates.py, 0.4.1-shaped project"
 S="$TMP/t11/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"
 printf '# d\n\nStatus: In progress\n\n### [REQ-DL-01] a\n\nLands D-1.\n\n### [REQ-DL-02] b\n\nNo back-link.\n' > "$S/features/d-1/requirements.md"
 printf 'REQ-DL-01 REQ-DL-02\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-DL-01] [REQ-DL-02]\n' > "$S/features/d-1/tasks.md"
@@ -360,4 +360,20 @@ printf 'See D-1, the Zork.io gateway at Big Corp.\n' > "$S/system/notes.md"; dec
 rc=0; out=$(L --specs "$S") || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL system/notes.md:1: denylisted term (token #5)" && echo "$out" | grep -q "denylisted term (token #8)" || fail "denylist: rc=$rc $out"
 echo "$out" | grep -qi "zork\|big" && fail "denylist echoed the term: $out" || true
+GT="$TMP/t11g"; mkdir -p "$GT/.specs/steering"; gitq -C "$GT" init; echo x > "$GT/x"; gitq -C "$GT" add x; gitq -C "$GT" commit -m x
+GR="$GT/.specs/steering/spec-rules.md"; gates() { python3 "$KIT/kit/scripts/gates.py" --specs "$GT/.specs" "$@"; }
+printf '## Gates\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo first ok` |\n| G2 | bad | `echo broke; exit 3` |\n| G3 | never | `touch ran3` |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "GATE FAILED: G2 bad (exit 3)" && echo "$out" | grep -q broke && [ ! -e "$GT/ran3" ] || fail "gates.py did not stop at G2: rc=$rc $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo one` |\n| G2 | pipe | `printf "a\\n\\n" && echo x \\| tr x y` |\n' > "$GR"
+out=$(gates 2>/dev/null) || fail "gates.py failed a green table"
+printf '### Gates\n- G1 ok: one\n- G2 pipe: y\n' > "$TMP/g.want"; echo "$out" | head -3 | cmp -s - "$TMP/g.want" || fail "gates block: $out"
+echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}\+dirty$" || fail "gates commit line: $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `touch ran1` |\n| G2 | prose | run the tests |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && [ ! -e "$GT/ran1" ] && echo "$out" | grep -q "G2" || fail "row without a command: rc=$rc $out"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | tests | `<exact command>` |\n' > "$GR"
+rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "template placeholder" || fail "placeholder ran: rc=$rc $out"
+printf '# no table\n' > "$GR"; rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "no Gates table" || fail "missing table: rc=$rc $out"
+rm "$GR"; rc=0; gates >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "missing spec-rules.md: rc=$rc"
+
 echo "selftest: OK"

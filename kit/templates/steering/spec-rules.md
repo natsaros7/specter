@@ -43,10 +43,17 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 
 ## 7. Definition of Done
 
-1. Gate: `<exact commands, e.g. ./gradlew check / npm test && npm run lint>`
-2. `python3 .specs/kit/scripts/spec_lint.py` exits 0.
-3. `tasks.md` fully ticked and `Status: Done <date> (<branch, commit or PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
-4. <review rule, e.g. fresh-context review on the diff; security paths get the strongest reviewer>
+1. Every gate below exits 0. `python3 .specs/kit/scripts/gates.py` runs them in order, stops at the first failure and
+   prints a `### Gates` block for the PR description. One command per row, in backticks; write a `|` inside a command
+   as `\|`.
+
+   | # | Gate | Command |
+   |---|---|---|
+   | G1 | <build and tests> | `<exact command, e.g. ./gradlew check or npm test && npm run lint>` |
+   | G2 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
+
+2. `tasks.md` fully ticked and `Status: Done <date> (<branch, commit or PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
+3. <review rule, e.g. fresh-context review on the diff; security paths get the strongest reviewer>
 
 ## 8. Keep specs in sync
 
