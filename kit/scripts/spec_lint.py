@@ -26,8 +26,10 @@ FAIL (exit 1): a feature is missing requirements/design/tasks.md; a feature fold
       decision row and decisions.enabled is not false, a cited D-<id> (standalone, with a digit)
       has no row, or a row's "Where it lands" names an undefined REQ (rows a later row supersedes are skipped); with
       decisions.backlinks true (or "warn": WARN), such a REQ's definition does not cite the decision; with denylist_sha256
-      set, a token (dots kept; each run of dot segments; each adjacent pair joined by '-') hashes to a listed digest.
-WARN: a REQ cited outside a feature's requirements/design/tasks.md is defined in no requirements.md (file:line);
+      set, a token (letters of any script and digits, NFC, lower-cased; dots kept; each run of dot segments; each adjacent
+      pair joined by '-'; per line) hashes to a listed digest.
+WARN: a REQ cited outside a feature's requirements/design/tasks.md and outside inline code is defined in no
+      requirements.md (one line per id, up to 3 file:line; unresolved_req "off" silences it);
       a task checkbox without a REQ; a required section (spec-kit.json) is missing; an upstream
       requirement id used in a feature is not in system/traceability.md; setup is still incomplete; an unresolved
       Drift Register row (any table with a Drift column; Logged optional) is older than drift_max_age_days (default 90, null = off),
@@ -43,6 +45,7 @@ import json
 import re
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
@@ -52,7 +55,7 @@ FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
             "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
-            "tracker_pattern": None, "merged_ref": None, "decisions": {}, "denylist_sha256": []}
+            "tracker_pattern": None, "merged_ref": None, "decisions": {}, "denylist_sha256": [], "unresolved_req": "warn"}
 STATUS = re.compile(r"^\s*>?\s*(?:\*\*Status:\*\*|\*\*Status\*\*:|Status:)\s*(.*)$", re.I)
 STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
 MERGED = "merged work found"
@@ -92,6 +95,8 @@ def load_config(specs):
     deny, dec = config["denylist_sha256"], config["decisions"]
     if not isinstance(deny, list) or not all(isinstance(d, str) for d in deny):
         sys.exit("spec-kit.json: denylist_sha256 must be a list of hex digests, got " + json.dumps(deny))
+    if config["unresolved_req"] not in ("warn", "off"):
+        sys.exit('spec-kit.json: unresolved_req must be "warn" or "off", got ' + json.dumps(config["unresolved_req"]))
     if not isinstance(dec, dict):
         sys.exit("spec-kit.json: decisions must be an object, got " + json.dumps(dec))
     dec = config["decisions"] = dict({"file": "steering/decisions.md", "backlinks": False, "enabled": True}, **dec)
@@ -200,18 +205,22 @@ def broken_links(specs):
 # a decision id stands alone (not inside REQ-D-01 or ADR-D-1, not a file name like D-1.md) and holds a digit, so prose
 # such as D-DAY is not an id
 DREF = re.compile(r"(?<![\w-])D-(?=[A-Z0-9-]*[0-9])[A-Z0-9]+(?:-[A-Z0-9]+)*(?![\w-]|\.\w)")
-TOKEN = re.compile(r"[a-z0-9]+(?:\.[a-z0-9]+)*")
+TOKEN = re.compile(r"[^\W_]+(?:\.[^\W_]+)*")  # letters (any script) and digits; dots kept inside
+
+
+def tokens(text):
+    return TOKEN.findall(unicodedata.normalize("NFC", text).lower())
 
 
 def unfenced(text):
-    """text with fenced blocks blanked, line numbers kept."""
+    """text with fenced blocks blanked, line numbers kept (FENCE.sub("", ...) elsewhere drops them: not the same)."""
     return FENCE.sub(lambda m: "\n" * m.group().count("\n"), text)
 
 
 def deny_hits(line, digests):
     """1-based numbers of the tokens in line that hit a digest: the token, any run of its dot segments (a host, an IP
     prefix), or the token joined to the next one with '-'."""
-    toks, hits = TOKEN.findall(line.lower()), []
+    toks, hits = tokens(line), []
     for n, tok in enumerate(toks, 1):
         parts = tok.split(".")
         cands = {".".join(parts[i:j]) for i in range(len(parts)) for j in range(i + 1, len(parts) + 1)}
@@ -251,32 +260,42 @@ def req_block(lines, i, defined_re):
     return "\n".join(block)
 
 
-def refs(specs, config, req_defs):
-    """Checks across files, each 'file:line: message': cited REQ and D- ids resolve, decision rows land on defined REQs
-    that cite them back, no denylisted term. Returns (fails, warns)."""
-    fails, warns = [], []
-    req, dec = re.compile(config["req_id_pattern"]), config["decisions"]
-    dec_path = specs / dec["file"]
-    # on only when the file holds at least one decision row: a decisions.md in another format lints as before
-    rows = (decision_rows(unfenced(dec_path.read_text()).splitlines()) or None) if dec["enabled"] and dec_path.is_file() else None
-    ids = {r[0] for r in rows or ()}
-    digests = {d.lower() for d in config["denylist_sha256"]}
-    for md in sorted(specs.rglob("*.md")):
-        rel = md.relative_to(specs)
-        if rel.parts[0] == "kit":
-            continue
-        raw = md.read_text()
+def spec_docs(specs):
+    """[(relative path, text)] of every .md under specs, outside kit/."""
+    return [(md.relative_to(specs).as_posix(), md.read_text()) for md in sorted(specs.rglob("*.md"))
+            if md.relative_to(specs).parts[0] != "kit"]
+
+
+def cited_ids(docs, config, req_defs, rows):
+    """Cited REQ ids defined nowhere (WARN, one per id) and, with a decisions log, cited D- ids without a row (FAIL)."""
+    req, dec, ids = re.compile(config["req_id_pattern"]), config["decisions"], {r[0] for r in rows or ()}
+    fails, missing = [], {}
+    for rel, raw in docs:
+        parts = rel.split("/")
         # lint_feature already FAILs undefined REQs in these three
-        own = len(rel.parts) == 3 and rel.parts[0] == "features" and rel.name in ("requirements.md", "design.md", "tasks.md")
+        own = len(parts) == 3 and parts[0] == "features" and parts[2] in ("requirements.md", "design.md", "tasks.md")
         for no, line in enumerate(unfenced(raw).splitlines(), 1):
-            at = rel.as_posix() + ":" + str(no) + ": "
-            warns += [at + r + " is cited but defined in no requirements.md"
-                      for r in dict.fromkeys(req.findall(line)) if not own and r not in req_defs]
+            at = rel + ":" + str(no)
+            if not own and config["unresolved_req"] != "off":
+                for r in dict.fromkeys(req.findall(re.sub(r"`[^`]*`", "", line))):  # an id in inline code is an example
+                    if r not in req_defs:
+                        missing.setdefault(r, []).append(at)
             if rows is not None:
-                fails += [at + d + " is cited but has no row in " + dec["file"] for d in dict.fromkeys(DREF.findall(line)) if d not in ids]
-        if digests:
-            fails += [rel.as_posix() + ":" + str(no) + ": denylisted term (token #" + str(n) + ")"
-                      for no, line in enumerate(raw.splitlines(), 1) for n in deny_hits(line, digests)]
+                fails += [at + ": " + d + " is cited but has no row in " + dec["file"] for d in dict.fromkeys(DREF.findall(line)) if d not in ids]
+    warns = [r + " is cited but defined in no requirements.md: " + ", ".join(locs[:3])
+             + (" and " + str(len(locs) - 3) + " more" if len(locs) > 3 else "") for r, locs in missing.items()]
+    return fails, warns
+
+
+def denylisted(docs, digests):
+    """A FAIL per denylisted token, fenced blocks included (a name in a code block leaks too). Never prints the term."""
+    return [rel + ":" + str(no) + ": denylisted term (token #" + str(n) + ")"
+            for rel, raw in docs for no, line in enumerate(raw.splitlines(), 1) for n in deny_hits(line, digests)]
+
+
+def landings(specs, config, req_defs, rows):
+    """Each REQ a live decision row lands on is defined (FAIL) and, with decisions.backlinks, cites it back."""
+    req, dec, fails, warns = re.compile(config["req_id_pattern"]), config["decisions"], [], []
     superseded = {d for r in rows or () for d in DREF.findall(r[3])}
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
     for d, no, lands, _ in rows or ():
@@ -288,10 +307,23 @@ def refs(specs, config, req_defs):
                 continue
             path, line_no = req_defs[r]
             block = req_block((specs / path).read_text().splitlines(), line_no - 1, defined_re)
-            if dec["backlinks"] and not re.search(r"(?<![\w-])" + re.escape(d) + r"(?![\w-])", block):
+            if dec["backlinks"] and not re.search(r"(?<![\w-])" + re.escape(d) + r"(?![\w-]|\.\w)", block):
                 (warns if dec["backlinks"] == "warn" else fails).append(
                     path + ":" + str(line_no) + ": " + r + " does not cite " + d + ", which lands on it")
     return fails, warns
+
+
+def refs(specs, config, req_defs):
+    """Checks across files: cited ids, decision landings and back-links, denylisted terms. Returns (fails, warns)."""
+    dec = config["decisions"]
+    dec_path = specs / dec["file"]
+    # on only when the file holds at least one decision row: a decisions.md in another format lints as before
+    rows = (decision_rows(unfenced(dec_path.read_text()).splitlines()) or None) if dec["enabled"] and dec_path.is_file() else None
+    docs = spec_docs(specs)
+    id_fails, id_warns = cited_ids(docs, config, req_defs, rows)
+    land_fails, land_warns = landings(specs, config, req_defs, rows)
+    deny = {d.lower() for d in config["denylist_sha256"]}
+    return id_fails + land_fails + (denylisted(docs, deny) if deny else []), id_warns + land_warns
 
 
 def repos(root):
@@ -517,8 +549,7 @@ def main(argv):
         i = argv.index("--specs")
         specs, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
     if "--hash-term" in argv:
-        words = argv[argv.index("--hash-term") + 1:][:1]
-        toks = TOKEN.findall(words[0].lower()) if words else []
+        toks = tokens(" ".join(a for a in argv[argv.index("--hash-term") + 1:] if not a.startswith("--")))
         if not 1 <= len(toks) <= 2:
             sys.exit("usage: --hash-term <term of one or two words>")
         print(hashlib.sha256("-".join(toks).encode()).hexdigest())

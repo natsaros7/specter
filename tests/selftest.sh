@@ -340,7 +340,7 @@ out=$(L --specs "$S") || fail "0.4.1-shaped project (no decisions file, no denyl
 echo "$out" | grep -v "^spec-lint:" | grep -q "FAIL\|D-9\|denylist" && fail "0.4.1-shaped project got a new FAIL: $out" || true
 printf 'Cites REQ-DL-77.\n' >> "$S/system/notes.md"
 out=$(L --specs "$S") || fail "unresolved REQ outside a feature must not FAIL"
-echo "$out" | grep -q "WARN system/notes.md:2: REQ-DL-77 is cited but defined in no requirements.md" || fail "unresolved REQ not warned: $out"
+echo "$out" | grep -q "WARN REQ-DL-77 is cited but defined in no requirements.md: system/notes.md:2$" || fail "unresolved REQ not warned: $out"
 DEC="$S/steering/decisions.md"; deccfg() { printf '{"decisions": {"backlinks": %s}%s}\n' "$1" "${2:-}" > "$S/spec-kit.json"; }
 printf '# Decisions\n\n| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | x | y | REQ-DL-01, REQ-DL-02 | |\n' > "$DEC"
 rc=0; out=$(L --specs "$S") || rc=$?
@@ -395,4 +395,18 @@ for cfg in '{"backlinks": "off"}' '{"backlinks": "false"}' '{"backlinks": 1}' '{
   printf '{"decisions": %s}\n' "$cfg" > "$S/spec-kit.json"; rc=0; out=$(L --specs "$S" 2>&1) || rc=$?
   [ "$rc" != 0 ] && echo "$out" | grep -q "spec-kit.json: decisions" || fail "bad decisions config $cfg accepted: rc=$rc $out"
 done
+printf '{"unresolved_req": "loud"}\n' > "$S/spec-kit.json"; rc=0; L --specs "$S" >/dev/null 2>&1 || rc=$?; [ "$rc" != 0 ] || fail "bad unresolved_req accepted"
+rm "$S/spec-kit.json"
+printf 'An example: `REQ-OLD-01`.\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\nREQ-OLD-02\n' > "$S/system/old.md"
+out=$(L --specs "$S") || fail "unresolved REQ changed the exit code"
+echo "$out" | grep -q "REQ-OLD-01" && fail "REQ in inline code warned: $out" || true
+[ "$(echo "$out" | grep -c 'REQ-OLD-02')" = 1 ] && echo "$out" | grep -q "WARN REQ-OLD-02 is cited but defined in no requirements.md: system/old.md:2, system/old.md:3, system/old.md:4 and 2 more" || fail "unresolved REQ WARN shape: $out"
+printf '{"unresolved_req": "off"}\n' > "$S/spec-kit.json"; out=$(L --specs "$S") || fail "unresolved_req off"
+echo "$out" | grep -q "REQ-OLD" && fail "unresolved_req off still warns: $out" || true
+rm "$S/spec-kit.json" "$S/system/old.md"
+[ "$(L --hash-term Big Corp)" = "$(printf %s big-corp | shasum -a 256 | cut -c1-64)" ] || fail "--hash-term ignored a word"
+J=$(printf %s 'josé' | shasum -a 256 | cut -c1-64); [ "$(L --hash-term 'José')" = "$J" ] || fail "--hash-term dropped a non-ASCII letter"
+printf 'José came. Jos stayed.\n' > "$S/system/notes.md"; printf '{"denylist_sha256": ["%s"]}\n' "$J" > "$S/spec-kit.json"
+out=$(L --specs "$S" 2>&1 || true); echo "$out" | grep -q "notes.md:1: denylisted term (token #1)" && ! echo "$out" | grep -q "token #3" || fail "non-ASCII tokenising: $out"
+rm "$S/spec-kit.json"; printf 'See D-1.\n' > "$S/system/notes.md"
 echo "selftest: OK"

@@ -163,6 +163,7 @@ New `.specs/spec-kit.json` keys (all optional):
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 | `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
 | `decisions` | `{}` | `file` (default `steering/decisions.md`), `backlinks` (`false`, `"warn"` or `true`) and `enabled` (default `true`); any other value or key stops the lint; see below |
+| `unresolved_req` | `"warn"` | `"off"` silences the WARN for REQ ids cited in `.specs/` but defined nowhere |
 | `denylist_sha256` | `[]` | SHA-256 digests of terms that must not appear in `.specs/`; see below |
 | `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count |
 
@@ -175,10 +176,12 @@ All opt-in; a project that adds none of them lints exactly as before.
   supersedes it. Ids hold a digit (`D-7`, `D-AUTH-2`; `D-DAY` in prose is not one). Once the file holds a decision row
   (and unless `"decisions": {"enabled": false}`), the lint FAILs on a cited `D-<id>` without a row and on a "Where it lands" REQ
   that isn't defined. With `"decisions": {"backlinks": true}` (or `"warn"`), each such REQ must cite the decision back.
-  A REQ cited anywhere in `.specs/` that is defined nowhere WARNs with `file:line`.
+  A REQ cited anywhere in `.specs/` (outside inline code) that is defined nowhere WARNs once per id, with up to three
+  `file:line` locations; `"unresolved_req": "off"` silences it.
 - **Names denylist.** For specs that several teams or clients read: put `sha256` digests in `denylist_sha256`, so the
   config never names what it protects. A hit FAILs as `denylisted term (token #n)` and never prints the word. Get a
-  digest with `python3 .specs/kit/scripts/spec_lint.py --hash-term "<one or two words>"`.
+  digest with `python3 .specs/kit/scripts/spec_lint.py --hash-term <one or two words>`. Tokens are letters of any script
+  and digits, lower-cased (`José` stays `josé`); a two-word term matches only on one line, not across a line break.
 - **Deploy impact.** Each change states `Deploy impact: none` or `<job or env>: <what changes>`. If it isn't `none`,
   the people who run CI/CD hear before the merge. Setup asks how CI/CD consumes the repo: a job that runs from the
   default branch picks up every merge.
