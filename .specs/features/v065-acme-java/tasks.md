@@ -66,8 +66,21 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   2026-11-03) and `CurrencyPolicy` lives in `order.rest`, out of reach for `partner`. Open: a partner can place an order
   with any currency string. Fix when wanted: move the accepted set into the `order` API, throw from `OrderService`,
   map to 422 in REST and a gRPC status here.
-- [ ] 6 `outbox` module: Flyway V2, Modulith JPA registry, `OutboxRelay`, logging sink, topic properties, Clock-driven
+- [x] 6 `outbox` module: Flyway V2, Modulith JPA registry, `OutboxRelay`, logging sink, topic properties, Clock-driven
   resubmission, `OrderOutboxIT` — [REQ-V065-02]
+  Done 2026-11-21. Under `examples/acme-shop/orders-api/`: pom adds `spring-modulith-starter-jpa` (2.1.2, BOM; one online
+  run); `outbox/{OrderEventSink,LoggingOrderEventSink,OutboxRelay,OutboxResubmitter,OutboxProperties,OutboxConfiguration}`;
+  `db/migration/V2__event_publication.sql`; `application.yml` `acme.outbox` (topics `order-events`, `.retry`, `.dlt`,
+  `resubmit-after`, `resubmit-every`); test `OrderOutboxIT`. `OutboxRelay` has an `@ApplicationModuleListener` per event
+  type and reads only `shop-common` events, never `order`. `OutboxResubmitter.resubmit()` runs on `@Scheduled` and calls
+  `IncompleteEventPublications.resubmitIncompletePublicationsOlderThan`; the registry takes the `Clock` bean, so the test
+  moves a `MutableClock` (removing the `advance` makes the IT fail, checked). The sink port is
+  `deliver(topic, eventId, event)`.
+  Library notes: Modulith 2.1.2 ships no SQL for the JPA registry (only the JDBC module does), so V2 is hand-written to
+  the entity (`ddl-auto: validate` passes); the listener is async, so tests poll with Awaitility, no `Thread.sleep`.
+  The relay's topic properties for `.retry` and `.dlt` are bound but unused by the logging sink.
+  Not tested: a crash between the sink call and the completion mark (the duplicate path is shown by calling the relay
+  twice with one event: same id both times); that a resubmit before the age passes sends nothing (a negative wait is racy).
 - [ ] 7 Architecture lane: `ModulesTest` (with the module docs), `ServiceBoundaryTest`, `CodingRulesTest`, all tagged
   `architecture` and in package `com.acme.shop.orders.architecture` so the `*/architecture/*` tier glob matches (check
   that Modulith does not read that package as a fourth module); settle the G2 `groups` UNKNOWN — [REQ-V065-04]

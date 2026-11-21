@@ -10,3 +10,11 @@ spring:
     properties:
       hibernate:
         default_schema: orders
+acme:
+  outbox:
+    topics:
+      order-events: order-events
+      retry: order-events.retry
+      dlt: order-events.dlt
+    resubmit-after: PT1M
+    resubmit-every: PT1M
