@@ -30,8 +30,8 @@ option A puts its properties record and `Clock` bean in `shop-common`; seed S5 n
 
 | Option | For | Against | Ops impact |
 |---|---|---|---|
-| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter whose Boot 4.x line is UNKNOWN | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
-| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 4.x compatibility of the current lines UNKNOWN; more config to read | A listening port during tests |
+| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter (Boot 4.x support not checked, none needed) | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
+| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 4.x compatibility not checked; more config to read | A listening port during tests |
 | Keep `orders.proto` as a contract file only; no gRPC code | Smallest | ORD-142, D-1 and requirement ORD-03 lose their code; the critical-tier seed tasks disappear | — |
 
 ### Events without a broker ([REQ-V065-02] [REQ-V065-03])
@@ -58,10 +58,21 @@ breaks the offline rule and the "protect the laptop" preference.
 - Dependencies only from Maven Central; the wrapper is the script-only type, with `distributionSha256Sum` pinned in
   `.mvn/wrapper/maven-wrapper.properties`. No `maven-wrapper.jar`, no binary file of any kind.
 - Versions are pinned in the root `pom.xml` properties, chosen in task 2 from Maven Central, each released at least two
-  weeks earlier: Spring Boot 4.x BOM, Spring Modulith 2.x BOM (decided 2026-11-21), grpc-java, protobuf, a protobuf Maven plugin,
-  ArchUnit, jqwik, Error Prone, NullAway, JSpecify, Spotless, the springdoc line that pairs with Boot 4.x, PIT and its JUnit 5 plugin. UNKNOWN until
-  task 2: the exact patch versions, and whether each library below has a Boot 4.x-compatible release (grpc-java
-  wiring, springdoc, jqwik, Error Prone and NullAway with JSpecify); a gap is a task-2 finding, not a guess.
+  weeks before 2026-11-21 (so 2026-11-07 or earlier). Pairing check done 2026-11-21 (details in tasks.md task 2):
+
+  | Library | Version | Pairing with Boot 4.1.2 |
+  |---|---|---|
+  | Spring Boot BOM | 4.1.2 (4.1.3 and 4.2.0 are from 2026-11-19, too new) | the base |
+  | Spring Modulith BOM | 2.1.2 | `spring-modulith-starter-test` and `ApplicationModules.verify()` run on Boot 4.1.2 |
+  | grpc-java, protobuf-java, protobuf-maven-plugin (`io.github.ascopes`) | 1.84.1, 4.36.2, 5.1.11 | the Boot 4.1.2 BOM manages exactly these three, so no clash; no gRPC starter, as chosen |
+  | springdoc-openapi | 3.2.0 | its own parent is Boot 4.1.2; `springdoc-openapi-starter-webmvc-api` resolves |
+  | jqwik | 1.10.2 | runs on JUnit Jupiter 6.0.3 (Boot's); its engine pom names platform 1.14.4, so keep it under the Boot-managed JUnit |
+  | ArchUnit | 1.5.1 | loads and imports classes on JDK 21 / JUnit 6 |
+  | Error Prone, NullAway, JSpecify | 2.51.0, 0.14.3, 1.0.1 | NullAway 0.14.3 builds on JSpecify 1.0.1; Spring Framework 7 is JSpecify-annotated |
+  | PIT, JUnit 5 plugin | 1.30.1, 1.2.3 | runs the jqwik property and the Jupiter tests |
+  | Spotless, Enforcer | 3.10.4, 3.7.0 | no pairing issue |
+
+  No gap found; the checks ran in a scratch build, not on the real code (tasks 7 and 8 confirm there).
 - No outbound call anywhere: no Kafka or HTTP client, no carrier client, no Testcontainers, no telemetry, no devtools.
   The app listens on 8080 for REST when run locally; tests use MockMvc and the in-process gRPC channel.
 - No secret: no keystore, certificate, private key or password beyond H2's default empty one. Partner subjects and ids
@@ -128,7 +139,7 @@ D-3 (timeouts at today's values) stays guidance with no check: a test that pins 
 that `Checked by` may be empty. `@Value` is deliberately not banned yet: that ban is seed S6.
 
 PIT runs weekly as chore C2 (`./mvnw -B -Ppit verify`), not as a gate: it takes minutes and its score moves with the
-code, so it reports rather than blocks. UNKNOWN until task 8: whether PIT's JUnit 5 plugin runs jqwik properties; if
+code, so it reports rather than blocks. Task 2's scratch build showed PIT's JUnit 5 plugin runs jqwik properties; task 8 confirms it on the real tests, and if
 not, the `pit` profile excludes them.
 
 ## Citations stay true ([REQ-V065-06])
@@ -186,12 +197,9 @@ README "Try it" block: lint the example (passes), check its citations (passes), 
 
 ## Specter's gates ([REQ-V065-09])
 
-| Option for G5 | For | Against | Ops impact |
+| Decided for G5 (2026-11-21; losing options removed) | For | Against | Ops impact |
 |---|---|---|---|
 | **Optional G5, `sh tests/acme-build.sh`: no JDK 21 → `G5 SKIPPED: needs JDK 21+ (found: <version or none>)`, exit 0; a build or download failure → exit 1** (chosen) | Kit contributors need no JDK; the skip is visible as the last line, which is what a `### Gates` block shows; a broken pom or a bad version pin is never mistaken for "offline" | A skip exits 0, so only the rule below stops a change to example code going in unbuilt | First run downloads about 200 to 400 MB into `~/.m2`, then `-o` works |
-| Same, but skip exits 77 | Machine-readable skip | `gates.py` and the slice-2 readiness verdict read any non-zero as FAIL; every non-JDK contributor sees red | — |
-| G5 fails without a JDK | Simple, strict | Breaks "G1 to G4 need no JDK" in spirit; Python contributors blocked | — |
-| No G5; build the example by hand at release | Nothing to maintain | Example code rots between releases; agents in the sandbox find a broken build first | — |
 
 Script behaviour, about fifteen lines of POSIX sh: find `java` (`JAVA_HOME` first, then `PATH`), read the major
 version, skip below 21; otherwise `cd examples/acme-shop && ./mvnw -B verify`, adding `-o` when `ACME_OFFLINE=1`.
@@ -217,9 +225,7 @@ cite-demo fixture (both FAIL lines, exit 1). It never calls `acme-build.sh`.
 
 | Option | For | Against | Ops impact |
 |---|---|---|---|
-| Branches of the specter repo | No setup | Agent merges pollute specter's history; evidence counting needs a `.git` at the example root (`kit/scripts/spec_lint.py:354-355`); seed tasks can be run once only | Reverts in specter's log |
 | **A disposable local copy with its own `git init`** (chosen until v060 slice 3) | Agents merge freely; evidence accrues in its own log; reset and re-run seeds as a benchmark; nothing leaves the machine | No platform guardrails (protected branch, required checks) to test | Re-copy to pick up example changes |
-| A private hosted repository | Guardrails and PR-based review become testable | Network, a host account, secrets for agent credentials; more to set up than slice 1 or 2 needs | Hosted CI minutes |
 
 Sandbox recipe (goes into `examples/acme-shop/README.md`, a new file for humans: build, run, sandbox):
 
@@ -275,8 +281,6 @@ downloads; no Docker; no real company, person or partner names; no generated fil
 | Option | For | Against | Ops impact |
 |---|---|---|---|
 | **0.6.5, on its own, before slice 2** (chosen) | Slice 2's tiers, readiness verdict and `Checked by` can then be built and tried on real code; the kit is unchanged, so a patch-level number is honest | One more release to cut | Nothing for installed projects |
-| Folded into 0.7.0 | One release | Slice 2 would be built against a test project that does not exist yet; a bigger, slower review | Same |
-| Merged to main, no release | No release work | The README demo change ships unannounced; tags don't mark it | — |
 
 ## Tests
 
