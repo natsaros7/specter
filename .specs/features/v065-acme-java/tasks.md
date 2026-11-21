@@ -44,9 +44,10 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   `ShopSecurityConfiguration`, event records, error codes, `MutableClock` test jar; `GrpcSecurityFilterTest`,
   `SecurityHeaderTest` — [REQ-V065-02]
   Done 2026-11-21. Files under `examples/acme-shop/shop-common/`: `security/{SecurityHeader,GrpcSecurityFilter,PeerSubjectResolver,ShopSecurityConfiguration}`, `events/{OrderPlaced,OrderCancelled}`, `errors/ErrorCode`, test jar `time/MutableClock`; tests `GrpcSecurityFilterTest` (in-process gRPC, stub subject), `SecurityHeaderTest`, `ShopSecurityConfigurationTest`. orders-api gets the test jar as a test dependency. Root pom pins `error_prone_annotations` (grpc-api and guava disagreed; dependencyConvergence) and maven-jar-plugin 3.5.1. Timestamp is never read, as designed.
-- [ ] 4 `order` module: Flyway V1, entities, `OrderService`, `OrderController`, `CurrencyPolicy`, `OrderControllerIT`,
+- [x] 4 `order` module: Flyway V1, entities, `OrderService`, `OrderController`, `CurrencyPolicy`, `OrderControllerIT`,
   `OpenApiSnapshotTest` with the recorded `openapi.yaml`; plant the S2 defect with no test covering it —
   [REQ-V065-02] [REQ-V065-10]
+  Done 2026-11-21. Under `examples/acme-shop/orders-api/`: `order/{OrderService,PlaceOrderCommand,OrderDto,OrderLineDto}`, `order/internal/{OrderEntity,OrderLineEntity,OrderStatus,OrderRepository}`, `order/rest/{OrderController,CurrencyPolicy}`, `db/migration/V1__orders.sql`, `application.yml` (H2, PostgreSQL mode, schema `orders`), `openapi.yaml` (recorded with `-Dopenapi.record=true`); tests `OrderControllerIT` (failsafe, added to orders-api pom), `OpenApiSnapshotTest`. `OrdersApplication` imports `ShopSecurityConfiguration` for the `Clock`; root pom compiler gets `-parameters`. Events go out through `ApplicationEventPublisher` until task 6. S2 planted, no test.
 - [ ] 5 `partner` module: proto2 `orders.proto`, in-process gRPC server, `PartnerOrdersService`,
   `PartnerOrdersCommitTest` — [REQ-V065-02] [REQ-V065-03]
 - [ ] 6 `outbox` module: Flyway V2, Modulith JPA registry, `OutboxRelay`, logging sink, topic properties, Clock-driven
