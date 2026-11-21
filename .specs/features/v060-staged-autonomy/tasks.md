@@ -18,7 +18,7 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 2: risk-tier labels (release 0.7.0)
 
-- [ ] 9 Gate: record the template-tiers, strictest-file, model-family, shared-family and missing-artifact decisions —
+- [ ] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
   [REQ-V060-05] [REQ-V060-13] [REQ-V060-14]
 - [ ] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
 - [ ] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]

@@ -72,11 +72,13 @@ def in_flight(root, config):
     # shortcut: one row per unmerged branch, so squash-merged branches stay listed; cap to the newest N when that clutters.
     git = lambda *a, cwd=root: subprocess.run(["git", "-C", str(cwd)] + list(a), capture_output=True, encoding="utf-8", errors="replace", timeout=30)
     try:
+        trees = [dict(l.split(" ", 1) for l in blk.splitlines() if " " in l) for blk in git("worktree", "list", "--porcelain").stdout.split("\n\n")]
         ref = spec_lint.merged_ref(root, config)
+        if ref == "HEAD" and not config["merged_ref"] and trees and "HEAD" in trees[0]:
+            ref = trees[0]["HEAD"]  # the fallback HEAD is the cwd's branch, wrong from a linked worktree; use the main checkout's
         branches = git("for-each-ref", "--no-merged=" + ref, "--format=%(refname)%00%(refname:lstrip=2)%00%(committerdate:short)", "refs/heads/") if ref else None
         if not branches or branches.returncode != 0:
             return None
-        trees = [dict(l.split(" ", 1) for l in blk.splitlines() if " " in l) for blk in git("worktree", "list", "--porcelain").stdout.split("\n\n")]
         by_ref = {t["branch"]: t["worktree"] for t in trees if "branch" in t}
 
         def row(name, wt, date, head):

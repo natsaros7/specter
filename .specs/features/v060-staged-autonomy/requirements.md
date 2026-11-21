@@ -28,7 +28,7 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
 - Memory is per feature only: the `▶ Resume here` block (`kit/playbooks/new-feature.md:45`,
   `kit/playbooks/next-task.md:5`). A correction the human gives in one session has no place to land for the next one.
 - Nothing runs on a schedule: `kit/playbooks/refresh.md:3` says "run this periodically", and nothing does.
-- The one dashboard is spec health: `kit/scripts/spec_report.py:143-150` shows features, drift, coverage and citations.
+- The one dashboard is spec health: `kit/scripts/spec_report.py` (before slice 1) shows features, drift, coverage and citations.
   It does not show which sessions are working on what, although parallel worktrees are the documented way to run
   workers (`kit/docs/review-loop.md:42-46`).
 - Every change ends at a human: `kit/docs/review-loop.md:28` ("Human check: rerun the gate yourself … then commit").

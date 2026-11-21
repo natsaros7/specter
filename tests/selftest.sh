@@ -442,6 +442,19 @@ gitq -C "$D" worktree add --detach "$TMP/t13d-wt"; echo y > "$TMP/t13d-wt/y"; gi
 python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$D/.specs" --out "$TMP/t13d.html" >/dev/null || fail "13: report on a detached HEAD"
 grep -Eq "\(HEAD|no branch|detached at" "$TMP/t13d.html" && fail "13: detached HEAD leaked into a row" || true
 rowsof "$TMP/t13d.html" | grep -q ">side<" && rowsof "$TMP/t13d.html" | grep "t13d-wt" | grep -q "detached " || fail "13: detached worktree row missing"
+S="$TMP/t13s"; mkdir -p "$S/sub/.specs/features/base"; gitq -C "$S" init; printf '# b\n' > "$S/sub/.specs/features/base/requirements.md"; gitq -C "$S" add .; gitq -C "$S" commit -m base
+gitq -C "$S" checkout -b feat-s; mkdir "$S/sub/.specs/features/sfeat"; printf '# s\n' > "$S/sub/.specs/features/sfeat/requirements.md"; gitq -C "$S" add .; gitq -C "$S" commit -m s; gitq -C "$S" checkout main
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$S/sub/.specs" --out "$TMP/t13s.html" >/dev/null || fail "13: report with .specs in a subfolder"
+rowsof "$TMP/t13s.html" | grep ">feat-s<" | grep -q "sfeat" || fail "13: feature on a branch not listed when .specs is in a subfolder"
+echo dirty > "$W/m.txt"; rm -rf "$TMP/t13-fresh"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$W/.specs" --out "$TMP/t13b.html" >/dev/null || fail "13: report after rm -rf worktree"
+rowsof "$TMP/t13b.html" | grep -q "/t13</td>" || fail "13: dirty main checkout not listed"
+rowsof "$TMP/t13b.html" | grep ">fresh<" | grep -q "</td><td>—</td><td>" || fail "13: worktree with its folder removed lacks the dash in Uncommitted"
+E="$TMP/t13e"; mkdir -p "$E/.specs/features/base"; gitq -C "$E" init; printf '# b\n' > "$E/.specs/features/base/requirements.md"; gitq -C "$E" add .; gitq -C "$E" commit -m base
+gitq -C "$E" worktree add -b feat-e "$TMP/t13e-wt"; echo e > "$TMP/t13e-wt/e"; gitq -C "$TMP/t13e-wt" add .; gitq -C "$TMP/t13e-wt" commit -m e
+echo m > "$E/m"; gitq -C "$E" add .; gitq -C "$E" commit -m main-ahead
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$TMP/t13e-wt/.specs" --out "$TMP/t13e.html" >/dev/null || fail "13: report from a linked worktree"
+rowsof "$TMP/t13e.html" | grep -q ">feat-e<" && ! rowsof "$TMP/t13e.html" | grep -q ">main<" || fail "13: run from a linked worktree without origin compared against the worktree's own HEAD"
 N="$TMP/t13-norepo"; mkdir -p "$N"; cp -R "$W/.specs" "$N/.specs"
 python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$N/.specs" --out "$N/r.html" >/dev/null || fail "13: report outside a repo"
 grep -q "no git data" "$N/r.html" && grep -q "<h2>Features</h2>" "$N/r.html" || fail "13: no 'no git data' line outside a repo"

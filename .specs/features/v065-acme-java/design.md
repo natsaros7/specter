@@ -30,8 +30,8 @@ option A puts its properties record and `Clock` bean in `shop-common`; seed S5 n
 
 | Option | For | Against | Ops impact |
 |---|---|---|---|
-| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter whose Boot 3.5 line is UNKNOWN | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
-| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 3.5 compatibility of the current lines UNKNOWN; more config to read | A listening port during tests |
+| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter whose Boot 4.x line is UNKNOWN | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
+| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 4.x compatibility of the current lines UNKNOWN; more config to read | A listening port during tests |
 | Keep `orders.proto` as a contract file only; no gRPC code | Smallest | ORD-142, D-1 and requirement ORD-03 lose their code; the critical-tier seed tasks disappear | — |
 
 ### Events without a broker ([REQ-V065-02] [REQ-V065-03])
@@ -58,15 +58,17 @@ breaks the offline rule and the "protect the laptop" preference.
 - Dependencies only from Maven Central; the wrapper is the script-only type, with `distributionSha256Sum` pinned in
   `.mvn/wrapper/maven-wrapper.properties`. No `maven-wrapper.jar`, no binary file of any kind.
 - Versions are pinned in the root `pom.xml` properties, chosen in task 2 from Maven Central, each released at least two
-  weeks earlier: Spring Boot 3.5.x BOM, Spring Modulith 1.4.x BOM, grpc-java, protobuf, a protobuf Maven plugin,
-  ArchUnit, jqwik, Error Prone, NullAway, JSpecify, Spotless, springdoc 2.8.x, PIT and its JUnit 5 plugin. UNKNOWN until
-  task 2: the exact patch versions, and which line pairs with Boot 4.0 if the open decision goes that way.
+  weeks earlier: Spring Boot 4.x BOM, Spring Modulith 2.x BOM (decided 2026-11-21), grpc-java, protobuf, a protobuf Maven plugin,
+  ArchUnit, jqwik, Error Prone, NullAway, JSpecify, Spotless, the springdoc line that pairs with Boot 4.x, PIT and its JUnit 5 plugin. UNKNOWN until
+  task 2: the exact patch versions, and whether each library below has a Boot 4.x-compatible release (grpc-java
+  wiring, springdoc, jqwik, Error Prone and NullAway with JSpecify); a gap is a task-2 finding, not a guess.
 - No outbound call anywhere: no Kafka or HTTP client, no carrier client, no Testcontainers, no telemetry, no devtools.
   The app listens on 8080 for REST when run locally; tests use MockMvc and the in-process gRPC channel.
 - No secret: no keystore, certificate, private key or password beyond H2's default empty one. Partner subjects and ids
   are fictional (`CN=partner-a.example`, `P-0001`).
 - Maven Enforcer: Java 21 or newer, Maven 3.9 or newer, no duplicate dependency versions.
 - `examples/acme-shop/.gitignore`: `target/`. `.mvn/jvm.config`: the `--add-exports` flags Error Prone needs on JDK 21.
+- `examples/acme-shop/.sdkmanrc`: `java=21.0.13.1+2-tem` (the maintainer's Temurin 21.0.13.1 via SDKMAN).
 
 ## Deterministic checks ([REQ-V065-04] [REQ-V065-05])
 
@@ -155,7 +157,7 @@ not, the `pit` profile excludes them.
 | `.specs/steering/autonomy.md` | Knowledge rows: ADRs (`../../docs/adr/`), architecture tests; chore C2 (PIT) | REQ-V065-05 |
 | `.specs/steering/lessons.md` | One new line: 2026-11-12, config read with `@Value`; use a `@ConfigurationProperties` record. Seen once, so no check yet (seed S6) | REQ-V065-10 |
 | `.specs/steering/project-profile.md` | Facts: two Maven modules plus three spec-only domains; topics are config for the outbox sink; three ADRs; the gate is the Gates table. The interview log stays as it is (history) | REQ-V065-07 |
-| `.specs/system/architecture.md` | Registry: orders-api is Java 21, Boot 3.5, Spring Modulith, H2, in-process gRPC, logging event sink; the diagram marks PostgreSQL, Kafka and the three spec-only components as "not in the example code" | REQ-V065-07 |
+| `.specs/system/architecture.md` | Registry: orders-api is Java 21, Boot 4.x, Spring Modulith 2.x, H2, in-process gRPC, logging event sink; the diagram marks PostgreSQL, Kafka and the three spec-only components as "not in the example code" | REQ-V065-07 |
 | `.specs/system/data-flows.md` | §2 notes OrderPaid is not implemented; new drift D5 (🟡, OrderPaid named in the docs, not in the code, resolved by seed S4); D4's ground truth drops "and chart" | REQ-V065-07, REQ-V065-10 |
 | `.specs/system/traceability.md` | Line numbers only | REQ-V065-06 |
 | `.specs/domains/orders-api/design.md` | Stack line (grpc-java in-process, Modulith registry, no Kafka client), Behaviour adds the three modules, events `OrderPlaced` and `OrderCancelled` (OrderPaid → D5), Data H2 with V1–V2, Config: no deploy charts in the example | REQ-V065-07 |
@@ -232,7 +234,8 @@ After install, the example's own Gates rows G4 and G5 and chore C1 find `.specs/
 ### Proposed tiers (written into the example by v060 slice 2, task 14)
 
 Rows from most to least autonomous; the lowest row a file matches wins, so security tests and architecture tests land
-on `critical` even though `*/src/test/*` also matches them.
+on `critical` even though `*/src/test/*` also matches them. The three architecture tests live in package
+`com.acme.shop.orders.architecture` (test sources), so `*/architecture/*` matches.
 
 | Tier | Paths | Reviewer | Human |
 |---|---|---|---|
@@ -297,7 +300,7 @@ One PR, then the 0.6.5 tag. Rollback is a revert: the kit is untouched, so no in
 | Error Prone breaks on a JDK update | Enforcer pins the JDK floor; G5 shows it at once |
 | A contributor fixes the planted S2 defect | It is listed in this design; the PR review checks it stays |
 | New files make one of specter's own suffix-style citations ambiguous | G4 catches it; use repo-relative paths |
-| Boot 3.5 out of OSS support | Open decision; the Boot 4.0 path is a version-property change plus Modulith 2.0 |
+| A Boot 4.x library gap (see the versions list) | Task 2 checks each pairing before any code; record gaps in tasks.md |
 
 ## Spec and doc impact
 

@@ -8,15 +8,16 @@ Maven run for G5.
 
 Goal: acme-shop becomes a small real Java 21 / Spring Boot / Spring Modulith codebase whose specs are true, checked by
 deterministic gates, and usable as the factory test project. Branch `feat/0.6.5-acme-java` (not created yet). Open
-decisions: Boot line, release number, G5 skip code, hosted sandbox (requirements.md). Gates: specter G1 to G5 from
+decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5 alone, G5 skip exit 0, local sandbox). Gates: specter G1 to G5 from
 `AGENTS.md`, and the example's own G1 to G3 from `examples/acme-shop/`.
 
 ## Tasks
 
-- [ ] 1 Gate: record the Boot-line, release and G5-skip decisions in requirements.md; delete the losing options from
-  the design — [REQ-V065-01] [REQ-V065-09] [REQ-V065-11]
+- [ ] 1 Gate: the Boot, release, G5-skip and sandbox decisions are recorded under Decided in requirements.md
+  (done 2026-11-21); delete the losing options from the design — [REQ-V065-01] [REQ-V065-09] [REQ-V065-11]
 - [ ] 2 Reactor skeleton: root and module `pom.xml` files with pinned versions, Enforcer, Error Prone + NullAway,
-  Spotless, script-only wrapper with checksum, `.gitignore`, `.mvn/jvm.config`; an empty build passes offline on the
+  Spotless, script-only wrapper with checksum, `.sdkmanrc` (`java=21.0.13.1+2-tem`), a Boot 4.x pairing check of each
+  library (record gaps), `.gitignore`, `.mvn/jvm.config`; an empty build passes offline on the
   second run — [REQ-V065-01] [REQ-V065-03]
 - [ ] 3 `shop-common`: `SecurityHeader`, `GrpcSecurityFilter` (presence-only timestamp kept), `PeerSubjectResolver`,
   `ShopSecurityConfiguration`, event records, error codes, `MutableClock` test jar; `GrpcSecurityFilterTest`,
@@ -29,7 +30,8 @@ decisions: Boot line, release number, G5 skip code, hosted sandbox (requirements
 - [ ] 6 `outbox` module: Flyway V2, Modulith JPA registry, `OutboxRelay`, logging sink, topic properties, Clock-driven
   resubmission, `OrderOutboxIT` — [REQ-V065-02]
 - [ ] 7 Architecture lane: `ModulesTest` (with the module docs), `ServiceBoundaryTest`, `CodingRulesTest`, all tagged
-  `architecture`; settle the G2 `groups` UNKNOWN — [REQ-V065-04]
+  `architecture` and in package `com.acme.shop.orders.architecture` so the `*/architecture/*` tier glob matches (check
+  that Modulith does not read that package as a fourth module); settle the G2 `groups` UNKNOWN — [REQ-V065-04]
 - [ ] 8 jqwik `CurrencyPolicyProperties`; `pit` profile, first measured threshold, the jqwik UNKNOWN settled —
   [REQ-V065-04] [REQ-V065-05]
 - [ ] 9 Prove the check map: break each rule once on a scratch branch, paste each red gate line into the PR, drop the
@@ -39,8 +41,8 @@ decisions: Boot line, release number, G5 skip code, hosted sandbox (requirements
   tree, after a build, and in a copy without `.git` — [REQ-V065-05] [REQ-V065-06] [REQ-V065-07] [REQ-V065-10]
 - [ ] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
   case, `AGENTS.md` G1 and G2 commands — [REQ-V065-08] [REQ-V065-09]
-- [ ] 12 `tests/acme-build.sh` and the G5 row; run it with no `java` on `PATH`, online, and with `ACME_OFFLINE=1` —
-  [REQ-V065-09]
+- [ ] 12 `tests/acme-build.sh` and the G5 row; with no `java` on `PATH` it prints `G5 SKIPPED: needs JDK 21+` and exits
+  0; run it also online and with `ACME_OFFLINE=1` — [REQ-V065-09]
 - [ ] 13 Dry run in a sandbox: S5 up to its stop, S2 end to end; record what the agent did, the gate lines and what
   the human caught, here under the task — [REQ-V065-10]
 - [ ] 14 Gate green: specter G1 to G5 (G5 run, not skipped) and the example's G1 to G3; `git diff --stat` shows nothing

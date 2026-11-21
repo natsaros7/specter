@@ -15,5 +15,5 @@ Take a codebase from "a human reads every change and makes every decision" to ag
 ## Where it landed
 
 - [Research and candidate changes E1–E10](2026-11-21-software-factories.md#what-this-means-for-specter)
-- [v060 staged autonomy](../../.specs/features/v060-staged-autonomy/requirements.md): slice 1 shipped (0.6.0); slices 2–4 absorb E2–E8
+- [v060 staged autonomy](../../.specs/features/v060-staged-autonomy/requirements.md): slice 1 shipped (0.6.0); slices 2–4 absorb E2–E5, E7 and E8
 - [v065 acme-shop in Java](../../.specs/features/v065-acme-java/requirements.md): a real codebase for the factory to work on
