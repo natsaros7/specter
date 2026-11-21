@@ -420,4 +420,41 @@ I="$TMP/t12i"; mkdir -p "$I"; gitq -C "$I" init; "$KIT/install.sh" "$I" >/dev/nu
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | where | `pwd -P` |\n' > "$I/.specs/steering/spec-rules.md"
 out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: $(cd "$I" && pwd -P)$" || fail "installed gates.py root: $out"
 
+echo "13. in flight: a worktree branch lists its feature, no git shows one line"
+W="$TMP/t13"; mkdir -p "$W/.specs/features/base"; gitq -C "$W" init
+printf '# base\n' > "$W/.specs/features/base/requirements.md"; gitq -C "$W" add .; gitq -C "$W" commit -m base
+gitq -C "$W" worktree add -b feat-x "$TMP/t13-wt"; mkdir -p "$TMP/t13-wt/.specs/features/xfeat"
+printf '# x\n' > "$TMP/t13-wt/.specs/features/xfeat/requirements.md"; gitq -C "$TMP/t13-wt" add .; gitq -C "$TMP/t13-wt" commit -m x
+echo dirty > "$TMP/t13-wt/u.txt"
+gitq -C "$W" branch lone
+gitq -C "$W" worktree add -b fresh "$TMP/t13-fresh"; echo dirty > "$TMP/t13-fresh/f.txt"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$W/.specs" --out "$TMP/t13.html" >/dev/null || fail "13: report"
+W_HTML="$TMP/t13.html"; rowsof() { sed 's/<tr>/\n&/g' "$1"; }
+grep -q "In flight" "$W_HTML" && grep -q ">feat-x<" "$W_HTML" && grep -q "xfeat" "$W_HTML" && grep -q "t13-wt" "$W_HTML" || fail "13: In flight lacks the worktree branch and feature"
+rowsof "$W_HTML" | grep ">feat-x<" | grep -q "<td>1</td>" || fail "13: feat-x row lacks the uncommitted count"
+rowsof "$W_HTML" | grep -q ">lone<" && fail "13: merged branch lone listed" || true
+rowsof "$W_HTML" | grep ">fresh<" | grep -q "<td>1</td>" || fail "13: fresh worktree on a merged commit missing or uncounted"
+rowsof "$W_HTML" | grep -q "/t13</td>" && fail "13: clean main checkout listed" || true
+grep -q "no git data" "$W_HTML" && fail "13: git reported missing in a repo" || true
+D="$TMP/t13d"; mkdir -p "$D/.specs/features/base"; gitq -C "$D" init; printf '# b\n' > "$D/.specs/features/base/requirements.md"; gitq -C "$D" add .; gitq -C "$D" commit -m base
+gitq -C "$D" checkout -b side; echo s > "$D/s"; gitq -C "$D" add .; gitq -C "$D" commit -m s; gitq -C "$D" checkout --detach HEAD~1
+gitq -C "$D" worktree add --detach "$TMP/t13d-wt"; echo y > "$TMP/t13d-wt/y"; gitq -C "$TMP/t13d-wt" add .; gitq -C "$TMP/t13d-wt" commit -m y
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$D/.specs" --out "$TMP/t13d.html" >/dev/null || fail "13: report on a detached HEAD"
+grep -Eq "\(HEAD|no branch|detached at" "$TMP/t13d.html" && fail "13: detached HEAD leaked into a row" || true
+rowsof "$TMP/t13d.html" | grep -q ">side<" && rowsof "$TMP/t13d.html" | grep "t13d-wt" | grep -q "detached " || fail "13: detached worktree row missing"
+N="$TMP/t13-norepo"; mkdir -p "$N"; cp -R "$W/.specs" "$N/.specs"
+python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$N/.specs" --out "$N/r.html" >/dev/null || fail "13: report outside a repo"
+grep -q "no git data" "$N/r.html" && grep -q "<h2>Features</h2>" "$N/r.html" || fail "13: no 'no git data' line outside a repo"
+
+echo "13a. autonomy profile: bad Knowledge link fails the lint; Chores run past a Tiers table; placeholder exits 2; absent profile unchanged"
+A="$TMP/t13a"; mkdir -p "$A"; gitq -C "$A" init; "$KIT/install.sh" "$A" >/dev/null
+lint13() { python3 "$A/.specs/kit/scripts/spec_lint.py" --specs "$A/.specs" 2>&1; }
+rc0=0; lint13 >/dev/null || rc0=$?; [ "$rc0" = 0 ] || fail "13a: a project without autonomy.md does not lint clean: rc=$rc0"
+printf '# Autonomy\n\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Decisions | [adrs](../adr-missing/) | before a design |\n' > "$A/.specs/steering/autonomy.md"
+rc=0; out=$(lint13) || rc=$?; [ "$rc" != 0 ] && echo "$out" | grep -q "autonomy.md" || fail "13a: a Knowledge link to a missing ADR folder did not fail the lint (rc=$rc): $out"
+printf '# Autonomy\n\n## Tiers\n| Tier | Paths |\n|---|---|\n| routine | docs |\n\n## Chores\n| # | Gate | Command |\n|---|---|---|\n| C1 | ran | `echo chore-ran > chore.out` |\n' > "$A/.specs/steering/autonomy.md"
+(cd "$A" && python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md >/dev/null 2>&1) && grep -q chore-ran "$A/chore.out" || fail "13a: gates.py --file did not run the Chores table past a Tiers table"
+printf '# Autonomy\n\n## Chores\n| # | Gate | Command |\n|---|---|---|\n| C1 | todo | `<command>` |\n' > "$A/.specs/steering/autonomy.md"
+rc=0; (cd "$A" && python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md >/dev/null 2>&1) || rc=$?; [ "$rc" = 2 ] || fail "13a: placeholder chore exits $rc, want 2"
+
 echo "selftest: OK"

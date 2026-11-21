@@ -2,11 +2,12 @@
 """One self-contained HTML page: feature progress, open drift, coverage, citation health. Python 3.8+, stdlib only.
 
 Usage: python3 .specs/kit/scripts/spec_report.py [--specs DIR] [--out FILE]     default OUT = DIR/report.html
-Reads through spec_lint.py (no checks of its own). Exit 0 once the page is written; the lint is the gate.
+Reads through spec_lint.py and git (in-flight branches and worktrees). Exit 0 once the page is written; the lint is the gate.
 """
 import datetime
 import os
 import re
+import subprocess
 import sys
 from html import escape as e
 from pathlib import Path
@@ -65,6 +66,44 @@ def table(head, rows, empty):
     return "<table><tr>" + "".join("<th>" + e(h) + "</th>" for h in head) + "</tr>" + "".join(rows) + "</table>"
 
 
+def in_flight(root, config):
+    """Rows for each local branch not merged into the merged ref plus each worktree on no such branch, or None without git data."""
+    # shortcut: local worktrees and branches only; read remote branches when sessions run on more than one machine.
+    # shortcut: one row per unmerged branch, so squash-merged branches stay listed; cap to the newest N when that clutters.
+    git = lambda *a, cwd=root: subprocess.run(["git", "-C", str(cwd)] + list(a), capture_output=True, encoding="utf-8", errors="replace", timeout=30)
+    try:
+        ref = spec_lint.merged_ref(root, config)
+        branches = git("for-each-ref", "--no-merged=" + ref, "--format=%(refname)%00%(refname:lstrip=2)%00%(committerdate:short)", "refs/heads/") if ref else None
+        if not branches or branches.returncode != 0:
+            return None
+        trees = [dict(l.split(" ", 1) for l in blk.splitlines() if " " in l) for blk in git("worktree", "list", "--porcelain").stdout.split("\n\n")]
+        by_ref = {t["branch"]: t["worktree"] for t in trees if "branch" in t}
+
+        def row(name, wt, date, head):
+            names = git("diff", "--name-only", "--relative", ref + "..." + head, "--", ".specs/features").stdout.splitlines()
+            feats = sorted({m.group(1) for n in names for m in [re.match(r"\.specs/features/([^/]+)/", n)] if m})
+            st = git("--no-optional-locks", "status", "--porcelain", cwd=wt) if wt else None  # never take index.lock from a working agent
+            dirty = len(st.stdout.splitlines()) if st and st.returncode == 0 else None  # None: no worktree, or its folder is gone
+            return ("<tr><td>" + e(name) + "</td><td>" + (e(wt) if wt else "\u2014") + "</td><td>" + e(date) + "</td><td>" + (str(dirty) if dirty is not None else "\u2014")
+                    + "</td><td>" + (", ".join(e(f) for f in feats) or '<span class="mute">no spec</span>') + "</td></tr>"), dirty
+        rows, shown = [], set()
+        for l in branches.stdout.splitlines():
+            full, name, date = l.split("\0")
+            shown.add(full)
+            rows.append(row(name, by_ref.get(full), date, full)[0])
+        for i, t in enumerate(trees):
+            if t.get("branch") in shown or "HEAD" not in t:
+                continue
+            label = t["branch"].replace("refs/heads/", "", 1) if "branch" in t else "detached " + t["HEAD"][:7]
+            date = git("log", "-1", "--format=%cd", "--date=short", t["HEAD"], "--").stdout.strip()
+            r, dirty = row(label, t["worktree"], date, t["HEAD"])
+            if i or dirty:  # the main worktree (first block) shows only when dirty
+                rows.append(r)
+        return rows
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
 def build(specs, out):
     lint, cite, config = spec_lint.lint_all(specs), spec_lint.cites(specs), spec_lint.load_config(specs)
     limit = config.get("drift_max_age_days")
@@ -102,6 +141,9 @@ def build(specs, out):
     cards = "".join('<div class="card"><div class="num ' + c + '">' + str(n) + '</div><div class="mute">' + e(t) + "</div></div>"
                     for t, n, c in counters)
     li = lambda items: "<ul>" + "".join("<li>" + i + "</li>" for i in items) + "</ul>" if items else '<p class="mute">None.</p>'
+    flight = in_flight(specs.parent, config)
+    flight_html = table(["Branch", "Worktree", "Last commit", "Uncommitted", "Feature"], flight, "No unmerged branches.") if flight is not None \
+        else '<p class="mute">no git data (git missing, not a repo, or merged ref unresolved)</p>'
     now = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -110,6 +152,7 @@ def build(specs, out):
 <p class="mute">specter {e(version(specs))} &middot; generated {now}</p>
 <div class="row">{cards}</div>
 <section class="card"><h2>Features</h2>{table(["Feature", "Tasks", "Progress", "Status"], feats, "No features.")}</section>
+<section class="card"><h2>In flight</h2>{flight_html}</section>
 <section class="card"><h2>Drift</h2>{table(["#", "Sev", "Drift", "Age (days)", "File"], drift, "No open drift rows.")}
 <p class="mute">{resolved} resolved{"" if limit is None else ", highlighted: open over " + str(limit) + " days"}</p></section>
 <section class="card"><h2>Coverage</h2><p class="mute">Requirements no task links</p>

@@ -114,6 +114,25 @@ default is a WARN for REQ ids that are cited but defined nowhere.
 - **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
   [`kit/docs/review-loop.md`](../kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
 
+## Autonomy profile (0.6.0, slice 1)
+
+`.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
+Slice 1 has two sections. Tiers, Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
+behave as in 0.5.0; the report always gains the In flight card. Setup asks about it in Q10.
+
+- **Knowledge.** A table of where the project keeps what an agent must know (router, steering, decisions, ADRs,
+  architecture tests, memory) with a `Read` column. Agents read the `start` rows at the start of a task and the
+  others at the moment the row names.
+- **Lessons.** `.specs/steering/lessons.md` takes one dated line per correction. A lesson seen twice becomes a check first
+  (a Gates row, a lint rule or a test), and a rule in spec-rules, code-standards or decisions only when no check can
+  catch it (`sync.md`).
+- **Chores.** A `| # | Gate | Command |` table that a schedule runs with
+  `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); on success it prints
+  the same `### Gates` block. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
+  are in [`kit/docs/chores.md`](../kit/docs/chores.md).
+- **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
+  `Status:` line shows yet.
+
 ## Adding specter to a project that already has specs
 
 ```bash

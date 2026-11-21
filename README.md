@@ -73,7 +73,7 @@ Say these to your agent. With the skill installed, `/spec-first …` (Claude Cod
 
 Small changes (one file, no contract change) skip the spec and go straight to code. The rules behind all this are in
 [`PHILOSOPHY.md`](PHILOSOPHY.md), and [`kit/docs/spec-driven.md`](kit/docs/spec-driven.md) explains the method on one
-page.
+page. To run spec health on a schedule (cron, launchd or CI), see [`kit/docs/chores.md`](kit/docs/chores.md).
 
 ## Supported agents
 
@@ -95,6 +95,12 @@ Run `./install.sh ~/code/my-project --dry-run`, then without `--dry-run`. When `
 kit, the installer adopts them: it adds `.specs/kit/` and the agent marker blocks, changes none of your specs, and
 installs no git hook unless you pass `--hook`. Then set `tracker_pattern` and `merged_ref` in `.specs/spec-kit.json`.
 Details in [the reference](docs/reference.md#adding-specter-to-a-project-that-already-has-specs).
+
+## Autonomy profile
+
+Add `.specs/steering/autonomy.md` to tell agents where your project keeps its knowledge and which checks to run on a
+schedule. A `lessons.md` next to it collects corrections so a repeated one becomes a rule. Details in
+[the reference](docs/reference.md#autonomy-profile-060-slice-1).
 
 ## Reference
 

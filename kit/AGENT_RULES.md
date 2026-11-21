@@ -1,6 +1,7 @@
 ## Spec-first workflow (specter)
 
 This project keeps its specs in `.specs/`. Read `.specs/README.md` first. It is the router: open only the one file it points to.
+If `.specs/steering/autonomy.md` has a Knowledge table, also read its `start` rows, and open the others on their trigger. When the user corrects you, add one dated line to the Memory row's file before the session ends. No autonomy.md: nothing changes.
 
 **Before you change code**
 - If `.specs/steering/project-profile.md` is missing or still lists `status: setup-incomplete`, the spec system is not set up yet. Offer to run `.specs/kit/playbooks/setup.md`, and do nothing else spec-related until the user answers.

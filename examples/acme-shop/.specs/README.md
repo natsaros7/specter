@@ -18,6 +18,7 @@ Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering
 | Standards and gates | [`steering/code-standards.md`](steering/code-standards.md) |
 | What setup learned, and the open UNKNOWNs | [`steering/project-profile.md`](steering/project-profile.md) |
 | What is already settled, and why | [`steering/decisions.md`](steering/decisions.md) |
+| What agents may do alone, and what they remember | [`steering/autonomy.md`](steering/autonomy.md), [`steering/lessons.md`](steering/lessons.md) |
 | New here | [`ONBOARDING.md`](ONBOARDING.md) |
 
 **Domains:** `orders-api` (sync REST + gRPC, owns orders) · `fulfilment-worker` (async, consumes `order-events`) ·
