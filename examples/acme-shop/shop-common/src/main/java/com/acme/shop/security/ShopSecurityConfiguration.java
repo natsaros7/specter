@@ -14,7 +14,12 @@ public class ShopSecurityConfiguration {
     }
 
     @Bean
-    GrpcSecurityFilter grpcSecurityFilter() {
-        return new GrpcSecurityFilter(PeerSubjectResolver.tls());
+    PeerSubjectResolver peerSubjectResolver() {
+        return PeerSubjectResolver.tls();
+    }
+
+    @Bean
+    GrpcSecurityFilter grpcSecurityFilter(final PeerSubjectResolver peers) {
+        return new GrpcSecurityFilter(peers);
     }
 }
