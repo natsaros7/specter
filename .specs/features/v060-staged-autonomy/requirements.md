@@ -14,6 +14,10 @@ vendor, self-reported) describes five stages: one session; many sessions; memory
 agent pipeline (triage, implement, review, merge) coordinating through a queue; a coordinating agent. It names human
 attention as the limit, puts governance first, and reports throughput but no defect or rollback data.
 
+Research input for slices 2 to 4: [software factories](../../../docs/research/2026-11-21-software-factories.md), final
+section, rows E1 to E10 (candidates, mostly self-reported sources). E1 landed in slice 1; E2, E4 and E5 amend slice 2,
+E8 slice 3, E3 and E7 slice 4; E6, E9 and E10 wait for v070.
+
 **Where specter is today: between stage 2 and stage 3.** Several sessions run in parallel; specs and rules mean they
 don't start from zero; there is no cron, no scheduled workflow and no session dashboard; the human tracks the sessions
 and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
@@ -40,6 +44,20 @@ the relative-link check that already resolves paths outside `.specs/` (`kit/scri
 merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:234`) and
 the list of agent files the installer writes (`kit/scripts/install.py:20-26`).
 
+Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:
+
+- A red gate hides what did not run: `gates.py` stops at the first failure and writes only to stderr
+  (`kit/scripts/gates.py:103-106`); the `### Gates` block exists only when every row passed (`kit/scripts/gates.py:109`).
+  The selftest pins today's block lines (`tests/selftest.sh:370`).
+- The reviewer reads "the project rules" with no commit named, so in practice the working tree, which the diff may
+  have edited (`kit/docs/review-loop.md:23-25`). Its findings are `blocker/major/minor` with no evidence required
+  (`kit/docs/review-loop.md:38`, `kit/roles/reviewer.md:14`), and every finding goes back to the worker
+  (`kit/docs/review-loop.md:26-27`).
+- Fix rounds are bounded only up to the deep tier: retry once, then escalate (`kit/docs/model-routing.md:28-29`).
+  Nothing says what happens when the deep round fails too.
+- The clean-clone rule for scheduled chores exists as prose only (`kit/docs/chores.md:19-21`); the Guardrails table
+  of REQ-V060-07 does not list it, nor a row for agent jobs that read untrusted text.
+
 ## User story
 
 As the lead of a codebase worked by several agent sessions, I want each repository to declare where its knowledge
@@ -52,9 +70,9 @@ declares nothing behaves exactly as today: every change goes to a human.
 | Slice | Kiro stage | Adds | A human still |
 |---|---|---|---|
 | 1 | a solid 3 | Knowledge and memory that load per repo, one scheduled chore, an in-flight view | reads every change |
-| 2 | 3, routed | Risk-tier labels on every change, decisions checked by gates | reads every change; the label says where to look hardest |
-| 3 | 3, measured | Guardrails declared before autonomy; an evidence report per tier | reads every change; sees which tier the numbers would allow to relax |
-| 4 | 4 | Human check by tier (only after the auto-merge decision), pipeline hand-offs | sets goals, approves rules, handles exceptions |
+| 2 | 3, routed | Risk-tier labels on every change, decisions checked by gates, a readiness verdict, a review contract, verification artifacts | reads every change; the label says where to look hardest |
+| 3 | 3, measured | Guardrails declared before autonomy (untrusted triggers and chores included); an evidence report per tier | reads every change; sees which tier the numbers would allow to relax |
+| 4 | 4 | Human check by tier (only after the auto-merge decision), pipeline hand-offs, a fix-round cap, a merge queue and demotion on breach | sets goals, approves rules, handles exceptions |
 
 Each slice ships and gives value on its own. A later slice never starts before the earlier one is released.
 
@@ -128,6 +146,12 @@ Each slice ships and gives value on its own. A later slice never starts before t
   default branch (no direct or force push); the Gates as required checks; required human review on `required` paths
   (CODEOWNERS or the platform's equivalent); agent credentials that cannot approve or merge; agent permissions set by
   the host's configuration, not by a prompt; merged history and review records the agents cannot edit.
+- Amended 2026-11-21 (research E8): the template SHALL also list two more rows, eight in all. Seven: an agent job
+  triggered by untrusted text (an issue, a PR, a comment, an outside contribution) runs read-only and without
+  secrets, and its writes go through a separate step that validates them. Eight: scheduled chores run from a clean
+  clone or the CI checkout of the default branch, never from a working copy (the rule in `kit/docs/chores.md:19-21`).
+  A repository with no such job or no chores SHALL say so in `Enforced by` ("no such job, checked <how>"), with the
+  `Verified` date; the row then counts as declared.
 - A tier whose Human is `none` SHALL be labelled as `spot`, with the reason, until every row names what enforces it
   and has a `Verified` date.
 - Specter SHALL NOT claim to enforce any guardrail. It records the declaration; the platform enforces it.
@@ -156,8 +180,9 @@ Blocked on the auto-merge decision.
 
 - A new `kit/docs/pipeline.md` SHALL map triage, implement, review and merge to the existing playbooks and roles.
 - For each stage it SHALL name what is handed on (approved spec and tasks; frozen patch and `### Gates` block; verdict
-  table; `### Risk tier` block) and when the human enters: spec approval, second red gate, disputed finding, the tier's
-  Human value, an edit to a guarded path, `Deploy impact` not `none`.
+  table; `### Risk tier` block) and when the human enters: spec approval, the fix-round cap reached (REQ-V060-15;
+  amended 2026-11-21, was "second red gate"), disputed finding, the tier's Human value, an edit to a guarded path,
+  `Deploy impact` not `none`.
 - The queue SHALL be the host's (issues, draft PRs, CI). The kit ships no orchestrator.
 
 ### [REQ-V060-11] Setup, docs and compatibility
@@ -175,7 +200,79 @@ Blocked on the auto-merge decision.
   - the profile read at the base;
   - an unknown `Checked by` gate;
   - `none` downgraded without guardrails;
-  - an evidence hold with no data.
+  - an evidence hold with no data;
+  - added 2026-11-21, slice 2: a red table's block lists `FAIL` and `not run`; `ready.py` refuses a block that lacks a
+    row of the base's Gates table or names another commit; rules read at another commit; an incomplete blocker
+    counted as advisory; the same model family warned; a declared artifact missing at the head; `ready.py` runs no
+    command;
+  - slice 3: the eight guardrail rows, and an undeclared row seven downgrading `none`;
+  - slice 4: a task over the fix-round cap; the demotion line on a breach, with the profile left unchanged.
+
+### [REQ-V060-12] Readiness verdict (slice 2, research E2)
+
+- `gates.py` SHALL write the `### Gates` block to stdout on every run that reaches the table, green or red: one line
+  per Gates row in table order, `pass (<last output line>)`, `FAIL (exit <n>)` or `not run`, then `commit:`, then
+  `verdict: ready` only when every row passed, else `verdict: not ready (<n> failed, <m> not run)`. It SHALL still stop
+  at the first failure and keep its exit codes (0 green, 1 a gate failed, 2 nothing run).
+- A row that did not run SHALL count as a FAIL. The run order SHALL stay the table's order: the spec-rules template
+  advises cheapest rows first, and no script reorders rows.
+- A new `kit/scripts/ready.py` SHALL check a PR description (a file, or stdin) against the repository without running
+  any command. The `### Gates` block SHALL list every row of the Gates table as of the change's base (the base of
+  REQ-V060-05) as `pass`, end with `verdict: ready`, and name the change's head as its commit. A missing row, a row
+  not `pass`, or another commit SHALL make the verdict `not ready`.
+- Output: a `### Readiness` block (one line per check, then `verdict: ready` or `verdict: not ready (<why>)`) and
+  `--json`. Exit 0 ready, 1 not ready, 2 on a bad argument or an unreadable input. It SHALL never run a gate, merge,
+  approve or edit.
+
+### [REQ-V060-13] Review contract (slice 2, research E4)
+
+- The PR description SHALL carry a `### Review` block: the implementer's model id, the reviewer's model id and tier,
+  the commit at which the reviewer read the rules (`rules: <sha>`), and the verdict table.
+- The reviewer SHALL read the project rules (`AGENTS.md`, `.specs/steering/*`, the Knowledge `start` rows) as of the
+  change's base, with `git show <base>:<path>`, never from the working tree, the way `tiers.py` reads the profile.
+  `ready.py` SHALL report `not ready` when `rules:` is not the base.
+- The verdict table SHALL be `| Severity | Location | Evidence | Trigger | Consequence | Fix |`, severity `blocker` or
+  `advisory`. A blocker SHALL give a `file:line` location, quoted code or output as evidence, the input or state that
+  triggers it, and its consequence. A blocker with any of the four empty SHALL count as advisory; `ready.py` SHALL say
+  so and name the empty cell.
+- Only blockers SHALL go back to the implementer. An advisory SHALL be filed as a follow-up (a task in the feature's
+  `tasks.md` with its REQ, or a tracker key, named in the Fix cell) and SHALL NOT block the merge. A complete blocker
+  in the final `### Review` block SHALL make `ready.py` report `not ready`.
+- `ready.py` SHALL compare the implementer's and the reviewer's model families (how a family is read: Open
+  decisions). A shared family SHALL print `review: same family (<family>)` as a WARN, exit code unchanged. Once
+  REQ-V060-09 lands, a change reviewed in its implementer's family SHALL NOT take Human `none`; it is labelled `spot`.
+- Specter SHALL record and check these declarations only. It runs no model and cannot prove which model ran; the
+  platform's review record is the evidence.
+
+### [REQ-V060-14] Verification artifacts (slice 2, research E5)
+
+- A PR description MAY carry a `### Verification` block, one line per artifact: `- [<REQ id>] <relative path or URL>:
+  <what it shows>`. Without the block nothing changes.
+- `ready.py` SHALL check each line: the REQ id is defined in a feature's `requirements.md`; a relative path exists at
+  the change's head (in the index for staged mode); a URL is reported `declared, not fetched`. An undefined REQ SHALL
+  be `not ready`; a path missing at the head SHALL be `not ready` (FAIL or WARN: Open decisions).
+- The reviewer SHALL open each artifact and check it against that REQ's acceptance, not only the diff. An artifact
+  that does not show the acceptance SHALL be a blocker, with the artifact as its evidence.
+
+### [REQ-V060-15] Fix-round cap (slice 4, research E3)
+
+- A task SHALL get at most 2 fix rounds. A round is one attempt to fix a red gate or the complete blockers of a
+  review. The worker's retry is round 1, the planner's escalation round 2 (Open decisions).
+- When round 2 ends with a red gate or a complete blocker, the task SHALL go back to the human with both rounds'
+  outputs (gate output or verdict table), and no agent SHALL retry it until the human acts.
+- The `### Review` block SHALL carry `rounds: <n>`. `ready.py` SHALL report `not ready (fix-round cap)` when n > 2
+  and a WARN when the line is missing.
+- `kit/docs/review-loop.md`, `kit/docs/model-routing.md`, `kit/roles/generator.md` and `kit/playbooks/next-task.md`
+  SHALL state the cap.
+
+### [REQ-V060-16] Merge queue and demotion on breach (slice 4, research E7)
+
+- The platform recipe of REQ-V060-09 SHALL include a merge queue (GitHub merge queue, GitLab merge trains or the
+  platform's equivalent), so changes that are green alone are gated together before they merge.
+- When `tiers.py --evidence` reports `breach` for a tier, it SHALL also print the demotion: the tier row as
+  `file:line` and its Human value one step stricter (`none` → `spot`, `spot` → `required`; `required` prints
+  "already required"). The human edits the profile; `tiers.py` SHALL NOT (REQ-V060-08). A tier in breach is not
+  `eligible`, so REQ-V060-09 already refuses it `none` until the evidence recovers.
 
 ## Out of scope
 
@@ -186,6 +283,15 @@ Blocked on the auto-merge decision.
 - A queue, scheduler, orchestrator or merge bot in the kit, and Kiro's stage 5 (a coordinating agent).
 - Making `.specs/` relocatable: the folder name stays fixed; what is inside points outward.
 - Multi-repo workspaces: slice 2 labels the repository that holds `.specs/` only.
+- Running or calling a model, or proving which model ran: specter checks declarations offline (REQ-V060-13).
+- Deferred to v070 (research rows, not decided here):
+  - E6: setup proposes verification gates by stack (property, contract and architecture tests, runtime checks), and
+    the Knowledge table points to a feature map.
+  - E9: a Drift Register row that describes an anti-pattern gets a "contain" action: a lint rule that stops new
+    occurrences, then cleanup tasks.
+  - E10: tracker-agnostic task export: spec tasks become tickets with blockers and tier labels through one small
+    adapter per tracker (GitHub Issues, GitLab, Jira, Linear), chosen per repository in config. Offline by default: it
+    writes an export file that the adapter or the host's orchestrator consumes. Still no orchestrator in the kit.
 
 ## Decided
 
@@ -198,6 +304,9 @@ Blocked on the auto-merge decision.
 - 2026-11-21, maintainer: a recurring lesson becomes a deterministic check first and prose only when it can't be
   checked, because prose is the weakest layer and agents use it to justify workarounds
   (`docs/research/2026-11-21-software-factories.md`, Potato section). Lands on [REQ-V060-02].
+- 2026-11-21, maintainer: "amend v060, then v070". Slices 2 to 4 absorb research rows E2, E4 and E5 (slice 2), E8
+  (slice 3), E3 and E7 (slice 4); E6, E9 and E10 go to v070. Lands on [REQ-V060-07], [REQ-V060-10], [REQ-V060-11]
+  and [REQ-V060-12] to [REQ-V060-16].
 
 ## Open decisions
 
@@ -208,3 +317,13 @@ Blocked on the auto-merge decision.
   or ship suggested numbers? — maintainer
 - DECISION: Strictest file wins, so a test kept next to the source takes the source's tier. Accept (default), or add
   an exclusion syntax? — maintainer
+- DECISION: How is a model's family read? The model id's first `-`-separated token (`claude-…`, `gpt-…`,
+  `gemini-…`; default, no config), a Family → id-prefix table in the profile, or a free-text `family:` the lead
+  writes? Blocks REQ-V060-13. — maintainer
+- DECISION: A reviewer in the implementer's family: a WARN that bars Human `none` once REQ-V060-09 lands (default),
+  `not ready` on every tier, or no check? A single-vendor repository can never pass the second. Blocks REQ-V060-13.
+  — maintainer
+- DECISION: A declared artifact path missing at the head: FAIL, `not ready` (default: a declared artifact that is not
+  there is a false claim), or WARN? Blocks REQ-V060-14. — maintainer
+- DECISION: Does the planner's escalation count as fix round 2 (default: worker retry, planner, then the human), or
+  do two worker rounds come before the planner? Blocks REQ-V060-15. — maintainer
