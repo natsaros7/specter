@@ -88,7 +88,7 @@ Practices:
 
 kiro.dev/blog/software-factory-1000-prs/ · kiro.dev/blog/software-factory-stability/ · github.com/kirodotdev/KiroCrew · stripe.dev/blog/minions-stripes-one-shot-end-to-end-coding-agents-part-2 · infoq.com/news/2026/10/spotify-ai-quality-controls · modal.com/blog/how-ramp-built-a-full-context-background-coding-agent-on-modal · uber.com/us/en/blog/efficient-software-factory · posthog.com/blog/10k-prs-a-month · openai.com/index/open-source-codex-orchestration-symphony/ · devblogs.microsoft.com/dotnet/ten-months-with-cca-in-dotnet-runtime/ · zenml.io/llmops-database/building-a-software-factory-with-ai-agents-and-automation-loops · strongdm.com/blog/the-strongdm-software-factory-building-software-with-ai · github.github.com/gh-aw/reference/safe-outputs/ · microsoft.com/en-us/security/blog/2026/06/05/securing-ci-cd-in-agentic-world-claude-code-github-action-case/ · noma.security/noma-labs/gitlost-how-we-tricked-githubs-ai-agent-into-leaking-private-repos · arxiv.org/abs/2602.08915
 
-Talk: "All Code Is Slop (Except Mine)", Lauren Tan, YouTube O_zcc6Xl12g (transcript supplied by the maintainer).
+Talk: "All Code Is Slop (Except Mine)", Lauren Tan, https://www.youtube.com/watch?v=O_zcc6Xl12g (transcript supplied by the maintainer; kept locally in `sources/local/`, git-ignored). Kiro article notes: [sources/kiro-software-factory-1000-prs.md](sources/kiro-software-factory-1000-prs.md). Index and goal: [README](README.md).
 
 ## What this means for specter
 
