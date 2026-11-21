@@ -113,8 +113,7 @@ The example's Gates table (`examples/acme-shop/.specs/steering/spec-rules.md`), 
 | G4 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
 | G5 | Citations | `python3 .specs/kit/scripts/spec_lint.py --cites` |
 
-Architecture tests carry the JUnit tag `architecture`. UNKNOWN until task 7: whether Surefire's `groups` filter passes
-quietly in `shop-common`, which has no tagged test; if not, G2 adds `-pl orders-api`.
+Architecture tests carry the JUnit tag `architecture`. Settled in task 7: Surefire's `groups` filter passes quietly in `shop-common` (no tagged test, no report, exit 0), so G2 stays as written, run from the reactor root (`-pl orders-api` alone cannot resolve the unbuilt `shop-common` jars).
 
 ### Check map: lesson or decision → check
 

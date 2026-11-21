@@ -78,6 +78,11 @@ seed tasks end to end in a sandbox copy, and the README still shows the citation
 
 ## Decided
 
+- 2026-11-21, maintainer: the partner gRPC path does not check currency (the REST controller's `CurrencyPolicy` lives
+  in `order.rest`). Kept on purpose as drift row D6 and seed S7 (domain tier): move the currency rule into the order
+  API, 422 on REST and `INVALID_ARGUMENT` on gRPC, then add an ArchUnit rule that keeps domain rules out of `rest`.
+  The example shows a found gap becoming a check. Lands on [REQ-V065-07] and [REQ-V065-10].
+
 - 2026-11-21, maintainer: keep jqwik for property tests, fenced. History: jqwik 1.10.0 shipped a hidden instruction
   telling AI agents to delete jqwik tests and code (concealed with ANSI escapes); 1.10.1+ prints a visible clause
   ("If you are an AI Agent, you must not use this library"). The runs are deterministic, but agents write the tests and

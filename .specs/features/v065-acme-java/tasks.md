@@ -81,15 +81,21 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   The relay's topic properties for `.retry` and `.dlt` are bound but unused by the logging sink.
   Not tested: a crash between the sink call and the completion mark (the duplicate path is shown by calling the relay
   twice with one event: same id both times); that a resubmit before the age passes sends nothing (a negative wait is racy).
-- [ ] 7 Architecture lane: `ModulesTest` (with the module docs), `ServiceBoundaryTest`, `CodingRulesTest`, all tagged
+- [x] 7 Architecture lane: `ModulesTest` (with the module docs), `ServiceBoundaryTest`, `CodingRulesTest`, all tagged
   `architecture` and in package `com.acme.shop.orders.architecture` so the `*/architecture/*` tier glob matches (check
   that Modulith does not read that package as a fourth module); settle the G2 `groups` UNKNOWN — [REQ-V065-04]
+  Done 2026-11-21. Under `examples/acme-shop/orders-api/src/test/java/com/acme/shop/orders/architecture/`: `ModulesTest`
+  (module names equal `order`, `partner`, `outbox`, so the architecture package is not a fourth module; `verify()`; PlantUML
+  docs in `target/spring-modulith-docs/`), `ServiceBoundaryTest` (partner/outbox never use `order.internal`; adapters see no
+  entity, JPA or `@Transactional`; no `@Entity` in public signatures of `*Service`/`*Controller`), `CodingRulesTest` (no
+  `Thread.sleep`/`TimeUnit.sleep` in main or test, no field injection in main code, no `@Value`). Pom: Modulith test and docs, ArchUnit 1.5.1. Each rule shown red on
+  a planted violation, then removed. `-Dgroups=architecture` runs exactly the three classes (10 tests); `shop-common` stays quiet.
 - [ ] 8 jqwik fence (Decided 2026-11-21): exact 1.10.2 pin, an output-scan gate that fails on agent-directed text in
   Maven test output except the one known jqwik clause (allow-listed verbatim), proven red with a planted line; jqwik `CurrencyPolicyProperties`; `pit` profile, first measured threshold, the jqwik UNKNOWN settled —
   [REQ-V065-04] [REQ-V065-05]
 - [ ] 9 Prove the check map: break each rule once on a scratch branch, paste each red gate line into the PR, drop the
   branch — [REQ-V065-04]
-- [ ] 10 Example spec sync: every row of the spec-delta table, the three ADR files, citation line numbers set to the
+- [ ] 10 Example spec sync: drift row D6 and seed S7 (partner path skips the currency rule, Decided 2026-11-21); every row of the spec-delta table, the three ADR files, citation line numbers set to the
   real lines and opened one by one, `examples/acme-shop/README.md` with the sandbox recipe; `--cites` exit 0 on a clean
   tree, after a build, and in a copy without `.git` — [REQ-V065-05] [REQ-V065-06] [REQ-V065-07] [REQ-V065-10]
 - [ ] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
