@@ -90,12 +90,12 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   entity, JPA or `@Transactional`; no `@Entity` in public signatures of `*Service`/`*Controller`), `CodingRulesTest` (no
   `Thread.sleep`/`TimeUnit.sleep` in main or test, no field injection in main code, no `@Value`). Pom: Modulith test and docs, ArchUnit 1.5.1. Each rule shown red on
   a planted violation, then removed. `-Dgroups=architecture` runs exactly the three classes (10 tests); `shop-common` stays quiet.
-- [ ] 8 jqwik fence (Decided 2026-11-21): exact 1.10.2 pin, an output-scan gate that fails on agent-directed text in
+- [x] 8 jqwik fence (Decided 2026-11-21): exact 1.10.2 pin, an output-scan gate that fails on agent-directed text in
   Maven test output except the one known jqwik clause (allow-listed verbatim), proven red with a planted line; jqwik `CurrencyPolicyProperties`; `pit` profile, first measured threshold, the jqwik UNKNOWN settled —
   [REQ-V065-04] [REQ-V065-05]
 - [ ] 9 Prove the check map: break each rule once on a scratch branch, paste each red gate line into the PR, drop the
   branch — [REQ-V065-04]
-- [ ] 10 Example spec sync: drift row D6 and seed S7 (partner path skips the currency rule, Decided 2026-11-21); every row of the spec-delta table, the three ADR files, citation line numbers set to the
+- [ ] 10 Example spec sync: drift row D6 and seed S7 (partner path skips the currency rule, Decided 2026-11-21); seed S8 (read-only service queries rule, Decided 2026-11-21); every row of the spec-delta table, the three ADR files, citation line numbers set to the
   real lines and opened one by one, `examples/acme-shop/README.md` with the sandbox recipe; `--cites` exit 0 on a clean
   tree, after a build, and in a copy without `.git` — [REQ-V065-05] [REQ-V065-06] [REQ-V065-07] [REQ-V065-10]
 - [ ] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo

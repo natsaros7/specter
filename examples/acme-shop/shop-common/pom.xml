@@ -11,6 +11,11 @@
 
   <artifactId>shop-common</artifactId>
 
+  <properties>
+    <!-- First PIT run 2026-11-21: 20 of 28 mutants killed. Raise by hand only. -->
+    <pit.threshold>71</pit.threshold>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>io.grpc</groupId>

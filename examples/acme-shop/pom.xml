@@ -37,6 +37,7 @@
     <maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
     <maven-enforcer-plugin.version>3.7.0</maven-enforcer-plugin.version>
     <maven-failsafe-plugin.version>3.5.6</maven-failsafe-plugin.version>
+    <maven-surefire-plugin.version>3.5.6</maven-surefire-plugin.version>
     <maven-jar-plugin.version>3.5.1</maven-jar-plugin.version>
     <spotless-maven-plugin.version>3.10.4</spotless-maven-plugin.version>
   </properties>
@@ -160,4 +161,50 @@
       </plugin>
     </plugins>
   </build>
+  <!-- Weekly chore C2, not a gate: ./mvnw -B -Ppit verify writes target/pit-reports/ per module. The threshold is the first measured score, raised by hand only. -->
+  <profiles>
+    <profile>
+      <id>pit</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.pitest</groupId>
+            <artifactId>pitest-maven</artifactId>
+            <version>${pitest.version}</version>
+            <dependencies>
+              <dependency>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-junit5-plugin</artifactId>
+                <version>${pitest-junit5.version}</version>
+              </dependency>
+            </dependencies>
+            <configuration>
+              <targetClasses>
+                <param>com.acme.shop.security.*</param>
+                <param>com.acme.shop.orders.order.*</param>
+              </targetClasses>
+              <targetTests>
+                <param>com.acme.shop.*</param>
+              </targetTests>
+              <failWhenNoMutations>false</failWhenNoMutations>
+              <!-- pit.threshold is set per module -->
+              <mutationThreshold>${pit.threshold}</mutationThreshold>
+              <outputFormats>
+                <outputFormat>HTML</outputFormat>
+                <outputFormat>XML</outputFormat>
+              </outputFormats>
+            </configuration>
+            <executions>
+              <execution>
+                <goals>
+                  <goal>mutationCoverage</goal>
+                </goals>
+                <phase>verify</phase>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
 </project>

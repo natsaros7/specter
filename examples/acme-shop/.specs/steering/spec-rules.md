@@ -18,6 +18,9 @@ Run in order from the repo root; `python3 .specs/kit/scripts/gates.py` prints th
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Build, unit and Testcontainers ITs | `./mvnw verify` |
-| G2 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
-| G3 | Citations | `python3 .specs/kit/scripts/spec_lint.py --cites` |
+| G1 | Compile, Error Prone + NullAway, format | `./mvnw -B -q -DskipTests verify` |
+| G2 | Architecture: Modulith `verify()`, ArchUnit | `./mvnw -B -q test -Dgroups=architecture` |
+| G3 | Full build: unit, property, integration and architecture tests; the log goes to `target/build.log` (read it on a red) | `mkdir -p target && ./mvnw -B verify > target/build.log 2>&1` |
+| G3b | Agent-text scan of the full build's log: fails on text that addresses an AI agent, except the one known jqwik clause | `sh scripts/scan-agent-text.sh target/build.log` |
+| G4 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
+| G5 | Citations | `python3 .specs/kit/scripts/spec_lint.py --cites` |

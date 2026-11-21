@@ -11,6 +11,11 @@
 
   <artifactId>orders-api</artifactId>
 
+  <properties>
+    <!-- First PIT run 2026-11-21: 27 of 27 mutants killed. Raise by hand only. -->
+    <pit.threshold>100</pit.threshold>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>com.acme.shop</groupId>
@@ -98,6 +103,13 @@
       <artifactId>spring-modulith-docs</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- Exact pin, no range: a human reviews every jqwik upgrade (v065 Decided 2026-11-21); scripts/scan-agent-text.sh gates its output. -->
+    <dependency>
+      <groupId>net.jqwik</groupId>
+      <artifactId>jqwik</artifactId>
+      <version>${jqwik.version}</version>
+      <scope>test</scope>
+    </dependency>
     <dependency>
       <groupId>com.tngtech.archunit</groupId>
       <artifactId>archunit-junit5</artifactId>
@@ -131,6 +143,18 @@
             </goals>
           </execution>
         </executions>
+      </plugin>
+      <!-- Surefire's default patterns skip *Properties, the jqwik class naming -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>${maven-surefire-plugin.version}</version>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+            <include>**/*Properties.java</include>
+          </includes>
+        </configuration>
       </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

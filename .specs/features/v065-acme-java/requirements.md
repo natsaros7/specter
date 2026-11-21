@@ -78,6 +78,11 @@ seed tasks end to end in a sandbox copy, and the README still shows the citation
 
 ## Decided
 
+- 2026-11-21, maintainer: architecture-rule scope. "No field injection" and the `@Value` ban apply to main code only
+  (tests keep `@Autowired` fields; the `@Scheduled` placeholder is allowed). The read-only-queries rule implied by
+  the ord-120 spec is not written now: it becomes seed S8 (domain tier), "service queries are `readOnly`; add the
+  ArchUnit rule". Lands on [REQ-V065-04] and [REQ-V065-10].
+
 - 2026-11-21, maintainer: the partner gRPC path does not check currency (the REST controller's `CurrencyPolicy` lives
   in `order.rest`). Kept on purpose as drift row D6 and seed S7 (domain tier): move the currency rule into the order
   API, 422 on REST and `INVALID_ARGUMENT` on gRPC, then add an ArchUnit rule that keeps domain rules out of `rest`.
