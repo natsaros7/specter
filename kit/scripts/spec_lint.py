@@ -48,6 +48,9 @@ import sys
 import unicodedata
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gates  # noqa: E402
+
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
@@ -232,7 +235,7 @@ def deny_hits(line, digests):
 
 
 def decision_rows(lines):
-    """(id, line no, Where it lands, Supersedes) per row whose first cell is a D- id, in tables with a Where it lands column."""
+    """(id, line no, Where it lands, Supersedes, Checked by or None without that column) per row whose first cell is a D- id, in tables with a Where it lands column."""
     rows, head = [], None
     for no, line in enumerate(lines, 1):
         if not line.lstrip().startswith("|"):
@@ -243,7 +246,7 @@ def decision_rows(lines):
             head = [x.lower() for x in c]
         elif "where it lands" in head and DREF.fullmatch(c[0]):
             cell = lambda name: c[head.index(name)] if name in head and head.index(name) < len(c) else ""
-            rows.append((c[0], no, cell("where it lands"), cell("supersedes")))
+            rows.append((c[0], no, cell("where it lands"), cell("supersedes"), cell("checked by") if "checked by" in head else None))
     return rows
 
 
@@ -298,9 +301,19 @@ def landings(specs, config, req_defs, rows):
     req, dec, fails, warns = re.compile(config["req_id_pattern"]), config["decisions"], [], []
     superseded = {d for r in rows or () for d in DREF.findall(r[3])}
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
-    for d, no, lands, _ in rows or ():
+    gate_ids = None
+    for d, no, lands, _, checked in rows or ():
         if d in superseded:
             continue
+        for g in [x.strip() for x in (checked or "").split(",") if x.strip()]:
+            if gate_ids is None:  # a label is "#", "Gate" or "# Gate"; no table or a bad one (gates.py reports it) leaves none
+                try:
+                    rules = specs / "steering" / "spec-rules.md"
+                    gate_ids = {w for l, _ in (gates.gate_rows(rules.read_text()) or ()) for w in (l, l.split(" ", 1)[0], l.split(" ", 1)[-1])} if rules.is_file() else set()
+                except ValueError:
+                    gate_ids = set()
+            if g not in gate_ids:
+                fails.append(dec["file"] + ":" + str(no) + ": " + d + " is checked by " + g + ", which is no row of the Gates table in steering/spec-rules.md")
         for r in dict.fromkeys(req.findall(lands)):
             if r not in req_defs:
                 fails.append(dec["file"] + ":" + str(no) + ": " + d + " lands on " + r + ", which no requirements.md defines")

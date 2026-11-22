@@ -34,11 +34,13 @@ changes until it adds `steering/autonomy.md`)
   - Evidence: `kit/scripts/ready.py` `check_review`; selftest 11c red (a PR with no `### Review` read as ready) then green: valid, missing block, missing id, rules not the base, same-family WARN, open blocker, blocker without evidence or file:line advisory, `--json` review.
 - [x] 11d `ready.py`: `### Verification` lines: REQ defined, path at the head, URL declared not fetched — [REQ-V060-14]
   - Evidence: `kit/scripts/ready.py` `check_verification`; selftest 11d: valid lines (path ok, URL `declared, not fetched`), unknown REQ, missing path, `..`, absolute path, symlink, malformed line, no block ready, `--json` verification.
-- [ ] 12 Review loop, reviewer role, model routing, spec-rules §7.4: reviewer tier from the label — [REQ-V060-05]
+- [x] 12 Review loop, reviewer role, model routing, spec-rules §7.4: reviewer tier from the label — [REQ-V060-05]
+  - Evidence: prose only: `review-loop.md` step 3 and 5, `roles/reviewer.md`, `model-routing.md`, `spec-rules.md` §7.4 point at `tiers.py` and `ready.py`; gates green.
 - [ ] 12a Review loop, reviewer and generator roles, feature `tasks.md` template: rules read at the base, the
   blocker/advisory verdict table, advisories filed as follow-ups, artifacts checked against acceptance — [REQ-V060-13]
   [REQ-V060-14]
-- [ ] 13 Lint: decisions `Checked by` column against the Gates table; decisions template column — [REQ-V060-06]
+- [x] 13 Lint: decisions `Checked by` column against the Gates table; decisions template column — [REQ-V060-06]
+  - Evidence: `spec_lint.py` (`decision_rows`, `landings`); selftest case 12 "Checked by" part red (rc=0) then green.
 - [ ] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
   cases included — [REQ-V060-05] [REQ-V060-06] [REQ-V060-11] [REQ-V060-12] [REQ-V060-13] [REQ-V060-14]
 - [ ] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —

@@ -22,11 +22,13 @@ flowchart LR
    what was reviewed.
 3. **Reviewer** starts in a **fresh context** (a new session or sub-agent) with only the patch, the feature spec and
    the project rules. It reports real issues only, each with `file:line` and a severity. It does not edit code.
-   Security-sensitive paths (auth, crypto, input validation, permissions) get the deep tier.
+   Run `python3 .specs/kit/scripts/tiers.py [--range B..H] [--json]` on the frozen diff: its `reviewer:` is the
+   reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation, permissions) get the deep tier.
 4. **Findings go back to the same worker** for one retry. After a second red gate or a disputed finding,
    escalate to the planner (deep) with the spec, the diff and both outputs.
 5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual), read the
-   reviewer's verdict table, then commit. Check the change's `Deploy impact:` line: if it is not `none`, the people who
+   reviewer's verdict table, then commit. Paste the `### Risk tier` block next to `### Gates` in the PR description
+   (`python3 .specs/kit/scripts/ready.py` prints both with the verdict). Check the change's `Deploy impact:` line: if it is not `none`, the people who
    run CI/CD hear before the merge. A job that runs from the default branch picks up every merge on its next run.
 
 ## Reviewer prompt (works with any agent)

@@ -1,6 +1,6 @@
 # Role: reviewer
 
-**Tier:** standard; **deep** when the diff touches security (auth, crypto, input validation, permissions).
+**Tier:** the `reviewer:` of `python3 .specs/kit/scripts/tiers.py [--range B..H]`; no profile: **deep** if the diff touches security, else standard.
 
 You review a diff that has **already passed its gate**, in a fresh context. You did not write it.
 Inputs: the patch file, `.specs/features/<feature>/`, `AGENTS.md`.

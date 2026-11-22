@@ -420,6 +420,15 @@ J=$(printf %s 'josé' | shasum -a 256 | cut -c1-64); [ "$(L --hash-term 'José')
 printf 'José came. Jos stayed.\n' > "$S/system/notes.md"; printf '{"denylist_sha256": ["%s"]}\n' "$J" > "$S/spec-kit.json"
 out=$(L --specs "$S" 2>&1 || true); echo "$out" | grep -q "notes.md:1: denylisted term (token #1)" && ! echo "$out" | grep -q "token #3" || fail "non-ASCII tokenising: $out"
 rm "$S/spec-kit.json"; printf 'See D-1.\n' > "$S/system/notes.md"
+C="$TMP/t12c/.specs"; mkdir -p "$C/steering"; CD="$C/steering/decisions.md"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Shell syntax | `true` |\n' > "$C/steering/spec-rules.md"
+printf '| ID | Decision | Why | Where it lands | Supersedes |\n|---|---|---|---|---|\n| D-1 | a | b | words | |\n' > "$CD"
+out=$(L --specs "$C") || fail "decisions without Checked by column changed the exit code: $out"
+printf '| ID | Decision | Why | Where it lands | Checked by | Supersedes |\n|---|---|---|---|---|---|\n| D-1 | a | b | words | G1 | |\n| D-2 | a | b | words | | |\n| D-3 | a | b | words | Shell syntax | |\n' > "$CD"
+out=$(L --specs "$C") || fail "Checked by naming real gates (G1, Shell syntax) or empty failed: $out"
+printf '| D-4 | a | b | words | G9 | |\n' >> "$CD"
+rc=0; out=$(L --specs "$C") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL steering/decisions.md:6: D-4 is checked by G9, which is no row of the Gates table in steering/spec-rules.md" || fail "unknown Checked by gate: rc=$rc $out"
+printf '| D-5 | a | b | words | | D-4 |\n' >> "$CD"; out=$(L --specs "$C") || fail "superseded row's Checked by still checked: $out"
 GT="$TMP/t12g"; mkdir -p "$GT/.specs/steering"; gitq -C "$GT" init
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | makes output | `touch out.log; echo made` |\n' > "$GT/.specs/steering/spec-rules.md"
 gitq -C "$GT" add .; gitq -C "$GT" commit -m x
