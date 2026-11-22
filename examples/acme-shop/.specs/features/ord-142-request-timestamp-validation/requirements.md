@@ -10,7 +10,7 @@ Verified on main 2026-10-20 (`4e1c2a7`):
 
 - `shop-common/src/main/java/com/acme/shop/security/SecurityHeader.java:8`: `TIMESTAMP("timestamp", true)`, javadoc
   "mandatory, for replay prevention". `isMandatory()` has no caller in main code (`rg isMandatory` finds tests only).
-- `shop-common/.../security/GrpcSecurityFilter.java:34-56` reads partner id and certificate subject; it never reads `timestamp`.
+- `shop-common/.../security/GrpcSecurityFilter.java:38-63` reads partner id and certificate subject; it never reads `timestamp`.
 - `orders.proto:20` marks `timestamp` as required. That checks presence only: an epoch-0 or week-old value passes.
 - The partner ICD (Annex B, CON-REQ-015) says stale requests are rejected.
 

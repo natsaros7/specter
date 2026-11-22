@@ -87,6 +87,12 @@ class OrderControllerIT {
     }
 
     @Test
+    void should_return400_when_skuIsLongerThanColumn() throws Exception {
+        mvc.perform(post(BASE).contentType(MediaType.APPLICATION_JSON).content(ORDER.replace("SKU-1", "S".repeat(65))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void should_return400_when_quantityIsNotPositive() throws Exception {
         mvc.perform(post(BASE)
                         .contentType(MediaType.APPLICATION_JSON)

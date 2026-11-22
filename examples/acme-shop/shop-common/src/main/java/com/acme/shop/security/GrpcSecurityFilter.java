@@ -8,14 +8,18 @@ import io.grpc.ServerInterceptor;
 import io.grpc.Status;
 import java.lang.System.Logger;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
-import javax.naming.InvalidNameException;
+import javax.naming.NamingEnumeration;
+import javax.naming.NamingException;
+import javax.naming.directory.Attribute;
 import javax.naming.ldap.LdapName;
 import javax.naming.ldap.Rdn;
 import org.jspecify.annotations.Nullable;
 
 /**
- * Maps the partner's certificate subject to a partner id and rejects any request whose message claims another one.
+ * Maps the partner's certificate subject to a partner id and rejects any request whose message claims another one (unary RPCs only: streaming handlers start before any message is checked).
  * Fails closed: no subject, no common name, or no readable partner id all deny.
  */
 public final class GrpcSecurityFilter implements ServerInterceptor {
@@ -33,6 +37,7 @@ public final class GrpcSecurityFilter implements ServerInterceptor {
             final ServerCall<Q, R> call, final Metadata headers, final ServerCallHandler<Q, R> next) {
         final Optional<String> subject = peers.subject(call);
         if (subject.isEmpty()) {
+            authFailed("none", null);
             return deny(call, Status.UNAUTHENTICATED.withDescription("No client certificate"));
         }
         final String certificatePartnerId = commonName(subject.get());
@@ -72,21 +77,35 @@ public final class GrpcSecurityFilter implements ServerInterceptor {
     }
 
     private static void authFailed(final String subject, final @Nullable String claimed) {
-        LOG.log(Logger.Level.WARNING, "AUTH_FAILED subject={0} claimedPartnerId={1}", subject, claimed);
+        // The claim is client-controlled: strip control characters and cap the length so it cannot forge log lines.
+        final String safeClaimed = claimed == null ? null : claimed.replaceAll("\\p{Cntrl}", "?");
+        LOG.log(
+                Logger.Level.WARNING,
+                "AUTH_FAILED subject={0} claimedPartnerId={1}",
+                subject,
+                safeClaimed == null || safeClaimed.length() <= 64 ? safeClaimed : safeClaimed.substring(0, 64));
     }
 
-    /** The CN of the subject, or empty when it has none or is not a valid distinguished name. */
+    /** The CN of the subject; empty unless it has exactly one CN attribute (multi-valued RDNs included) and is valid. */
     private static String commonName(final String subject) {
         try {
+            final List<String> cns = new ArrayList<>();
             for (final Rdn rdn : new LdapName(subject).getRdns()) {
-                if ("CN".equalsIgnoreCase(rdn.getType())) {
-                    return rdn.getValue().toString();
+                final NamingEnumeration<? extends Attribute> attrs =
+                        rdn.toAttributes().getAll();
+                while (attrs.hasMore()) {
+                    final Attribute attr = attrs.next();
+                    if ("CN".equalsIgnoreCase(attr.getID())) {
+                        for (int i = 0; i < attr.size(); i++) {
+                            cns.add(String.valueOf(attr.get(i)));
+                        }
+                    }
                 }
             }
-        } catch (InvalidNameException e) {
+            return cns.size() == 1 ? cns.get(0) : "";
+        } catch (NamingException e) {
             return "";
         }
-        return "";
     }
 
     /** Calls a public no-argument String getter by name; null when the message has none. */

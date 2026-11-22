@@ -99,7 +99,8 @@ components:
       properties:
         sku:
           type: string
-          minLength: 1
+          maxLength: 64
+          minLength: 0
         quantity:
           type: integer
           format: int32

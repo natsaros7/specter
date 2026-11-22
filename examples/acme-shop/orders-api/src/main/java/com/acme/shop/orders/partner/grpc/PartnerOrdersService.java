@@ -49,6 +49,8 @@ public class PartnerOrdersService extends PartnerOrdersGrpc.PartnerOrdersImplBas
         reply(out, Optional.of(orders.place(command)));
     }
 
+    // shortcut: no order ownership, any authenticated partner reads and cancels any order; add partner_id to orders
+    // when a seed needs tenant isolation (drift D7)
     @Override
     public void getOrder(final GetOrderRequest request, final StreamObserver<OrderReply> out) {
         withId(request.getOrderId(), out, id -> orders.get(id));

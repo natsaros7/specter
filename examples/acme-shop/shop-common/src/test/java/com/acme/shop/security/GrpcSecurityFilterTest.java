@@ -23,7 +23,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -111,7 +116,8 @@ class GrpcSecurityFilterTest {
         final ManagedChannel channel =
                 InProcessChannelBuilder.forName(name).directExecutor().build();
         cleanup.add(channel::shutdownNow);
-        return ClientCalls.blockingUnaryCall(channel, method, CallOptions.DEFAULT, request);
+        return ClientCalls.blockingUnaryCall(
+                channel, method, CallOptions.DEFAULT.withDeadlineAfter(5, TimeUnit.SECONDS), request);
     }
 
     @Test
@@ -150,5 +156,74 @@ class GrpcSecurityFilterTest {
                 .isInstanceOfSatisfying(
                         StatusRuntimeException.class,
                         e -> assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.PERMISSION_DENIED));
+    }
+
+    private void assertDenied(final String subject, final String claimed, final Status.Code code) {
+        assertThatThrownBy(() -> call(Optional.of(subject), new Req(claimed, 0L), REQ))
+                .isInstanceOfSatisfying(
+                        StatusRuntimeException.class,
+                        e -> assertThat(e.getStatus().getCode()).isEqualTo(code));
+    }
+
+    @Test
+    void should_deny_permission_when_subject_has_two_common_names() {
+        assertDenied("CN=partner-8,OU=Partners,CN=partner-7", "partner-7", Status.Code.PERMISSION_DENIED);
+    }
+
+    @Test
+    void should_deny_permission_when_subject_has_multivalued_rdn_with_two_common_names() {
+        assertDenied("CN=partner-7+CN=partner-8,O=Acme", "partner-7", Status.Code.PERMISSION_DENIED);
+    }
+
+    private List<LogRecord> captureLog() {
+        final List<LogRecord> records = new ArrayList<>();
+        final Logger logger = Logger.getLogger(GrpcSecurityFilter.class.getName());
+        final Handler handler = new Handler() {
+            @Override
+            public void publish(final LogRecord record) {
+                records.add(record);
+            }
+
+            @Override
+            public void flush() {}
+
+            @Override
+            public void close() {}
+        };
+        logger.addHandler(handler);
+        cleanup.add(() -> logger.removeHandler(handler));
+        return records;
+    }
+
+    @Test
+    void should_log_auth_failed_when_partner_id_differs_from_subject() {
+        final List<LogRecord> records = captureLog();
+        assertDenied("CN=partner-7,O=Acme", "partner-8", Status.Code.PERMISSION_DENIED);
+        assertThat(records).singleElement().satisfies(r -> {
+            assertThat(r.getLevel()).isEqualTo(Level.WARNING);
+            assertThat(r.getMessage()).startsWith("AUTH_FAILED");
+            assertThat(r.getParameters()).containsExactly("CN=partner-7,O=Acme", "partner-8");
+        });
+    }
+
+    @Test
+    void should_log_auth_failed_when_certificate_is_missing() {
+        final List<LogRecord> records = captureLog();
+        assertThatThrownBy(() -> call(Optional.empty(), new Req("partner-7", 0L), REQ))
+                .isInstanceOf(StatusRuntimeException.class);
+        assertThat(records)
+                .singleElement()
+                .satisfies(r -> assertThat(r.getMessage()).startsWith("AUTH_FAILED"));
+    }
+
+    @Test
+    void should_not_forge_log_line_when_claimed_partner_id_has_newline_or_is_long() {
+        final List<LogRecord> records = captureLog();
+        assertDenied(
+                "CN=partner-7",
+                "x\nWARNING: AUTH_OK subject=CN=P-0002" + "y".repeat(100),
+                Status.Code.PERMISSION_DENIED);
+        final String claimed = (String) records.get(0).getParameters()[1];
+        assertThat(claimed).doesNotContain("\n").hasSizeLessThanOrEqualTo(64);
     }
 }
