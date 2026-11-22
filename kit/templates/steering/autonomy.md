@@ -11,6 +11,13 @@ What agents may do here without a human, and on what evidence. Editing this file
 | Architecture tests | [<arch-test>](<arch-test>) | before a design |
 | Memory | [lessons](lessons.md) | start |
 
+## Tiers
+| Tier | Paths | Reviewer | Human |
+|---|---|---|---|
+| routine | `<tests glob>` `<docs glob>` `<lockfile>` | standard | none |
+| domain | `<source glob>` | standard | spot |
+| critical | `<security glob>` `<contracts glob>` `<migrations glob>` `<CI glob>` `CODEOWNERS` | deep | required |
+
 ## Chores
 Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`.
 

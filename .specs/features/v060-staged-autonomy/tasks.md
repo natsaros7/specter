@@ -42,8 +42,9 @@ changes until it adds `steering/autonomy.md`)
   - Evidence: prose only: `review-loop.md` steps 3-5, prompt and verdict table; `roles/reviewer.md`, `roles/generator.md`, feature `tasks.md` PR task; formats match `ready.py` `check_review`/`check_verification`; gates green.
 - [x] 13 Lint: decisions `Checked by` column against the Gates table; decisions template column — [REQ-V060-06]
   - Evidence: `spec_lint.py` (`decision_rows`, `landings`); selftest case 12 "Checked by" part red (rc=0) then green.
-- [ ] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
+- [x] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
   cases included — [REQ-V060-05] [REQ-V060-06] [REQ-V060-11] [REQ-V060-12] [REQ-V060-13] [REQ-V060-14]
+  - Evidence: template and acme `autonomy.md` gain `## Tiers`; setup Q10 and Phase 5 step 8 cover it; selftest case 14 (installed repo, acme table: test file routine, order source domain, GrpcSecurityFilter critical; `ready.py` verdict) beside 13b, 11b-11d.
 - [ ] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
   [REQ-V060-11] [REQ-V060-12]
 

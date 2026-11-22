@@ -616,4 +616,21 @@ nr "malformed line" "$(vb '- REQ-F-01 docs/a.png')" "verification line"
 js=$(vb '- [REQ-F-01] docs/a.png: s' | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verification"]=={"lines":[{"req":"REQ-F-01","target":"docs/a.png","status":"ok"}],"problems":[]}, d' || fail "11d: --json verification shape: $js"
 js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="ready" and d["verification"]["lines"]==[], d' || fail "11d: no block is ready: $js"
 
+echo "14. end to end: the acme Tiers table in an installed repo labels real paths, and ready.py gives the verdict"
+E="$TMP/t14"; mkdir -p "$E"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null
+cp "$KIT/examples/acme-shop/.specs/steering/autonomy.md" "$E/.specs/steering/autonomy.md"
+python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check >/dev/null || fail "14: acme Tiers table fails --check"
+printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$E/.specs/steering/spec-rules.md"
+gitq -C "$E" add -A; gitq -C "$E" commit -m base; EB=$(git -C "$E" rev-parse HEAD)
+et() { python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range "$EB..HEAD" 2>&1; }
+chg() { git -C "$E" reset -q --hard "$EB"; for f in "$@"; do mkdir -p "$E/$(dirname "$f")"; echo x >> "$E/$f"; done; gitq -C "$E" add -A; gitq -C "$E" commit -m chg; }
+chg orders-api/src/test/java/com/acme/shop/orders/order/rest/FooTest.java; et | grep -q "tier: routine" || fail "14: test file not routine: $(et)"
+chg orders-api/src/main/java/com/acme/shop/orders/order/OrderService.java; et | grep -q "tier: domain" || fail "14: order source not domain: $(et)"
+chg orders-api/src/main/java/com/acme/shop/orders/order/OrderService.java shop-common/src/main/java/com/acme/shop/security/GrpcSecurityFilter.java
+et | grep -q "tier: critical" && et | grep -q "GrpcSecurityFilter" || fail "14: GrpcSecurityFilter does not win: $(et)"
+EH=$(git -C "$E" rev-parse --short HEAD)
+pr() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n' "$1" "$(echo "$EB" | cut -c1-7)"; }
+out=$(pr "$EH" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" 2>&1) && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "tier: critical" || fail "14: ready verdict: $out"
+rc=0; pr "$EB" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || fail "14: stale commit exits $rc, want 1"
+
 echo "selftest: OK"

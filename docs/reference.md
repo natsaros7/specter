@@ -122,10 +122,10 @@ factory slices are tested on. Its README covers the build (JDK 21) and the sandb
 `install.sh`, commit, then hand an agent one of the seed tasks. Specter's optional gate G5 (`sh tests/acme-build.sh`)
 builds it.
 
-## Autonomy profile (0.6.0, slice 1)
+## Autonomy profile (0.6.0)
 
 `.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
-Slice 1 has two sections. Tiers, Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
+Sections so far: Knowledge, Tiers, Chores. Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
 behave as in 0.5.0; the report always gains the In flight card. Setup asks about it in Q10.
 
 - **Knowledge.** A table of where the project keeps what an agent must know (router, steering, decisions, ADRs,
@@ -134,6 +134,12 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
 - **Lessons.** `.specs/steering/lessons.md` takes one dated line per correction. A lesson seen twice becomes a check first
   (a Gates row, a lint rule or a test), and a rule in spec-rules, code-standards or decisions only when no check can
   catch it (`sync.md`).
+- **Tiers.** A `| Tier | Paths | Reviewer | Human |` table, rows from most to least autonomous (setup suggests routine: tests,
+  docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
+  glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
+  `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
+  Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
+  head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
   `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
   the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
