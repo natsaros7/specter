@@ -100,7 +100,7 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   |---|---|---|---|---|
   | Lesson 2026-10-27, no sleep | `Thread.sleep(1)` in `CurrencyPolicy` | G2 | `CodingRulesTest.should_not_sleep_when_code_is_main_or_test` ... `use MutableClock from shop-common's test jar` | 1 |
   | Constructor injection | `@Autowired Clock` field in `OutboxResubmitter` | G2 | `CodingRulesTest.should_use_constructor_injection_when_class_is_main_code` | 1 |
-  | No `@Value` (S6 rule) | `@Value` field in `OutboxRelay` | G2 | `CodingRulesTest.should_bind_config_with_properties_when_value_is_tempting` (the injection rule fires too) | 1 |
+  | No `@Value` | `@Value` field in `OutboxRelay` | G2 | `CodingRulesTest.should_bind_config_with_properties_when_value_is_tempting` (the injection rule fires too) | 1 |
   | ServiceBoundary 1 | `OrderStatus.class` (order.internal) used in `OutboxRelay` | G2 | `ServiceBoundaryTest.should_not_reach_order_internals_when_class_is_partner_or_outbox` (ModulesTest also red) | 1 |
   | ServiceBoundary 2 | `jakarta.persistence.Id.class` in `rest.CurrencyPolicy` | G2 | `ServiceBoundaryTest.should_not_touch_entities_or_jpa_when_class_is_an_adapter` | 1 |
   | ServiceBoundary 3 | `@Transactional` on `OrderController` | G2 | `ServiceBoundaryTest.should_not_open_a_transaction_when_class_is_an_adapter` | 1 |
@@ -125,7 +125,7 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   Citations reset (opened one by one): SecurityHeader line 41 to 8 (the TIMESTAMP line); GrpcSecurityFilter lines 120-131 to 34-56 (subject, claimed id, no timestamp); GrpcSecurityFilter line 88 to 38 and 49 (two places; CN mapping and the equals check); orders.proto line 23 to 20 (two places; `required int64 timestamp` in PlaceOrderRequest); application.yml lines 41-47 to 16-18 (topics). Design cites into the example moved: ONBOARDING lines 26-27 to 27-28, and 55 to 56.
   `--cites` on the example: clean tree 0 FAIL of 7, exit 0; after `./mvnw -B -o verify` (target/ present) exit 0; copy without `.git` exit 0. Sandbox recipe run in scratch (copy, `git init`, `install.sh`): lint and `--cites` via `.specs/kit/scripts/` exit 0.
   G5 re-proof: in a scratch copy the SecurityHeader citation renamed to SecurityHeaderX gave `FAIL cite features/ord-142-request-timestamp-validation/requirements.md: ... SecurityHeaderX.java:8 no such file` (cite text omitted here), `spec-lint --cites: 1 FAIL of 7 citation(s)`, exit 1; copy discarded.
-  Open for the maintainer: the `@Value` ban already exists in `CodingRulesTest`, so seed S6 as written (rule fails on a planted `@Value`) finds its check built, and lessons.md names the check instead of "no check yet". README says the demo of failure still points at acme until task 11.
+  Resolved 2026-11-22: the `@Value` ban already exists in `CodingRulesTest`, so seed S6 was redefined to `Instant.now()` over the injected `Clock` (design seed table); lessons.md names the existing check. README says the demo of failure still points at acme until task 11.
 - [ ] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
   case, `AGENTS.md` G1 and G2 commands — [REQ-V065-08] [REQ-V065-09]
 - [ ] 12 `tests/acme-build.sh` and the G5 row; with no `java` on `PATH` it prints `G5 SKIPPED: needs JDK 21+` and exits
