@@ -1,7 +1,8 @@
 # .specs — Acme Shop spec system (example)
 
 > **Example.** Acme Shop is fictional; it shows what `setup.md` produces and what two real-world features look like.
-> Paths and line numbers point to an imaginary codebase.
+> The code is in this folder (see the [example README](../README.md)). Dates and commit shas belong to the story; paths
+> and line numbers are real, and `spec_lint.py --cites` checks them.
 
 A **link layer** over the existing sources of truth. Where it summarises, the linked source wins.
 Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering/spec-rules.md).
@@ -22,7 +23,8 @@ Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering
 | New here | [`ONBOARDING.md`](ONBOARDING.md) |
 
 **Domains:** `orders-api` (sync REST + gRPC, owns orders) · `fulfilment-worker` (async, consumes `order-events`) ·
-`catalog-cache` (read proxy) · `web` (UI) · `shop-common` (shared lib). Only `orders-api` is written out in this example.
+`catalog-cache` (read proxy) · `web` (UI) · `shop-common` (shared lib). Only `orders-api` is written out in this example,
+and only `orders-api` and `shop-common` have code here; `fulfilment-worker`, `catalog-cache` and `web` are spec-only.
 
 ## Features in this example
 
@@ -35,6 +37,6 @@ Grounded on `4e1c2a7`, 2026-10-20. Workflow: [`steering/spec-rules.md`](steering
 
 | Source | Where | Rule |
 |---|---|---|
-| ADRs | `docs/adr/` | `design.md` must not contradict an Accepted ADR |
+| ADRs | [`docs/adr/`](../docs/adr/): [ADR-007](../docs/adr/ADR-007-transactional-outbox.md), [ADR-012](../docs/adr/ADR-012-service-transaction-boundary.md), [ADR-013](../docs/adr/ADR-013-modulith-modules.md) | `design.md` must not contradict an Accepted ADR |
 | Supply contract (requirements `CON-REQ-NNN`) | Shared drive, "Acme Shop – Contract Annex B" | Link only; traceability is kept in `system/traceability.md` |
 | OpenAPI | `orders-api/src/main/resources/openapi.yaml` | Generated from code; authoritative for REST |

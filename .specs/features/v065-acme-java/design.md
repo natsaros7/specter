@@ -107,11 +107,14 @@ The example's Gates table (`examples/acme-shop/.specs/steering/spec-rules.md`), 
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Compile, Error Prone + NullAway, format | `./mvnw -B -q -DskipTests verify` |
+| G1 | Compile, Error Prone + NullAway, format | `./mvnw -B -DskipTests verify` |
 | G2 | Architecture: Modulith `verify()`, ArchUnit | `./mvnw -B -q test -Dgroups=architecture` |
-| G3 | Full build: unit, property, integration and architecture tests | `./mvnw -B verify` |
+| G3 | Full build: unit, property, integration and architecture tests; the log goes to `target/build.log` | `mkdir -p target && ./mvnw -B verify > target/build.log 2>&1` |
+| G3b | Agent-text scan of that log (jqwik fence) | `sh scripts/scan-agent-text.sh target/build.log` |
 | G4 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
 | G5 | Citations | `python3 .specs/kit/scripts/spec_lint.py --cites` |
+
+G1 has no `-q` (task 10): quiet mode hid Error Prone's pattern name (`[EqualsIncompatibleType]`), and the unquiet output is about 100 lines, short enough to read. G2 keeps `-q`. G4 and G5 use the installed form (`.specs/kit/scripts/`), which is how the sandbox runs; the kit exists there only after `install.sh`, so the sandbox recipe installs first, and the example README says so and gives the bare-checkout form (`python3 ../../kit/scripts/spec_lint.py --specs .specs [--cites]`).
 
 Architecture tests carry the JUnit tag `architecture`. Settled in task 7: Surefire's `groups` filter passes quietly in `shop-common` (no tagged test, no report, exit 0), so G2 stays as written, run from the reactor root (`-pl orders-api` alone cannot resolve the unbuilt `shop-common` jars).
 
@@ -124,10 +127,10 @@ task 9 proves each row by breaking it once on a scratch branch.
 |---|---|---|---|
 | Lesson 2026-10-27 (`examples/acme-shop/.specs/steering/lessons.md:5`) | No real sleeps; time comes from a `Clock` | `CodingRulesTest`: no class, main or test, calls `Thread.sleep` or `TimeUnit.sleep` (`because`: "use MutableClock from shop-common's test jar"); the outbox resubmission test drives a `MutableClock` | G2 |
 | Lesson 2026-11-03 (`examples/acme-shop/.specs/steering/lessons.md:6`) | Unknown `currency` → 422, never 400 | jqwik `CurrencyPolicyProperties`: for any string outside the accepted set, the status is 422; malformed JSON stays 400 (one MockMvc example each) | G3 |
-| ADR-012, ord-120 STB-01 to STB-03 (`ServiceBoundaryTest` named in `examples/acme-shop/.specs/ONBOARDING.md:26-27`) | Adapters own no transaction and see no entity; services take and return DTOs; queries `readOnly` | `ServiceBoundaryTest` (ArchUnit, one global strict rule set: ord-120's end state) | G2 |
+| ADR-012, ord-120 STB-01 to STB-03 (`ServiceBoundaryTest` named in `examples/acme-shop/.specs/ONBOARDING.md:27-28`) | Adapters own no transaction and see no entity; services take and return DTOs; queries `readOnly` | `ServiceBoundaryTest` (ArchUnit, one global strict rule set: ord-120's end state) | G2 |
 | ADR-013 (new: Modulith modules) | Modules use each other's API package only; no cycles | `ModulesTest`: `ApplicationModules.of(...).verify()`; it also writes the module diagrams to `target/spring-modulith-docs/`, a verification artifact a reviewer can open | G2 |
 | D-1 (`examples/acme-shop/.specs/steering/decisions.md:10`) | A gRPC call commits before it answers | `PartnerOrdersCommitTest`: inside the test observer's `onNext`, no transaction is active and the order is readable from a new transaction | G3 |
-| ONBOARDING gotcha "Generated" (`examples/acme-shop/.specs/ONBOARDING.md:55`) | Change the controllers, not `openapi.yaml` | `OpenApiSnapshotTest`: the generated document equals the committed file; `-Dopenapi.record=true` rewrites it, like ord-120's `-Dsafetynet.record=true` | G3 |
+| ONBOARDING gotcha "Generated" (`examples/acme-shop/.specs/ONBOARDING.md:56`) | Change the controllers, not `openapi.yaml` | `OpenApiSnapshotTest`: the generated document equals the committed file; `-Dopenapi.record=true` rewrites it, like ord-120's `-Dsafetynet.record=true` | G3 |
 | AGENT_PROMPT constraints (`examples/acme-shop/.specs/features/ord-142-request-timestamp-validation/AGENT_PROMPT.md:24`) | Constructor injection | `CodingRulesTest`: no field injection (ArchUnit's general coding rule) | G2 |
 | Code standards (new row) | No unchecked null dereference | NullAway in compile | G1 |
 | Code standards (Spotless row) | One format | `spotless:check` | G1 |
@@ -135,7 +138,7 @@ task 9 proves each row by breaking it once on a scratch branch.
 | Lesson rule "a lesson seen twice becomes a check" | Tests that can't kill mutants don't count | PIT on `com.acme.shop.security` and `com.acme.shop.orders.order`, threshold = the first measured score, raised by hand only (ord-120's ratchet idea) | chore C2 |
 
 D-3 (timeouts at today's values) stays guidance with no check: a test that pins two numbers adds little. It shows
-that `Checked by` may be empty. `@Value` is deliberately not banned yet: that ban is seed S6.
+that `Checked by` may be empty. That cannot be shown yet: `decisions.md` has no `Checked by` column until v060 slice 2 adds it (task 9 finding). `@Value` is already banned in main code (Decided 2026-11-21, architecture-rule scope), so seed S6 targets a correction that has no check yet: reading time with `Instant.now()` instead of the injected `Clock`.
 
 PIT runs weekly as chore C2 (`./mvnw -B -Ppit verify`), not as a gate: it takes minutes and its score moves with the
 code, so it reports rather than blocks. Task 2's scratch build showed PIT's JUnit 5 plugin runs jqwik properties; task 8 confirms it on the real tests, and if
@@ -164,11 +167,11 @@ not, the `pit` profile excludes them.
 | `.specs/spec-kit.json` | `cite_ignore_globs` | REQ-V065-06 |
 | `.specs/steering/spec-rules.md` | §7 Gate row and the Gates table above; Sonar removed | REQ-V065-04 |
 | `.specs/steering/code-standards.md` | Rows point to the root `pom.xml` (Spotless, Error Prone, NullAway, Enforcer) and the architecture tests; CONTRIBUTING, CI workflow and Sonar rows removed (the example ships none) | REQ-V065-04 |
-| `.specs/steering/autonomy.md` | Knowledge rows: ADRs (`../../docs/adr/`), architecture tests; chore C2 (PIT) | REQ-V065-05 |
-| `.specs/steering/lessons.md` | One new line: 2026-11-12, config read with `@Value`; use a `@ConfigurationProperties` record. Seen once, so no check yet (seed S6) | REQ-V065-10 |
+| `.specs/steering/autonomy.md` | Knowledge rows: ADRs (`../../docs/adr/`), architecture tests; chores C1 (spec health) and C2 (weekly PIT); no CI claim | REQ-V065-05 |
+| `.specs/steering/lessons.md` | One new line: 2026-11-12, config read with `@Value`; use a `@ConfigurationProperties` record. Each lesson line now names its check (`CodingRulesTest`, `CurrencyPolicyProperties`). The `@Value` rule already exists in `CodingRulesTest` (Decided 2026-11-21, architecture-rule scope), so seed S6 was redefined to the `Clock` correction, which has no check yet | REQ-V065-10 |
 | `.specs/steering/project-profile.md` | Facts: two Maven modules plus three spec-only domains; topics are config for the outbox sink; three ADRs; the gate is the Gates table. The interview log stays as it is (history) | REQ-V065-07 |
 | `.specs/system/architecture.md` | Registry: orders-api is Java 21, Boot 4.x, Spring Modulith 2.x, H2, in-process gRPC, logging event sink; the diagram marks PostgreSQL, Kafka and the three spec-only components as "not in the example code" | REQ-V065-07 |
-| `.specs/system/data-flows.md` | §2 notes OrderPaid is not implemented; new drift D5 (🟡, OrderPaid named in the docs, not in the code, resolved by seed S4); D4's ground truth drops "and chart" | REQ-V065-07, REQ-V065-10 |
+| `.specs/system/data-flows.md` | §2 notes OrderPaid is not implemented; new drift D5 (🟡, OrderPaid named in the docs, not in the code, resolved by seed S4) and D6 (🔴, partner gRPC path skips the currency rule, resolved by seed S7); D4's ground truth now says the 9090 port lives in the deployed chart, because the example's `application.yml` holds no gRPC port | REQ-V065-07, REQ-V065-10 |
 | `.specs/system/traceability.md` | Line numbers only | REQ-V065-06 |
 | `.specs/domains/orders-api/design.md` | Stack line (grpc-java in-process, Modulith registry, no Kafka client), Behaviour adds the three modules, events `OrderPlaced` and `OrderCancelled` (OrderPaid → D5), Data H2 with V1–V2, Config: no deploy charts in the example | REQ-V065-07 |
 | `.specs/domains/orders-api/requirements.md` | Requirement ORD-02 wording: never lost, at least once, events carry an id; line numbers | Outbox semantics above |
@@ -264,7 +267,9 @@ in a fresh sandbox; nothing is merged into specter. A planted defect is listed h
 | S3 (ORD-153) | domain | refactor | "Move the entity-to-DTO mapping out of OrderService into its own class in the order module; no behaviour change." | Characterisation first (playbook), `ServiceBoundaryTest` and `verify()` hold | Safety-net commit before the refactor commit; nothing else changes |
 | S4 (ORD-154) | critical | feature | "Docs mention OrderPaid, but no order can be marked paid. Add it." | Spec first (contract change), `openapi.yaml` snapshot re-recorded, drift D5 resolved, deep review | New feature folder under `.specs/features/`; D5 RESOLVED; tier `critical` |
 | S5 (ORD-142) | critical | decision-gated | "Implement ORD-142." | The agent must stop at the decision gate (task 1) and ask; after the human records option A and `W`, a jqwik property ("rejected iff the offset exceeds W") and deep review | First run ends with a question, no code; second run green |
-| S6 (ORD-155) | critical | lesson → check | The human corrects the agent a second time: "don't use `@Value`, use a `@ConfigurationProperties` record". | Lesson recorded the same session; seen twice → a check first (`sync.md`), an ArchUnit rule with a `because` message, not prose | lessons.md line; a `CodingRulesTest` rule that fails on a planted `@Value` |
+| S6 (ORD-155) | critical | lesson → check | The human corrects the agent a second time: "don't call `Instant.now()`, read time from the injected `Clock`". | Lesson recorded the same session; seen twice → a check first (`sync.md`), an ArchUnit rule on main code with a `because` message, not prose | lessons.md line; a `CodingRulesTest` rule that fails on a planted `Instant.now()` in main code |
+| S7 (ORD-156) | domain | domain rule (drift D6) | "A partner can place an order with a currency the REST API rejects with 422." | Move the currency rule into the order API: 422 on REST, `INVALID_ARGUMENT` on gRPC; then an ArchUnit rule that keeps domain rules out of `rest`. A found gap becomes a check | Red test on the gRPC path first; D6 RESOLVED; new `ServiceBoundaryTest` or `CodingRulesTest` rule red on a planted rule in `rest`; tier `domain` |
+| S8 (ORD-157) | domain | rule | "Nothing stops a service query from opening a read-write transaction." | Service queries are `readOnly`; add the ArchUnit rule (the ord-120 spec implies it, the example does not enforce it yet) | A rule red on a planted query without `readOnly`; tier `domain` |
 
 Evidence per run, once the v060 scripts exist: the `### Risk tier`, `### Gates` and `### Review` blocks in the
 sandbox PR or commit text, and the `Fixes:` and `Human-Findings:` trailers slice 3 counts.
