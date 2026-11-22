@@ -495,7 +495,6 @@ bad "placeholder left in" '| routine | `<tests glob>` | standard | none |\n| cri
 bad "short row" '| routine | `tests/*` |\n| critical | `*` | deep | required |' 2
 bad "guarded path in a lower row" '| routine | `docs/adr/*` | standard | none |\n| critical | `*` | deep | required |' 1
 bad "agent file in a lower row" '| routine | `CLAUDE.md` | standard | none |\n| critical | `*` | deep | required |' 1
-python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" >/dev/null 2>&1 && fail "13b: no mode exits 0"
 python3 "$B/.specs/kit/scripts/tiers.py" --bogus >/dev/null 2>&1 && fail "13b: unknown flag exits 0"
 tprof "$GOOD"; gitq -C "$B" add .; gitq -C "$B" commit -m profile; tprof '| critical | `*` | deep | required |'
 python3 -I - "$B" "$KIT/kit/scripts" <<'PY' || fail "13b: guarded globs or base read"
@@ -510,5 +509,35 @@ assert "docs/adr/*" in g and ".specs/steering/*" in g and "AGENTS.md" in g, g
 for a in install.AGENTS.values():
     assert any(x.startswith(a[3].split("/")[0] + "/") for x in g), ("agent dir not guarded", a[3])
 PY
+echo "13b. tiers.py label: staged and --range, strictest file wins, guarded path takes the last row, base table rules, --json, usage errors"
+tl() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" "$@" 2>&1; }
+mkdir -p "$B/tests" "$B/src/security" "$B/docs"; echo a > "$B/tests/a.txt"; echo a > "$B/docs/d.md"; echo a > "$B/src/s.txt"
+tprof "$GOOD"; gitq -C "$B" add -A; gitq -C "$B" commit -m base2; BASE=$(git -C "$B" rev-parse HEAD)
+echo b > "$B/docs/d.md"; gitq -C "$B" add -A
+out=$(tl) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && echo "$out" | grep -q "^### Risk tier" || fail "13b: staged docs change not routine: $out"
+echo b > "$B/src/s.txt"; gitq -C "$B" add -A
+out=$(tl) && echo "$out" | grep -q "tier: domain" && echo "$out" | grep -q "files: 2 (routine 1, domain 1)" && echo "$out" | grep -q 'set by: src/s.txt (`src/\*`)' || fail "13b: strictest file did not win: $out"
+echo b > "$B/src/security/k.txt"; gitq -C "$B" add -A
+out=$(tl) && echo "$out" | grep -q "tier: critical (reviewer: deep, human: required)" || fail "13b: security file not critical: $out"
+gitq -C "$B" reset -q; gitq -C "$B" add docs/d.md; echo c > "$B/AGENTS.md"; gitq -C "$B" add AGENTS.md
+out=$(tl) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "set by: AGENTS.md" || fail "13b: guarded AGENTS.md not critical: $out"
+gitq -C "$B" reset -q --hard; gitq -C "$B" clean -fdq; gitq -C "$B" mv tests/a.txt tests/b.txt
+out=$(tl) && echo "$out" | grep -q "files: 2" || fail "13b: rename not counted under both paths: $out"
+gitq -C "$B" reset -q --hard; gitq -C "$B" clean -fdq
+echo z > "$B/tests/z.txt"; gitq -C "$B" add -A; gitq -C "$B" commit -m z
+out=$(tl --range "$BASE..HEAD") && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "profile: .specs/steering/autonomy.md at ${BASE%"${BASE#???????}"}" || fail "13b: --range label: $out"
+js=$(tl --range "$BASE...HEAD" --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]=="routine" and d["reviewer"]=="standard" and d["human"]=="none" and d["set_by"]["file"]=="tests/z.txt" and d["set_by"]["glob"]=="tests/*" and d["counts"]=={"routine":1} and d["profile_commit"]=="'"$BASE"'" and d["labels_only"] is True, d' || fail "13b: --json shape: $js"
+# a branch that rewrites the Tiers table is labelled by the base's table
+tprof '| critical | `*` | deep | required |'; ( cd "$B" && echo q > docs/e.md ); gitq -C "$B" add -A; gitq -C "$B" commit -m rewrite
+out=$(tl --range "$BASE..HEAD") && echo "$out" | grep -q "tier: critical" || fail "13b: guarded profile edit not critical: $out"
+tprof '| critical | `*` | deep | required |'; gitq -C "$B" add -A; gitq -C "$B" commit -q -m same || true
+echo w > "$B/docs/w.md"; gitq -C "$B" add docs/w.md
+out=$(tl) && echo "$out" | grep -q "tier: critical" || fail "13b: head table not used for staged: $out"
+N="$TMP/t13b-none"; mkdir -p "$N/.specs/steering"; gitq -C "$N" init; echo x > "$N/x"; gitq -C "$N" add -A; gitq -C "$N" commit -m x; echo y > "$N/x"; gitq -C "$N" add -A
+out=$(python3 "$B/.specs/kit/scripts/tiers.py" --specs "$N/.specs" 2>&1) && echo "$out" | grep -q "no autonomy profile at" && echo "$out" | grep -q "human: required" || fail "13b: no profile at base is not the human tier: $out"
+for a in "--range" "--range nodots" "--check --range a..b" "--json --check" "--range a..b --range c..d"; do
+  rc=0; tl $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: 'tiers.py $a' exits $rc, want 2"
+done
+rc=0; tl --range nosuch..HEAD >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: unresolvable range exits $rc, want 2"
 
 echo "selftest: OK"

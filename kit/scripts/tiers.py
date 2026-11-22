@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check the Tiers table of the autonomy profile. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/tiers.py --check [--specs DIR] [--file PATH] | --help
+Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check [--specs DIR] [--file PATH] | --help
        default DIR = the .specs/ this script is installed in; default PATH = DIR/steering/autonomy.md
 
 --check reads the working-tree profile and validates its `## Tiers` table: unique tier names, at least one `glob`
@@ -10,9 +10,15 @@ last row `required`, no <placeholder> left in. It also fails when a tier above t
 profile itself, the installed kit, Knowledge targets, agent files): guarded paths always take the last row.
 Exit 0: valid, or no profile / no Tiers section (not configured: the human tier applies, as in 0.5.0).
 Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or argument, with `file:line`.
-Labelling a change (staged or --range, reading the profile at the base commit) is not built yet.
+
+Without --check it labels a change and prints a `### Risk tier` block (--json: the same as JSON). The change is the
+staged files (base HEAD) or --range A...B / A..B (base = merge-base A B, head B); the profile is read at the base,
+never the working tree. Each file takes the lowest row a glob matches (none: the last row; guarded: the last row) and
+the change takes its strictest file's tier. Renames count under both paths. Exit 0, or 2 on a bad argument or profile.
+No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 """
 import fnmatch
+import json
 import posixpath
 import re
 import subprocess
@@ -105,12 +111,67 @@ def profile_at(root, base, rel):
     return run.stdout if run.returncode == 0 else None
 
 
-USAGE = "usage: tiers.py --check [--specs DIR] [--file PATH] | --help"
+USAGE = "usage: tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --help"
 
 
 def refuse(msg):
     print("tiers: " + msg, file=sys.stderr)
     return 2
+
+
+def git(root, *args):
+    run = subprocess.run(["git", "-C", str(root)] + list(args), capture_output=True, text=True)
+    return run.stdout.strip() if run.returncode == 0 else None
+
+
+def label(root, rel, rng, as_json):
+    """Print the Risk tier block for the staged change or the range; return the exit code."""
+    if rng:
+        a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
+        base = git(root, "merge-base", a, b) if a and b else None
+        files = git(root, "diff", "--no-renames", "--name-only", "--relative", base, b) if base else None
+    else:
+        base = git(root, "rev-parse", "--verify", "-q", "HEAD")
+        files = git(root, "diff", "--cached", "--no-renames", "--name-only", "--relative")
+    if rng and files is None:
+        return refuse("cannot resolve --range " + rng + " in " + str(root))
+    files = (files or "").splitlines()
+    text = profile_at(root, base, rel) if base else None
+    try:
+        rows = parse_tiers(text) if text else None
+    except ValueError as err:
+        return refuse(rel + " at " + str(base)[:7] + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+    short = (base or "HEAD")[:7]
+    if rows is None:
+        # Not configured: the human tier, as in 0.5.0.
+        rows = [("human", ["*"], "deep", "required", 0)]
+        text, why = "", ("no autonomy profile at " if not text else "no Tiers section in profile at ") + short
+    else:
+        why = None
+    guarded = guarded_globs(text, rel)
+    last, counts, top = len(rows) - 1, {}, (-1, None, None)
+    for f in files:
+        hit = next((g for g in guarded if fnmatch.fnmatch(f, g)), None)
+        idx, glob = (last, hit) if hit else next(
+            ((k, g) for k, r in reversed(list(enumerate(rows))) for g in r[1] if fnmatch.fnmatch(f, g)), (last, None))
+        counts[rows[idx][0]] = counts.get(rows[idx][0], 0) + 1
+        top = max(top, (idx, f, glob), key=lambda t: t[0])
+    idx = top[0] if files else last
+    tier, _, reviewer, human, _ = rows[idx]
+    set_by = {"file": top[1], "glob": top[2]} if files else None
+    ordered = {r[0]: counts[r[0]] for r in rows if r[0] in counts}
+    if as_json:
+        print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
+                          "profile_commit": base if why is None else None, "labels_only": True}))
+        return 0
+    print("### Risk tier")
+    print("- tier: " + tier + " (reviewer: " + reviewer + ", human: " + human + ")")
+    if set_by:
+        print("- set by: " + set_by["file"] + (" (`" + set_by["glob"] + "`)" if set_by["glob"] else " (no glob matched)"))
+    print("- files: " + str(len(files)) + (" (" + ", ".join(k + " " + str(v) for k, v in ordered.items()) + ")" if files else ""))
+    print("- profile: " + (why or rel + " at " + short))
+    print("- autonomy: labels only; every change still gets the human check")
+    return 0
 
 
 def main(argv):
@@ -126,9 +187,23 @@ def main(argv):
                 return refuse(USAGE)
             value, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
             specs, profile = (value, profile) if flag == "--specs" else (specs, value)
-    if argv != ["--check"]:
-        return refuse("expected --check" + ("; unknown argument(s) " + " ".join(argv) if argv else "") + "; " + USAGE)
+    rng, as_json = None, "--json" in argv
+    argv = [a for a in argv if a != "--json"]
+    if "--range" in argv:
+        i = argv.index("--range")
+        if i + 1 >= len(argv) or not re.fullmatch(r"[^.\s][^\s]*?\.\.\.?[^.\s][^\s]*", argv[i + 1]):
+            return refuse("--range needs A...B; " + USAGE)
+        rng, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+    check = argv == ["--check"]
+    if argv and not check or check and (rng or as_json):
+        return refuse("unknown or conflicting argument(s) " + " ".join(argv + (["--json"] if as_json else []) + (["--range"] if rng else [])) + "; " + USAGE)
     profile = profile or specs / "steering" / "autonomy.md"
+    if not check:
+        try:
+            rel = profile.relative_to(specs.parent).as_posix()
+        except ValueError:
+            return refuse(str(profile) + " is outside " + str(specs.parent) + "; " + USAGE)
+        return label(specs.parent, rel, rng, as_json)
     try:
         text = profile.read_text()
     except OSError:
