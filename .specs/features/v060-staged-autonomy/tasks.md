@@ -3,6 +3,23 @@
 Deploy impact: none (specter has no CI/CD; a project gets each slice only when it re-runs `install.sh`, and nothing
 changes until it adds `steering/autonomy.md`)
 
+## ▶ Resume here (2026-11-22)
+
+Branch `feat/0.7.0` (local, on top of `feat/0.6.5-acme-java`, which sits on `feat/0.6.0`; none merged to `main`,
+none tagged). Slice 2 tasks 9-14 committed; task 15 (release 0.7.0) is blocked on review fixes.
+- Two security reviews of slice 2 said "do not ship": `docs/reviews/2026-11-22-slice2-deep-review.md` and
+  `docs/reviews/2026-11-22-slice2-re-review.md`. Fix rounds 1-2 are committed (`ecbd154`, `3a877d3`). Round 3 (re-review
+  findings 1-7, 10, 12: one NFKC+casefold path key, exact Gates-table equality, gates.py dirty-after-run,
+  trusted-copy commands that run, staged base fail-closed with `merged_ref` read at the base, unreadable blocker
+  location = not ready, more guarded globs) was handed to a deep-tier worker; its edits may be uncommitted in the tree.
+- Next: run G1-G4; if round 3 is in the tree, review its diff, commit; then a confirmation re-review (deep tier)
+  re-running F1-F7; then finish `CHANGELOG.md` `[0.7.0]` (draft uncommitted; corrections listed at the end of the
+  re-review), `VERSION` 0.7.0, tick 15, gate-review, push `feat/0.7.0`.
+- Then slice 3 (tasks 16-19, release 0.8.0) and slice 4 (20-23, 0.9.0): the milestone is v060 done.
+- Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0 to `main` and tag, in that order.
+- Pinned (do not start): the platform layer for multi-repo systems, until the CRRD spec split closes. Its input is
+  gaps G1-G13 in CRRD's `.specs/features/crrd-platform-split/design.md` § 8.4.
+
 ## Slice 1: a solid stage 3 (release 0.6.0)
 
 - [x] 1 Gate: record the memory-file and first-chore decisions in the Open decisions; delete the unused option —
