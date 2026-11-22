@@ -66,6 +66,7 @@ none tagged). Slice 2 tasks 9-14 committed; task 15 (release 0.7.0) is blocked o
   [REQ-V060-11] [REQ-V060-12]
   - Evidence (review fix, ready.py): selftest 11b/11e rows red then green for head gate commands (changed, removed), staged base, stale staged block, blocker location forms, `FAIL (exit -9)`, reviewer-tier warning, provider-prefixed ids, hidden blocks, directory targets, no `__pycache__`; docs name the trusted-copy run.
   - Evidence (review fix, tiers.py): selftest 13b rows for case-folded, nested, quoted-path, subfolder-.specs guards and the merge-base staged base red, then green.
+  - Evidence (re-review fix): selftest rows red, then green: folded names (`AGENTſ.md`, `.ſpecs/kit/x`, `.specs/ﬆeering/x.md`, `.clınerules`, `src/Security/Bypass.java`, NFD Knowledge target), `AGENTS.override.md`/`CLAUDE.local.md`/nested `.claude`, work-tree `merged_ref` ignored, no merge base fails closed, Gates table equal (prepended row, duplicate label), `tree changed during gates`, unreadable and en-dash blocker locations, `./` targets, `--range` bad `spec-kit.json` exits 2.
 
 ## Slice 3: guardrails and evidence (release 0.8.0)
 

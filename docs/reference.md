@@ -67,7 +67,7 @@ python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdou
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
-python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (labelling comes next)
+python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -140,7 +140,12 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
   Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
   head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
-  Run `tiers.py` and `ready.py` from a trusted copy, never the PR's own `.specs/kit/`: a worktree of the base branch (`git worktree add /tmp/base <base>`, then `python3 /tmp/base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD`) or CI on the default branch. `ready` means the PR's declarations are consistent with the base's rules and the head commit; it does not prove the gates ran: re-run them, or run them in CI.
+  Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base>`,
+  then `python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md` as a staged preflight
+  before the commit, and `… tiers.py --specs .specs --range <base>...HEAD` plus `… ready.py --specs .specs --range
+  <base>...HEAD --pr /tmp/pr.md` after it (the only binding check; steps in `kit/docs/review-loop.md`). The first
+  upgrade to 0.7.0 has no kit at its base: run them from the specter release checkout. `ready` means the PR's
+  declarations agree with the base's rules and the head commit; it does not prove the gates ran: rerun them, or run them in CI.
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
   `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
   the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI

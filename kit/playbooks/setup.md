@@ -106,7 +106,7 @@ From `.specs/kit/templates/`:
    otherwise the first settled decision creates it.
 7. `steering/code-standards.md`: link to the project's existing standards and CI gate. Don't restate them.
 8. `steering/autonomy.md` and `steering/lessons.md`: **only if Q10 was yes, and never in adopt mode.** Copy both
-   templates. In `autonomy.md` keep Knowledge, Tiers and Chores. In Tiers put the real globs found in Phase 1 (tests, docs, lockfile; source; security, interfaces, migrations, CI, `CODEOWNERS`), as the user confirmed them in Q10; every tier keeps at least one glob, and run `python3 .specs/kit/scripts/tiers.py --check` after. Fill every placeholder from what Phase 1 found
+   templates. In `autonomy.md` keep Knowledge, Tiers and Chores. In Tiers put the real globs found in Phase 1 (tests, docs, lockfile; source; security, interfaces, migrations, CI, `CODEOWNERS`, and the scripts the Gates commands run in the last tier), as the user confirmed them in Q10; every tier keeps at least one glob, and run `python3 .specs/kit/scripts/tiers.py --check` after. Fill every placeholder from what Phase 1 found
    (ADR folder, architecture tests, the chore schedule and scheduler the user named), or delete the row. Never leave a
    `<…>`.
 9. Update `.specs/spec-kit.json`: `upstream_req_pattern` (Q1), `spec_threshold_loc` (Q6), `spec_sync` and `code_globs` (Q7).

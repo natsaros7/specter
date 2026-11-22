@@ -11,8 +11,9 @@ Reads the first table whose header has a Gate and a Command column (a # column i
 Each row's Command cell holds exactly one `code span`: that is the command, with \\| read as |. Commands run with
 `sh -c` from the folder holding .specs/, in table order.
 Exit 0: all green; stdout gets a `### Gates` block: one line per gate (`pass (<last output line>)`), then
-        `commit: <sha>[+dirty]`, taken before the gates ran (`none` outside git), then `verdict: ready (N passed)`.
-        Stdin is closed.
+        `tree changed during gates` when a gate changed git status or the diff against HEAD, then
+        `commit: <sha>[+dirty]`, taken after the gates ran (`none` outside git), then `verdict: ready (N passed)`.
+        ready.py refuses a block whose gates changed the tree: the commit is not what they checked. Stdin is closed.
 Exit 1: a gate failed; later gates don't run. stdout gets the same block with `FAIL (exit N)` and `not run` rows and
         `verdict: not ready (F failed, R not run)`; the failing output and `GATE FAILED: <gate> (exit N)` go to stderr.
 Exit 2: no file, no table, a row without exactly one code span, or a template placeholder (`<...>`) left in. Nothing
@@ -58,6 +59,13 @@ def gate_rows(text):
     return rows or None
 
 
+def tree(root):
+    """git status plus the diff against HEAD: what a run must leave as it found.
+    shortcut: an untracked file's content is not compared, only its name; add it if a gate edits untracked files."""
+    run = lambda *a: subprocess.run(["git", "-C", str(root)] + list(a), capture_output=True).stdout
+    return run("status", "--porcelain") + run("diff", "HEAD")
+
+
 def commit(root):
     sha = subprocess.run(["git", "-C", str(root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True)
     if sha.returncode:
@@ -101,7 +109,7 @@ def main(argv):
     root, summary, failed = specs.parent, [], 0
     if not root.is_dir():
         return refuse("no project folder " + str(root))
-    sha = commit(root)  # before the gates: output they write must not make the tree look dirty
+    before = tree(root)
     for label, cmd in rows:
         if failed:
             summary.append("- " + label + ": not run")
@@ -120,7 +128,8 @@ def main(argv):
         summary.append("- " + label + ": pass (" + (last[-1].strip() if last else "exit 0") + ")")
     skipped = sum(l.endswith(": not run") for l in summary)  # a gate's output sits inside "pass (...)", so it can't end so
     verdict = "not ready (1 failed, %d not run)" % skipped if failed else "ready (%d passed)" % len(summary)
-    print("### Gates\n" + "\n".join(summary) + "\n- commit: " + sha + "\n- verdict: " + verdict)
+    changed = "\n- tree changed during gates" if tree(root) != before else ""
+    print("### Gates\n" + "\n".join(summary) + changed + "\n- commit: " + commit(root) + "\n- verdict: " + verdict)
     return 1 if failed else 0
 
 

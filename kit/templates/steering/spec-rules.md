@@ -60,8 +60,8 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 3. The change states `Deploy impact: none` or `Deploy impact: <job or env>: <what changes>`. CI/CD here consumes
    <a pinned artifact or image | the default branch directly> (setup Q9). If it is not `none`, the people who run CI/CD
    hear before the merge.
-4. Fresh-context review on the diff. The reviewer's tier is the `Reviewer` column of the row `python3 .specs/kit/scripts/tiers.py`
-   gives, from the Tiers table in `steering/autonomy.md`. <add a project rule here, or delete this note>
+4. Fresh-context review on the diff. The reviewer's tier is the `Reviewer` column of the row `tiers.py` gives, run from a
+   trusted copy of the kit at the base (`.specs/kit/docs/review-loop.md` step 3), from the Tiers table in `steering/autonomy.md`. <add a project rule here, or delete this note>
 
 ## 8. Keep specs in sync
 

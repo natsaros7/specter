@@ -38,7 +38,7 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
   tier could earn autonomy on numbers. Searched `grep -rniE 'autonom|auto-merge|codeowners|audit' kit`: the only hit
   is "Work autonomously" in `kit/templates/feature/AGENT_PROMPT.md:2`.
 
-Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:32`, it already skips
+Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:33`, it already skips
 tables without Gate and Command columns), changed-file listing and fnmatch globs (`kit/scripts/spec_sync_check.py:18-27`),
 the relative-link check that already resolves paths outside `.specs/` (`kit/scripts/spec_lint.py:188-200`), the
 merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:234`) and
@@ -126,7 +126,7 @@ Each slice ships and gives value on its own. A later slice never starts before t
   it matches, an unmatched file takes the last row, and the change takes its strictest file's tier.
 - Guarded paths SHALL always take the last row, whatever the table says: `.specs/steering/*`, `.specs/spec-kit.json`,
   `.specs/kit/*`, every in-repo path the Knowledge section names, and the agent files the installer writes.
-- The profile SHALL be read as of the change's base (the merge base for a range, `HEAD` for staged files), so a
+- The profile SHALL be read as of the change's base (the merge base for a range; for staged files the merge base with `merged_ref` as committed at `HEAD`, and the last tier for every file when there is none), so a
   change is judged by the rules it started under. No profile at the base means the human tier.
 - Output: a `### Risk tier` block for the PR (tier, Reviewer, Human, the file and glob that set it, the profile's
   commit) and `--json`. Exit 0 once labelled, 2 on a bad profile or argument. It SHALL never merge, approve or edit.

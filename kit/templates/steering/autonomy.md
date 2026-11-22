@@ -12,6 +12,7 @@ What agents may do here without a human, and on what evidence. Editing this file
 | Memory | [lessons](lessons.md) | start |
 
 ## Tiers
+<!-- Put the scripts your Gates commands run (test runners, lint scripts, CI config) in the last tier: ready.py compares Gates commands, not the scripts they call. -->
 | Tier | Paths | Reviewer | Human |
 |---|---|---|---|
 | routine | `<tests glob>` `<docs glob>` `<lockfile>` | standard | none |

@@ -24,16 +24,39 @@ flowchart LR
    the project rules **as they are at the base commit**: `git show <base>:AGENTS.md`, and each `.specs/steering/*`
    and Knowledge `start` file the same way. Never the working tree or the PR head: a change cannot edit its own
    review rules. It reports real issues only, in the verdict table below. It does not edit code.
-   Run `tiers.py` and `ready.py` from a trusted copy, never the PR's own `.specs/kit/`: a worktree of the base branch (`git worktree add /tmp/base <base>`, then `python3 /tmp/base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD`) or CI on the default branch. `ready` means the PR's declarations are consistent with the base's rules and the head commit; it does not prove the gates ran: re-run them, or run them in CI.
-   Run `python3 .specs/kit/scripts/tiers.py [--range B..H] [--json]` on the frozen diff: its `reviewer:` is the
-   reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation, permissions) get the deep tier.
+   The lead labels the frozen diff with a **trusted copy** of the kit, never the PR's own `.specs/kit/` (the PR can
+   edit it). From the repo root:
+
+   ```sh
+   git worktree add --detach /tmp/specter-base <base>     # the kit as it is at <base>; works while <base> is checked out
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs
+   ```
+
+   Its `reviewer:` is the reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation,
+   permissions) get the deep tier.
 4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up
    (a task in the feature's `tasks.md`, or an issue); advisories never block. After a second red gate or a disputed finding,
    escalate to the planner (deep) with the spec, the diff and both outputs.
-5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual), read the
-   reviewer's verdict table, then commit. Paste the `### Risk tier` block next to `### Gates` in the PR description
-   (`python3 .specs/kit/scripts/ready.py` prints both with the verdict), with the `### Review` block and, when
-   there are artifacts, the `### Verification` block. Read `### Review` and `### Readiness` next to `### Gates`. Check the change's `Deploy impact:` line: if it is not `none`, the people who
+5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
+   reviewer's verdict table. Write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
+   block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
+   `### Verification` block. Then check it with the trusted copy from step 3, in two modes:
+
+   ```sh
+   # preflight, staged, before the commit (a +dirty Gates block binds no content)
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md
+   git commit                                            # then rerun gates.py and put its new block in /tmp/pr.md
+   # the binding check, after the commit: the label and the verdict for <base>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD --pr /tmp/pr.md
+   git worktree remove /tmp/specter-base
+   ```
+
+   Only the `--range` run binds the blocks to a commit. `ready` means the declarations agree with the base's rules
+   and the head commit; it does not prove the gates ran: rerun them, or run them in CI. The first change that
+   upgrades a project to 0.7.0 has no `ready.py` at its base: run both scripts from the specter release checkout
+   (`python3 <specter>/kit/scripts/ready.py --specs .specs …`). Paste the `### Readiness` block into the PR and read
+   it next to `### Gates` and `### Review`. Check the change's `Deploy impact:` line: if it is not `none`, the people who
    run CI/CD hear before the merge. A job that runs from the default branch picks up every merge on its next run.
 
 ## Reviewer prompt (works with any agent)

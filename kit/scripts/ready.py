@@ -5,20 +5,26 @@ Usage: python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr F
        default DIR = the .specs/ this script is installed in; PR text comes from FILE, else stdin.
 
 Reads only: it runs no command, and never executes or evals anything from the PR text. Base and head are as in
-tiers.py: staged mode (base HEAD; the block's commit must be HEAD, `+dirty` allowed) or --range (base = merge-base
-A B, head B; the block's commit must be B, a prefix of at least 7 hex, and not dirty).
-Gates: the labels come from the Gates table of steering/spec-rules.md at the base, never the working tree. Every label
-needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeated label, a stale or dirty commit, or a
-verdict other than `ready (N passed)` is not ready. A row whose label is not in the base's table is a warning, never
-trusted. The block's Risk tier (tiers.py) is printed. Exit 0 ready, 1 not ready, 2 bad argument or unreadable input.
+tiers.py: staged mode, a preflight before the commit (base = tiers.py's staged base, head the index; the block's
+commit must be HEAD, and `+dirty` while files are staged) or --range, the binding check after the commit (base =
+merge-base A B, head B; the block's commit must be B, a prefix of at least 7 hex, and not dirty). Run it from a
+trusted copy of the kit (a worktree of the base), never the PR's own.
+Gates: the labels come from the Gates table of steering/spec-rules.md at the base, never the working tree, and the
+head's table (the index in staged mode) must equal it row for row: a changed table goes to the human. Every label
+needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeated label, a stale or dirty commit, a
+`- tree changed during gates` line, or a verdict other than `ready (N passed)` is not ready. A row whose label is not
+in the base's table is a warning, never trusted. The block's Risk tier (tiers.py) is printed.
+Exit 0 ready, 1 not ready, 2 bad argument or unreadable input (a bad spec-kit.json included).
 Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, one
-verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready, else advisory.
+verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready; an empty cell makes
+it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
 --json: {verdict, gates, tier, review, verification, warnings}.
 """
 import json
+import posixpath
 import re
 import subprocess
 import sys
@@ -94,12 +100,16 @@ def check_gates(text, labels, head, ranged, staged=False):
         problems.append("block commit " + sha + " was dirty")
     elif staged and not ranged and not dirty:
         problems.append("block commit " + sha + " is clean but files are staged; it needs +dirty")
+    if blocks and "- tree changed during gates" in blocks[0]:
+        problems.append("gates changed the tree during the run: the commit is not what they checked (gitignore gate output)")
     passed = sum(1 for k in labels if len(status.get(k, [])) == 1 and status[k][0].startswith("pass ("))
     return {"ok": not problems, "passed": passed, "total": len(labels), "commit": sha, "problems": problems,
             "warnings": warnings}
 
 
 def family(model):
+    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. It only
+    # warns today; replace with a profile table before slice 4 lets a family bar Human none.
     """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
     m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
     return m.split("-")[0]
@@ -134,7 +144,10 @@ def check_review(text, base, want="standard"):
             if sev not in ("blocker", "advisory"):
                 r["problems"].append("verdict row has severity '" + c[0] + "', not blocker or advisory")
                 continue
-            loc = c[1] if re.fullmatch(r"`?[^\s:#`]+(?::\d+(?:-\d+)?(?::\d+)?|#L\d+(?:-L\d+)?)`?", c[1]) else ""
+            loc = c[1] if re.fullmatch(r"`?[^\s:#`]+(?::\d+(?:[-\u2013]\d+)?(?::\d+)?|#L\d+(?:-L\d+)?)`?", c[1]) else ""
+            if sev == "blocker" and c[1] and not loc:
+                r["problems"].append("blocker location unreadable: " + c[1])
+                continue
             empty = [n for n, v in (("location", loc), ("evidence", c[2]), ("trigger", c[3]), ("consequence", c[4])) if not v]
             if sev == "blocker" and not empty:
                 r["blockers"].append(c[1])
@@ -186,9 +199,10 @@ def check_verification(text, root, head, ranged, req_pattern):
         elif target.startswith("/") or ".." in target.split("/") or "\\" in target:
             status = "path outside the repository"
         else:
-            out = tiers.git(root, "--literal-pathspecs", "ls-tree" if ranged else "ls-files", *(["-s"] if not ranged else []), *([head] if ranged else []), "--", target) or ""
-            ent = [x.split() for x in out.splitlines() if x.partition("\t")[2] == target]  # a directory lists its children, not itself
-            status = "ok" if ent and ent[0][0] in ("100644", "100755") else "symlink or not a file" if ent or out or target == "." else "missing at the head"
+            path = posixpath.normpath(target)
+            out = tiers.git(root, "--literal-pathspecs", "ls-tree" if ranged else "ls-files", *(["-s"] if not ranged else []), *([head] if ranged else []), "--", path) or ""
+            ent = [x.split() for x in out.splitlines() if x.partition("\t")[2] == path]  # a directory lists its children, not itself
+            status = "ok" if ent and ent[0][0] in ("100644", "100755") else "symlink or not a file" if ent or out or path == "." else "missing at the head"
         v["lines"].append({"req": req, "target": target, "status": status})
         if req not in defined:
             v["problems"].append("verification REQ " + req + " is not defined in any requirements.md")
@@ -233,6 +247,12 @@ def main(argv):
     try:
         rel = (specs / "steering" / "spec-rules.md").relative_to(root).as_posix()
         change = tiers.classify(root, (specs / "steering" / "autonomy.md").relative_to(root).as_posix(), rng, specs)
+        # shortcut: req_id_pattern comes from the working tree's spec-kit.json, not the head; upgrade if a PR can edit it to pass.
+        pattern = spec_lint.load_config(specs)["req_id_pattern"]
+    except SystemExit as err:
+        return refuse(str(err.code))
+    except (json.JSONDecodeError, OSError) as err:
+        return refuse("cannot read " + str(specs / "spec-kit.json") + ": " + str(err))
     except ValueError as err:
         return refuse(str(err))
     base = change["base"]
@@ -244,23 +264,22 @@ def main(argv):
         return refuse(rel + " at " + str(base)[:7] + ": " + str(err))
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
-    staged = not rng and tiers.subprocess.run(["git", "-C", str(root), "diff", "--cached", "--quiet"]).returncode == 1
+    staged = not rng and subprocess.run(["git", "-C", str(root), "diff", "--cached", "--quiet"]).returncode == 1
     g = check_gates(text, [r[0] for r in rows], head, bool(rng), staged)
-    # A PR must not edit the command behind a label it reports as passed: compare the head's (or index's) table.
+    # gates.py runs the head's table in order, so any edit (a row added before a base row, a duplicate label, a changed
+    # command) changes what ran. Equal rows or not ready.
+    # shortcut: equal commands do not mean equal scripts: a PR that edits a script a gate calls still passes; setup
+    # puts gate scripts in the last tier; upgrade by comparing the files a command names.
     hrules = tiers.profile_at(root, head if rng else "", rel)
     try:
-        hrows = dict(gates.gate_rows(hrules) or []) if hrules else {}
+        hrows = gates.gate_rows(hrules) if hrules else None
     except ValueError:
-        hrows = {}
-    for label, cmd in rows:
-        if label not in hrows:
-            g["problems"].append("gate " + label + ": removed in this change")
-        elif hrows[label] != cmd:
-            g["problems"].append("gate " + label + ": command changed in this change")
+        hrows = None
+    if hrows != rows:
+        g["problems"].append("Gates table changed in this change: goes to the human")
     g["ok"] = not g["problems"]
     review = check_review(text, base, change["reviewer"])
-    # shortcut: req_id_pattern comes from the working tree's spec-kit.json, not the head; upgrade if a PR can edit it to pass.
-    verification = check_verification(text, root, head, bool(rng), spec_lint.load_config(specs)["req_id_pattern"])
+    verification = check_verification(text, root, head, bool(rng), pattern)
     problems = g["problems"] + review["problems"] + verification["problems"]
     warnings = g["warnings"] + review["warnings"]
     verdict = "not ready" if problems else "ready"
