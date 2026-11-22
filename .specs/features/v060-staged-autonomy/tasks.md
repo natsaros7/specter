@@ -30,7 +30,8 @@ changes until it adds `steering/autonomy.md`)
 - [x] 11b `ready.py`: PR text from `--pr` or stdin, base and head as `tiers.py`, `### Gates` against the base's table
   and the head commit, `### Readiness` block, `--json`, no command run — [REQ-V060-12]
   - Evidence: `kit/scripts/ready.py` (+ `tiers.classify` extracted from `label`); selftest 11b red (ready.py missing) then green: ready, missing/not-run/FAIL lane, stale, dirty, forged row, `--json`, usage.
-- [ ] 11c `ready.py`: `### Review` block: both model ids, families compared, `rules:` at the base, blocker form — [REQ-V060-13]
+- [x] 11c `ready.py`: `### Review` block: both model ids, families compared, `rules:` at the base, blocker form — [REQ-V060-13]
+  - Evidence: `kit/scripts/ready.py` `check_review`; selftest 11c red (a PR with no `### Review` read as ready) then green: valid, missing block, missing id, rules not the base, same-family WARN, open blocker, blocker without evidence or file:line advisory, `--json` review.
 - [ ] 11d `ready.py`: `### Verification` lines: REQ defined, path at the head, URL declared not fetched — [REQ-V060-14]
 - [ ] 12 Review loop, reviewer role, model routing, spec-rules §7.4: reviewer tier from the label — [REQ-V060-05]
 - [ ] 12a Review loop, reviewer and generator roles, feature `tasks.md` template: rules read at the base, the

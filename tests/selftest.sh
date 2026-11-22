@@ -550,7 +550,8 @@ printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a`
 echo a > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m base; RB=$(git -C "$R" rev-parse HEAD)
 echo b > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m head; RH=$(git -C "$R" rev-parse --short HEAD)
 rd() { python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range "$RB..HEAD" "$@" 2>&1; }
-blk() { printf 'Body text\n\n### Gates\n%b\n- commit: %s\n- verdict: %s\n\nafter\n' "$1" "$2" "$3"; }
+RV() { printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n| Severity | Location | Evidence | Trigger | Consequence | Fix |\n|---|---|---|---|---|---|\n%b\n' "$(echo "$RB" | cut -c1-7)" "$1"; }
+blk() { printf 'Body text\n\n### Gates\n%b\n- commit: %s\n- verdict: %s\n\n%s\nafter\n' "$1" "$2" "$3" "$(RV '| advisory | a.txt:1 | | | | follow-up |')"; }
 OK='- G1 Lint: pass (a)\n- G2 Tests: pass (b)'
 blk "$OK" "$RH" "ready (2 passed)" > "$R/pr.md"
 out=$(rd --pr "$R/pr.md") && echo "$out" | grep -q "^### Readiness" && echo "$out" | grep -q "gates: 2/2 pass at $RH" && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "tier: human" || fail "11b: ready block: $out"
@@ -572,11 +573,24 @@ nr "head table instead of base" "$(blk '- G1 Lint: pass (a)' "$RH" 'ready (1 pas
 [ ! -e "$R/pwned" ] || fail "11b: ready.py ran a command"
 # staged mode: block commit must be HEAD, +dirty allowed
 echo s > "$R/src/s.txt"; gitq -C "$R" add -A; H=$(git -C "$R" rev-parse --short HEAD)
-printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n' "$H" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" >/dev/null 2>&1; rc=$?
+{ printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n' "$H"; printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1\n- rules: %s\n' "$H"; } | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" >/dev/null 2>&1; rc=$?
 [ "$rc" = 0 ] || fail "11b: staged mode with +dirty exits $rc, want 0"
 for a in "--bogus" "--range" "--range nodots" "--pr" "--pr $R/nosuch.md"; do
   rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" $a </dev/null >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "11b: 'ready.py $a' exits $rc, want 2"
 done
 rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range nosuch..HEAD </dev/null >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "11b: unresolvable range exits $rc, want 2"
+
+echo "11c. ready.py: ### Review block: model ids, families, rules at the base, blocker form, --json review"
+rv() { blk "$OK" "$RH" "ready (1 passed)" | sed '/^### Review/,$d'; RV "$1"; }
+RO=$(rv '| advisory | a.txt:1 | | | | follow-up: tasks.md task 9 |'); out=$(printf '%s' "$RO" | rd) && echo "$out" | grep -q "verdict: ready" || fail "11c: valid review: $out"
+nr "no review block" "$(blk "$OK" "$RH" 'ready (1 passed)' | sed '/^### Review/,$d')" "Review"
+nr "missing reviewer id" "$(printf '%s' "$RO" | sed 's/^- reviewer: .*/- reviewer: /')" "reviewer"
+nr "rules not the base" "$(printf '%s' "$RO" | sed "s/^- rules: .*/- rules: $RH/")" "rules"
+out=$(printf '%s' "$RO" | sed 's/gpt-5-1/claude-opus-5-5/' | rd) && echo "$out" | grep -q "warning: .*family" || fail "11c: same family is a warning only: $out"
+BL='| blocker | src/a.c:42 | "if (t > 0)" | total 0 | ships free | >= 0 |'
+nr "open blocker" "$(rv "$BL")" "blocker at src/a.c:42"
+out=$(rv '| blocker | src/a.c:42 | | total 0 | ships free | x |' | rd) && echo "$out" | grep -q "advisory (no evidence)" || fail "11c: blocker without evidence is advisory: $out"
+out=$(rv '| blocker | nowhere | "q" | t | c | x |' | rd) && echo "$out" | grep -q "advisory (no location)" || fail "11c: blocker without file:line is advisory: $out"
+js=$(rv "$BL" | rd --json) || true; printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d["review"]; assert d["verdict"]=="not ready" and r["implementer"]=="claude-sonnet-5-5" and r["reviewer"]=="gpt-5-1" and r["same_family"] is False and len(r["blockers"])==1 and r["advisories"]==[] and r["problems"], d' || fail "11c: --json review shape: $js"
 
 echo "selftest: OK"

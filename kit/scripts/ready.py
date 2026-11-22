@@ -11,6 +11,8 @@ Gates: the labels come from the Gates table of steering/spec-rules.md at the bas
 needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeated label, a stale or dirty commit, or a
 verdict other than `ready (N passed)` is not ready. A row whose label is not in the base's table is a warning, never
 trusted. The block's Risk tier (tiers.py) is printed. Exit 0 ready, 1 not ready, 2 bad argument or unreadable input.
+Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, one
+verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready, else advisory.
 --json: {verdict, gates, tier, review, verification, warnings}.
 """
 import json
@@ -75,6 +77,56 @@ def check_gates(text, labels, head, ranged):
             "warnings": warnings}
 
 
+def check_review(text, base):
+    """{implementer, reviewer, same_family, rules, blockers, advisories, problems, warnings} for the ### Review block."""
+    r = {"implementer": None, "reviewer": None, "same_family": False, "rules": None, "blockers": [], "advisories": [],
+         "problems": [], "warnings": []}
+    lines, cur, n = [], False, 0
+    for line in text.splitlines():
+        if line.strip() == "### Review":
+            cur, n = True, n + 1
+        elif cur and line.startswith("#"):
+            cur = False
+        elif cur:
+            lines.append(line.rstrip())
+    if n != 1:
+        r["problems"].append("needs exactly one ### Review block, found " + str(n))
+        return r
+    for line in lines:
+        m = re.fullmatch(r"- (implementer|reviewer|rules): *(\S*).*", line)
+        if m:
+            r[m.group(1)] = m.group(2) or None
+        elif line.startswith("|"):
+            c = gates.split_row(line) + [""] * 6
+            if c[0].lower() == "severity" or set("".join(c)) <= set("-: "):
+                continue
+            sev = c[0].lower()
+            if sev not in ("blocker", "advisory"):
+                r["problems"].append("verdict row has severity '" + c[0] + "', not blocker or advisory")
+                continue
+            loc = c[1] if re.fullmatch(r"[^\s:]+:\d+", c[1]) else ""
+            empty = [n for n, v in (("location", loc), ("evidence", c[2]), ("trigger", c[3]), ("consequence", c[4])) if not v]
+            if sev == "blocker" and not empty:
+                r["blockers"].append(c[1])
+                r["problems"].append("open blocker at " + c[1])
+            else:
+                r["advisories"].append(c[1])
+                if sev == "blocker":
+                    r["warnings"].append("blocker at '" + c[1] + "' is advisory (no " + ", no ".join(empty) + ")")
+    for who in ("implementer", "reviewer"):
+        if not r[who]:
+            r["problems"].append("review has no " + who + " model id")
+    if r["implementer"] and r["reviewer"]:
+        fam = [r[k].split("-")[0].lower() for k in ("implementer", "reviewer")]
+        r["same_family"] = fam[0] == fam[1]
+        if r["same_family"]:
+            r["warnings"].append("reviewer " + r["reviewer"] + " is in the implementer's family '" + fam[0] + "'; it bars Human none")
+    rules = r["rules"] or ""
+    if not re.fullmatch(r"[0-9a-f]{7,40}", rules) or not (base or "").startswith(rules):
+        r["problems"].append("review rules " + (rules or "(none)") + " is not the base " + (base or "?")[:7])
+    return r
+
+
 def refuse(msg):
     print("ready: " + msg, file=sys.stderr)
     return 2
@@ -122,14 +174,15 @@ def main(argv):
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
     g = check_gates(text, [r[0] for r in rows], head, bool(rng))
-    # Seams for 11c and 11d: each check adds its own entry here and its problems join `problems`.
-    review = verification = None
-    problems = g["problems"]
+    # Seam for 11d: its check adds `verification` here and its problems join `problems`.
+    review, verification = check_review(text, base), None
+    problems = g["problems"] + review["problems"]
+    warnings = g["warnings"] + review["warnings"]
     verdict = "not ready" if problems else "ready"
     tier = {k: change[k] for k in ("tier", "reviewer", "human")}
     if as_json:
         print(json.dumps({"verdict": verdict, "gates": g, "tier": tier, "review": review,
-                          "verification": verification, "warnings": g["warnings"]}))
+                          "verification": verification, "warnings": warnings}))
     else:
         print("### Readiness")
         print("- gates: %d/%d pass at %s" % (g["passed"], g["total"], head[:7]))
@@ -137,7 +190,7 @@ def main(argv):
         print("- verdict: " + verdict)
         for p in problems:
             print("- not ready: " + p)
-        for w in g["warnings"]:
+        for w in warnings:
             print("- warning: " + w)
     return 1 if problems else 0
 
