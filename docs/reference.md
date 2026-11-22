@@ -140,6 +140,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
   Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
   head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
+  Run `tiers.py` and `ready.py` from a trusted copy, never the PR's own `.specs/kit/`: a worktree of the base branch (`git worktree add /tmp/base <base>`, then `python3 /tmp/base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD`) or CI on the default branch. `ready` means the PR's declarations are consistent with the base's rules and the head commit; it does not prove the gates ran: re-run them, or run them in CI.
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
   `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
   the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI

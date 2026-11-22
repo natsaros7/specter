@@ -208,6 +208,11 @@ stdin when `--pr` is absent).
 2. **Gates.** Labels from `gates.gate_rows` on `git show <base>:.specs/steering/spec-rules.md`. Each label needs a line
    `- <label>: pass (…)`, and the block needs `- verdict: ready`. Extra lines (a row the change adds) are allowed. A
    row the change removes is still required: that edit is to a guarded path and goes to the human anyway.
+   The Gates table is also read at the head (the index in staged mode): a label whose command differs, or is gone, is
+   `not ready` (`gate <label>: command changed|removed in this change`). Staged base is `tiers.classify`'s (merge-base
+   with `merged_ref`); in staged mode a block with staged files needs `+dirty`. Blocks inside HTML comments or code
+   fences are ignored; `FAIL (exit -9)` parses. Scripts set `sys.dont_write_bytecode` (no `__pycache__` in the kit).
+   Run from a trusted copy (base-branch worktree or CI), never the PR's own kit.
 3. **Review** and 4. **Verification**: the next two sections.
 5. **Out**, stdout:
 
@@ -242,7 +247,7 @@ The lead (the session that runs the loop) writes the block from the reviewer's o
 
 Checks: both model ids present; `rules:` equals the base (prefix match); each `blocker` row has a Location matching
 `<path>:<line>`, and a non-empty Evidence, Trigger and Consequence, else it is reported `advisory (no <cell>)`; a
-complete blocker makes the verdict `not ready`; families compared. The table uses the `gates.py` cell split.
+complete blocker makes the verdict `not ready`; families compared after dropping a provider prefix (`bedrock/`, `us.anthropic.`); Location forms `path:42`, `:42-45`, `:42:7`, backticked, `#L42`, `#L42-L45`; a reviewer tier below the label's warns (blocking in slice 4). A Verification target that is a directory or `.` is `not a file`. The table uses the `gates.py` cell split.
 
 shortcut: Evidence is checked for presence, not matched against the cited line; match the quote against the file at
 the head when reviewers are caught inventing quotes.

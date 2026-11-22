@@ -511,7 +511,7 @@ bad "agent file in a lower row" '| routine | `CLAUDE.md` | standard | none |\n| 
 python3 "$B/.specs/kit/scripts/tiers.py" --bogus >/dev/null 2>&1 && fail "13b: unknown flag exits 0"
 tprof "$GOOD"; gitq -C "$B" add .; gitq -C "$B" commit -m profile; tprof '| critical | `*` | deep | required |'
 python3 -I - "$B" "$KIT/kit/scripts" <<'PY' || fail "13b: guarded globs or base read"
-import sys; sys.path.insert(0, sys.argv[2])
+import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[2])
 import tiers, install
 root = sys.argv[1]
 txt = tiers.profile_at(root, "HEAD", ".specs/steering/autonomy.md")
@@ -599,9 +599,14 @@ js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | pyth
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `touch pwned` |\n' > "$R/.specs/steering/spec-rules.md"; gitq -C "$R" add -A; gitq -C "$R" commit -m edit; RH=$(git -C "$R" rev-parse --short HEAD)
 nr "head table instead of base" "$(blk '- G1 Lint: pass (a)' "$RH" 'ready (1 passed)')" "G2 Tests"
 [ ! -e "$R/pwned" ] || fail "11b: ready.py ran a command"
+nr "gate removed at the head, honest block" "$(blk "$OK" "$RH" 'ready (2 passed)')" "gate G2 Tests: removed"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo lint ok` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"; gitq -C "$R" add -A; gitq -C "$R" commit -m cmd; RH=$(git -C "$R" rev-parse --short HEAD)
+nr "gate command changed at the head, honest block" "$(blk "$OK" "$RH" 'ready (2 passed)')" "gate G1 Lint: command changed"
+printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"; gitq -C "$R" add -A; gitq -C "$R" commit -m restore; RH=$(git -C "$R" rev-parse --short HEAD)
+nr "FAIL with a negative exit" "$(blk '- G1 Lint: pass (a)\n- G2 Tests: FAIL (exit -9)' "$RH" 'not ready (1 failed, 0 not run)')" "G2 Tests' is FAIL"
 # staged mode: block commit must be HEAD, +dirty allowed
 echo s > "$R/src/s.txt"; gitq -C "$R" add -A; H=$(git -C "$R" rev-parse --short HEAD)
-{ printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n' "$H"; printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1\n- rules: %s\n' "$H"; } | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" >/dev/null 2>&1; rc=$?
+{ printf '### Gates\n- G1 Lint: pass (a)\n- G2 Tests: pass (b)\n- commit: %s+dirty\n- verdict: ready (2 passed)\n' "$H"; printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n' "$H"; } | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" >/dev/null 2>&1; rc=$?
 [ "$rc" = 0 ] || fail "11b: staged mode with +dirty exits $rc, want 0"
 for a in "--bogus" "--range" "--range nodots" "--pr" "--pr $R/nosuch.md"; do
   rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" $a </dev/null >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "11b: 'ready.py $a' exits $rc, want 2"
@@ -632,8 +637,44 @@ nr "path with .." "$(vb '- [REQ-F-01] ../etc/hosts: x')" "outside the repository
 nr "absolute path" "$(vb '- [REQ-F-01] /etc/hosts: x')" "outside the repository"
 nr "symlink out" "$(vb '- [REQ-F-01] docs/link.png: x')" "symlink or not a file"
 nr "malformed line" "$(vb '- REQ-F-01 docs/a.png')" "verification line"
+for t in docs docs/ .; do nr "directory target $t" "$(vb "- [REQ-F-01] $t: x")" "not a file"; done
 js=$(vb '- [REQ-F-01] docs/a.png: s' | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verification"]=={"lines":[{"req":"REQ-F-01","target":"docs/a.png","status":"ok"}],"problems":[]}, d' || fail "11d: --json verification shape: $js"
 js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="ready" and d["verification"]["lines"]==[], d' || fail "11d: no block is ready: $js"
+
+echo "11e. ready.py: head gate commands, staged base and stale block, blocker forms, tiers, ids, hidden blocks, no __pycache__"
+rv() { blk "$OK" "$RH" "ready (1 passed)" | sed '/^### Review/,$d'; RV "$1"; }
+for loc in 'src/a.c:42-45' 'src/a.c:42:7' '`src/a.c:42`' 'src/a.c#L42' 'src/a.c#L42-L45'; do
+  nr "blocker location $loc" "$(rv "| blocker | $loc | \"q\" | t | c | x |")" "open blocker"
+done
+RO=$(rv '| advisory | a.txt:1 | | | | f |')
+out=$(printf '%s' "$RO" | sed 's/(deep)/(standard)/' | rd) && echo "$out" | grep -q "reviewer tier below the label's reviewer" || fail "11e: reviewer tier below the label is not warned: $out"
+for id in anthropic/claude-opus-5-5 us.anthropic.claude-opus-5-5-v1:0 bedrock/claude-opus-5-5 bedrock/anthropic.claude-opus-5-5; do
+  out=$(printf '%s' "$RO" | sed "s|gpt-5-1|$id|" | rd) && echo "$out" | grep -q "warning: .*family" || fail "11e: provider-prefixed id $id not compared by family: $out"
+done
+GOOD=$(blk "$OK" "$RH" "ready (2 passed)")
+out=$(printf '%s\n<!--\n### Gates\n- G1 Lint: pass (x)\n-->\n```\n### Gates\n- G1 Lint: pass (y)\n```\n' "$GOOD" | rd) || fail "11e: a Gates block in a comment or fence is counted: $out"
+nr "Gates block only in a comment" "$(printf 'x\n<!--\n%s\n-->\n' "$GOOD")" "exactly one ### Gates"
+# staged mode: base = merge-base with merged_ref, head = index
+S2="$TMP/t11e"; mkdir -p "$S2/.specs/steering" "$S2/.specs/features/f" "$S2/docs" "$S2/src" "$S2/.specs/kit"; gitq -C "$S2" init; cp -R "$KIT/kit/scripts" "$S2/.specs/kit/scripts"
+printf '{"merged_ref": "main"}' > "$S2/.specs/spec-kit.json"; printf '### [REQ-F-01] x\n' > "$S2/.specs/features/f/requirements.md"; echo p > "$S2/docs/a.png"
+printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$S2/.specs/steering/spec-rules.md"
+echo a > "$S2/src/a.txt"; gitq -C "$S2" add -A; gitq -C "$S2" commit -m base; MB=$(git -C "$S2" rev-parse --short HEAD); gitq -C "$S2" checkout -b work
+sr() { python3 "$S2/.specs/kit/scripts/ready.py" --specs "$S2/.specs" 2>&1; }
+sg() { printf '### Gates\n- G1 Lint: pass (a)\n%b- commit: %s\n- verdict: ready (%s passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$2" "$1" "$3" "$MB" "${4:-}"; }
+snr() { rc=0; out=$(printf '%s' "$2" | sr) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "$3" || fail "11e: staged $1 (exit $rc, want 1 and '$3'): $out"; }
+echo s > "$S2/src/s.txt"; gitq -C "$S2" add -A; W=$(git -C "$S2" rev-parse --short HEAD)
+G2='- G2 Tests: pass (b)\n'
+snr "clean-HEAD block with staged files" "$(sg "$W" "$G2" 2)" "staged"
+out=$(sg "$W+dirty" "$G2" 2 | sr) || fail "11e: staged +dirty block should be ready: $out"
+snr "directory target in the index" "$(sg "$W+dirty" "$G2" 2; printf '\n### Verification\n- [REQ-F-01] docs: x\n')" "not a file"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$S2/.specs/steering/spec-rules.md"; gitq -C "$S2" add -A; gitq -C "$S2" commit -m drop-g2; W=$(git -C "$S2" rev-parse --short HEAD)
+snr "worker-committed gate removal, block lists both" "$(sg "$W+dirty" "$G2" 2)" "gate G2 Tests: removed"
+snr "worker-committed gate removal, block lists one" "$(sg "$W+dirty" "" 1)" "G2 Tests"
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo ok` |\n| G2 | Tests | `echo b` |\n' > "$S2/.specs/steering/spec-rules.md"; gitq -C "$S2" add -A; gitq -C "$S2" commit -m cmd; W=$(git -C "$S2" rev-parse --short HEAD)
+snr "worker-committed command change" "$(sg "$W+dirty" "$G2" 2)" "gate G1 Lint: command changed"
+python3 "$S2/.specs/kit/scripts/spec_lint.py" --specs "$S2/.specs" >/dev/null 2>&1 || true
+python3 "$S2/.specs/kit/scripts/tiers.py" --specs "$S2/.specs" >/dev/null 2>&1 || true
+[ -z "$(find "$S2/.specs/kit/scripts" "$R/.specs/kit/scripts" -name __pycache__)" ] || fail "11e: a kit script left a __pycache__ in the installed kit"
 
 echo "14. end to end: the acme Tiers table in an installed repo labels real paths, and ready.py gives the verdict"
 E="$TMP/t14"; mkdir -p "$E"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null

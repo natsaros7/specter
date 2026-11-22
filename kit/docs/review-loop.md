@@ -24,6 +24,7 @@ flowchart LR
    the project rules **as they are at the base commit**: `git show <base>:AGENTS.md`, and each `.specs/steering/*`
    and Knowledge `start` file the same way. Never the working tree or the PR head: a change cannot edit its own
    review rules. It reports real issues only, in the verdict table below. It does not edit code.
+   Run `tiers.py` and `ready.py` from a trusted copy, never the PR's own `.specs/kit/`: a worktree of the base branch (`git worktree add /tmp/base <base>`, then `python3 /tmp/base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD`) or CI on the default branch. `ready` means the PR's declarations are consistent with the base's rules and the head commit; it does not prove the gates ran: re-run them, or run them in CI.
    Run `python3 .specs/kit/scripts/tiers.py [--range B..H] [--json]` on the frozen diff: its `reviewer:` is the
    reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation, permissions) get the deep tier.
 4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up

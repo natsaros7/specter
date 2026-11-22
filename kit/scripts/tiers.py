@@ -27,6 +27,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 import spec_lint  # noqa: E402

@@ -24,13 +24,28 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 import spec_lint  # noqa: E402
 import tiers  # noqa: E402
 
 USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help"
-ROW = re.compile(r"- (.+?): (pass \(.*\)|FAIL \(exit \d+\)|not run)")
+ROW = re.compile(r"- (.+?): (pass \(.*\)|FAIL \(exit -?\d+\)|not run)")
+
+
+def visible(text):
+    """The text a reader sees: HTML comments and fenced code blocks dropped, so a hidden block counts for nothing."""
+    out, fence = [], None
+    for line in re.sub(r"<!--.*?(?:-->|\Z)", "", text, flags=re.S).splitlines():
+        m = re.match(r"\s*(```|~~~)", line)
+        if fence:
+            fence = None if m and m.group(1) == fence else fence
+        elif m:
+            fence = m.group(1)
+        else:
+            out.append(line)
+    return "\n".join(out)
 
 
 def block(text, heading):
@@ -47,7 +62,7 @@ def block(text, heading):
     return out
 
 
-def check_gates(text, labels, head, ranged):
+def check_gates(text, labels, head, ranged, staged=False):
     """{ok, passed, total, commit, problems, warnings} for the PR's Gates block against the base's labels."""
     blocks, problems, warnings, status, sha = block(text, "Gates"), [], [], {}, None
     if len(blocks) != 1:
@@ -77,14 +92,22 @@ def check_gates(text, labels, head, ranged):
         problems.append("block commit " + (sha or "(none)") + " is not the head " + (head or "?")[:7])
     elif dirty and ranged:
         problems.append("block commit " + sha + " was dirty")
+    elif staged and not ranged and not dirty:
+        problems.append("block commit " + sha + " is clean but files are staged; it needs +dirty")
     passed = sum(1 for k in labels if len(status.get(k, [])) == 1 and status[k][0].startswith("pass ("))
     return {"ok": not problems, "passed": passed, "total": len(labels), "commit": sha, "problems": problems,
             "warnings": warnings}
 
 
-def check_review(text, base):
+def family(model):
+    """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
+    m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
+    return m.split("-")[0]
+
+
+def check_review(text, base, want="standard"):
     """{implementer, reviewer, same_family, rules, blockers, advisories, problems, warnings} for the ### Review block."""
-    r = {"implementer": None, "reviewer": None, "same_family": False, "rules": None, "blockers": [], "advisories": [],
+    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "blockers": [], "advisories": [],
          "problems": [], "warnings": []}
     lines, cur, n = [], False, 0
     for line in text.splitlines():
@@ -98,9 +121,11 @@ def check_review(text, base):
         r["problems"].append("needs exactly one ### Review block, found " + str(n))
         return r
     for line in lines:
-        m = re.fullmatch(r"- (implementer|reviewer|rules): *(\S*).*", line)
+        m = re.fullmatch(r"- (implementer|reviewer|rules): *(\S*)(?: *\((\w+)\))?.*", line)
         if m:
             r[m.group(1)] = m.group(2) or None
+            if m.group(1) == "reviewer":
+                r["reviewer_tier"] = (m.group(3) or "").lower() or None
         elif line.startswith("|"):
             c = gates.split_row(line) + [""] * 6
             if c[0].lower() == "severity" or set("".join(c)) <= set("-: "):
@@ -109,7 +134,7 @@ def check_review(text, base):
             if sev not in ("blocker", "advisory"):
                 r["problems"].append("verdict row has severity '" + c[0] + "', not blocker or advisory")
                 continue
-            loc = c[1] if re.fullmatch(r"[^\s:]+:\d+", c[1]) else ""
+            loc = c[1] if re.fullmatch(r"`?[^\s:#`]+(?::\d+(?:-\d+)?(?::\d+)?|#L\d+(?:-L\d+)?)`?", c[1]) else ""
             empty = [n for n, v in (("location", loc), ("evidence", c[2]), ("trigger", c[3]), ("consequence", c[4])) if not v]
             if sev == "blocker" and not empty:
                 r["blockers"].append(c[1])
@@ -122,10 +147,13 @@ def check_review(text, base):
         if not r[who]:
             r["problems"].append("review has no " + who + " model id")
     if r["implementer"] and r["reviewer"]:
-        fam = [r[k].split("-")[0].lower() for k in ("implementer", "reviewer")]
+        fam = [family(r[k]) for k in ("implementer", "reviewer")]
         r["same_family"] = fam[0] == fam[1]
         if r["same_family"]:
             r["warnings"].append("reviewer " + r["reviewer"] + " is in the implementer's family '" + fam[0] + "'; it bars Human none")
+    # shortcut: warning only; slice 4 makes a reviewer below the label's reviewer blocking.
+    if r["reviewer"] and want == "deep" and r["reviewer_tier"] != "deep":
+        r["warnings"].append("reviewer tier below the label's reviewer (" + (r["reviewer_tier"] or "none") + " < " + want + ")")
     rules = r["rules"] or ""
     if not re.fullmatch(r"[0-9a-f]{7,40}", rules) or not (base or "").startswith(rules):
         r["problems"].append("review rules " + (rules or "(none)") + " is not the base " + (base or "?")[:7])
@@ -158,8 +186,9 @@ def check_verification(text, root, head, ranged, req_pattern):
         elif target.startswith("/") or ".." in target.split("/") or "\\" in target:
             status = "path outside the repository"
         else:
-            ent = (tiers.git(root, "--literal-pathspecs", "ls-tree" if ranged else "ls-files", *(["-s"] if not ranged else []), *([head] if ranged else []), "--", target) or "").split()
-            status = "ok" if ent and ent[0] in ("100644", "100755") else "symlink or not a file" if ent else "missing at the head"
+            out = tiers.git(root, "--literal-pathspecs", "ls-tree" if ranged else "ls-files", *(["-s"] if not ranged else []), *([head] if ranged else []), "--", target) or ""
+            ent = [x.split() for x in out.splitlines() if x.partition("\t")[2] == target]  # a directory lists its children, not itself
+            status = "ok" if ent and ent[0][0] in ("100644", "100755") else "symlink or not a file" if ent or out or target == "." else "missing at the head"
         v["lines"].append({"req": req, "target": target, "status": status})
         if req not in defined:
             v["problems"].append("verification REQ " + req + " is not defined in any requirements.md")
@@ -199,10 +228,11 @@ def main(argv):
         text = Path(pr).read_text(encoding="utf-8", errors="replace") if pr else sys.stdin.read()
     except OSError as err:
         return refuse("cannot read " + str(pr) + ": " + err.strerror)
+    text = visible(text)
     root, rel = specs.parent, "x"
     try:
         rel = (specs / "steering" / "spec-rules.md").relative_to(root).as_posix()
-        change = tiers.classify(root, (specs / "steering" / "autonomy.md").relative_to(root).as_posix(), rng)
+        change = tiers.classify(root, (specs / "steering" / "autonomy.md").relative_to(root).as_posix(), rng, specs)
     except ValueError as err:
         return refuse(str(err))
     base = change["base"]
@@ -214,8 +244,21 @@ def main(argv):
         return refuse(rel + " at " + str(base)[:7] + ": " + str(err))
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
-    g = check_gates(text, [r[0] for r in rows], head, bool(rng))
-    review = check_review(text, base)
+    staged = not rng and tiers.subprocess.run(["git", "-C", str(root), "diff", "--cached", "--quiet"]).returncode == 1
+    g = check_gates(text, [r[0] for r in rows], head, bool(rng), staged)
+    # A PR must not edit the command behind a label it reports as passed: compare the head's (or index's) table.
+    hrules = tiers.profile_at(root, head if rng else "", rel)
+    try:
+        hrows = dict(gates.gate_rows(hrules) or []) if hrules else {}
+    except ValueError:
+        hrows = {}
+    for label, cmd in rows:
+        if label not in hrows:
+            g["problems"].append("gate " + label + ": removed in this change")
+        elif hrows[label] != cmd:
+            g["problems"].append("gate " + label + ": command changed in this change")
+    g["ok"] = not g["problems"]
+    review = check_review(text, base, change["reviewer"])
     # shortcut: req_id_pattern comes from the working tree's spec-kit.json, not the head; upgrade if a PR can edit it to pass.
     verification = check_verification(text, root, head, bool(rng), spec_lint.load_config(specs)["req_id_pattern"])
     problems = g["problems"] + review["problems"] + verification["problems"]

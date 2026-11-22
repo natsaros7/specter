@@ -47,6 +47,7 @@ changes until it adds `steering/autonomy.md`)
   - Evidence: template and acme `autonomy.md` gain `## Tiers`; setup Q10 and Phase 5 step 8 cover it; selftest case 14 (installed repo, acme table: test file routine, order source domain, GrpcSecurityFilter critical; `ready.py` verdict) beside 13b, 11b-11d.
 - [ ] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
   [REQ-V060-11] [REQ-V060-12]
+  - Evidence (review fix, ready.py): selftest 11b/11e rows red then green for head gate commands (changed, removed), staged base, stale staged block, blocker location forms, `FAIL (exit -9)`, reviewer-tier warning, provider-prefixed ids, hidden blocks, directory targets, no `__pycache__`; docs name the trusted-copy run.
   - Evidence (review fix, tiers.py): selftest 13b rows for case-folded, nested, quoted-path, subfolder-.specs guards and the merge-base staged base red, then green.
 
 ## Slice 3: guardrails and evidence (release 0.8.0)
