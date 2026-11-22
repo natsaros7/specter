@@ -126,8 +126,9 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   `--cites` on the example: clean tree 0 FAIL of 7, exit 0; after `./mvnw -B -o verify` (target/ present) exit 0; copy without `.git` exit 0. Sandbox recipe run in scratch (copy, `git init`, `install.sh`): lint and `--cites` via `.specs/kit/scripts/` exit 0.
   G5 re-proof: in a scratch copy the SecurityHeader citation renamed to SecurityHeaderX gave `FAIL cite features/ord-142-request-timestamp-validation/requirements.md: ... SecurityHeaderX.java:8 no such file` (cite text omitted here), `spec-lint --cites: 1 FAIL of 7 citation(s)`, exit 1; copy discarded.
   Resolved 2026-11-22: the `@Value` ban already exists in `CodingRulesTest`, so seed S6 was redefined to `Instant.now()` over the injected `Clock` (design seed table); lessons.md names the existing check. README says the demo of failure still points at acme until task 11.
-- [ ] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
+- [x] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
   case, `AGENTS.md` G1 and G2 commands — [REQ-V065-08] [REQ-V065-09]
+  Done 2026-11-22. `spec_lint.py --specs examples/cite-demo/.specs --cites` prints the two FAIL lines (`past end of file (39 lines)`, `no such file`) and `2 FAIL of 3 citation(s)`, exit 1; acme `--cites` 0 FAIL of 7, exit 0.
 - [ ] 12 `tests/acme-build.sh` and the G5 row; with no `java` on `PATH` it prints `G5 SKIPPED: needs JDK 21+` and exits
   0; run it also online and with `ACME_OFFLINE=1` — [REQ-V065-09]
 - [ ] 13 Dry run in a sandbox: S5 up to its stop, S2 end to end; record what the agent did, the gate lines and what

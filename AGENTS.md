@@ -30,7 +30,7 @@ network, and the selftest works in a `mktemp` dir and leaves the tree untouched.
 | # | Gate | Command |
 |---|---|---|
 | G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh` |
-| G2 | Example specs lint | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs` |
+| G2 | Example specs lint | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
 | G4 | Specter's own specs | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites` |
 
