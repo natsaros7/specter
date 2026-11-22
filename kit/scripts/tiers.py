@@ -48,7 +48,7 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            "GEMINI*.md", "*/AGENTS*.md", "*/CLAUDE*.md", "*/GEMINI*.md", ".github/copilot-instructions.md",
            ".github/instructions/*", ".github/prompts/*", ".github/agents/*", ".github/skills/*", "*/.github/*instructions*",
            ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
-           ".clinerules", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
+           ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
            "docs/CODEOWNERS"]
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
@@ -121,15 +121,16 @@ def guarded_globs(text, rel):
 
 def key(s):
     """The one key every path and glob is compared under: NFKC, then a full case fold that also takes what APFS and
-    NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I). Folding more than
-    the filesystem only adds matches, and the strictest match wins."""
+    NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I).
+    shortcut: the key folds more than APFS (NFKC) or a case-sensitive disk, so a file that matches no glob as spelled
+    (Docs/x on Linux) can take a lower row's tier; tighten when a project runs files by exact case-variant names."""
     return unicodedata.normalize("NFKC", s).upper().casefold().replace("\u0307", "")
 
 
 def hit(path, globs):
     """First glob matching path under key(): a path must not escape its row through a folding checkout."""
     k = key(path)
-    return next((g for g in globs if fnmatch.fnmatchcase(k, key(g))), None)
+    return next((g for g in globs if fnmatch.fnmatchcase(path, g) or fnmatch.fnmatchcase(k, key(g))), None)
 
 
 def profile_at(root, base, rel):

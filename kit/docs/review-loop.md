@@ -56,7 +56,8 @@ flowchart LR
    and the head commit; it does not prove the gates ran: rerun them, or run them in CI. The first change that
    upgrades a project to 0.7.0 has no `ready.py` at its base: run both scripts from the specter release checkout
    (`python3 <specter>/kit/scripts/ready.py --specs .specs …`). Paste the `### Readiness` block into the PR and read
-   it next to `### Gates` and `### Review`. Check the change's `Deploy impact:` line: if it is not `none`, the people who
+   it next to `### Gates` and `### Review`. A change to the Gates table itself is never ready: the human reviews the
+   new gates, runs them, and merges on their own check. Check the change's `Deploy impact:` line: if it is not `none`, the people who
    run CI/CD hear before the merge. A job that runs from the default branch picks up every merge on its next run.
 
 ## Reviewer prompt (works with any agent)

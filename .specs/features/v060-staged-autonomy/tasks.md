@@ -3,19 +3,16 @@
 Deploy impact: none (specter has no CI/CD; a project gets each slice only when it re-runs `install.sh`, and nothing
 changes until it adds `steering/autonomy.md`)
 
-## ▶ Resume here (2026-11-22)
+## ▶ Resume here (2026-11-22, end of session)
 
-Branch `feat/0.7.0` (local, on top of `feat/0.6.5-acme-java`, which sits on `feat/0.6.0`; none merged to `main`,
-none tagged). Slice 2 tasks 9-14 committed; task 15 (release 0.7.0) is blocked on review fixes.
-- Two security reviews of slice 2 said "do not ship": `docs/reviews/2026-11-22-slice2-deep-review.md` and
-  `docs/reviews/2026-11-22-slice2-re-review.md`. Fix rounds 1-2 are committed (`ecbd154`, `3a877d3`). Round 3 (re-review
-  findings 1-7, 10, 12: one NFKC+casefold path key, exact Gates-table equality, gates.py dirty-after-run,
-  trusted-copy commands that run, staged base fail-closed with `merged_ref` read at the base, unreadable blocker
-  location = not ready, more guarded globs) was handed to a deep-tier worker; its edits may be uncommitted in the tree.
-- Next: run G1-G4; if round 3 is in the tree, review its diff, commit; then a confirmation re-review (deep tier)
-  re-running F1-F7; then finish `CHANGELOG.md` `[0.7.0]` (draft uncommitted; corrections listed at the end of the
-  re-review), `VERSION` 0.7.0, tick 15, gate-review, push `feat/0.7.0`.
-- Then slice 3 (tasks 16-19, release 0.8.0) and slice 4 (20-23, 0.9.0): the milestone is v060 done.
+Slice 2 is released as 0.7.0 on branch `feat/0.7.0` (pushed; stacked on `feat/0.6.5-acme-java` and `feat/0.6.0`;
+none merged to `main`, none tagged). Three security reviews in `docs/reviews/2026-11-22-slice2-*.md`; the last one
+says ship, with MINORs left for 0.7.1 (listed in `docs/reviews/2026-11-22-slice2-confirmation-review.md`; the cheap
+ones are already in).
+- Next: slice 3, tasks 16-19 (guardrails and evidence, release 0.8.0); task 16's decision is already recorded
+  (Decided 2026-11-22). Then slice 4, tasks 20-23 (pipeline, release 0.9.0), which closes the v060 milestone.
+- Work one task per dispatch, gates G1-G4 after each, a deep-tier security review before each release: slice 2
+  needed three review rounds, so plan for it. Trust-layer code (tiers.py, ready.py, gates.py) changes go red-first.
 - Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0 to `main` and tag, in that order.
 - Pinned (do not start): the platform layer for multi-repo systems, until the CRRD spec split closes. Its input is
   gaps G1-G13 in CRRD's `.specs/features/crrd-platform-split/design.md` § 8.4.
@@ -62,7 +59,7 @@ none tagged). Slice 2 tasks 9-14 committed; task 15 (release 0.7.0) is blocked o
 - [x] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
   cases included — [REQ-V060-05] [REQ-V060-06] [REQ-V060-11] [REQ-V060-12] [REQ-V060-13] [REQ-V060-14]
   - Evidence: template and acme `autonomy.md` gain `## Tiers`; setup Q10 and Phase 5 step 8 cover it; selftest case 14 (installed repo, acme table: test file routine, order source domain, GrpcSecurityFilter critical; `ready.py` verdict) beside 13b, 11b-11d.
-- [ ] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
+- [x] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
   [REQ-V060-11] [REQ-V060-12]
   - Evidence (review fix, ready.py): selftest 11b/11e rows red then green for head gate commands (changed, removed), staged base, stale staged block, blocker location forms, `FAIL (exit -9)`, reviewer-tier warning, provider-prefixed ids, hidden blocks, directory targets, no `__pycache__`; docs name the trusted-copy run.
   - Evidence (review fix, tiers.py): selftest 13b rows for case-folded, nested, quoted-path, subfolder-.specs guards and the merge-base staged base red, then green.

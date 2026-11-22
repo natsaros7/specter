@@ -5,6 +5,64 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-22
+
+Slice 2 of staged autonomy: every change gets a risk tier and one readiness verdict, and reviews follow a contract.
+Labels only: nothing merges on its own yet (that is slice 4). Re-run `install.sh` to get the new scripts.
+
+### Breaking
+- `gates.py`'s `### Gates` block changed. Rows read `- <label>: pass (<last line>)`, `FAIL (exit N)` or `not run`
+  (they were `- <label>: <last line>`); a last line `- verdict: ready (N passed)` or
+  `- verdict: not ready (F failed, R not run)` follows; a red run prints the block on stdout too, so "stdout not
+  empty" no longer means green. `commit:` is read after the gates run, and a run that changes `git status` or the
+  diff against `HEAD` adds `- tree changed during gates`: gitignore gate output. Exit codes are unchanged. Scripts
+  that grep the block must change, and a 0.6 PR description fails `ready.py`.
+- The review verdict table is `| Severity | Location | Evidence | Trigger | Consequence | Fix |` with `blocker` or
+  `advisory` only. A blocker with an empty cell is advisory (a follow-up); a non-empty Location that is not
+  `path:line` is not ready. A 0.6-style `major`/`minor` row makes `ready.py` say not ready.
+- Tiers and guarded globs are relative to the repository root. A 0.6.5 profile written relative to a subfolder's
+  `.specs/` parent no longer matches and fails closed to the last tier: add the subfolder prefix.
+
+### Added
+- `kit/scripts/tiers.py`: `--check` validates the Tiers table of `steering/autonomy.md`. Label mode labels the staged
+  change (a preflight) or `--range A...B` (binding) from the profile at the base: the merge base of the range, or for
+  staged files the merge base with `merged_ref` as committed at `HEAD`; with no merge base every file takes the last
+  tier (`- base: HEAD (no merge base: last tier)`). Set `merged_ref` in `spec-kit.json`. The strictest file sets the
+  tier. Paths and globs are compared under NFKC and a full case fold (what APFS and NTFS fold). Guarded paths always
+  take the last row: `AGENTS*.md`, `CLAUDE*.md`, `GEMINI*.md` at any depth, nested `.claude/` and `.cursor/`,
+  `.github/*instructions*`, skills folders, other agents' rules files, CODEOWNERS, Knowledge targets,
+  `.specs/README.md`, `.specs/steering/`, `.specs/kit/` (`tiers.GUARDED`). Prints `### Risk tier` (with a `- base:`
+  line) or `--json`.
+- `kit/scripts/ready.py`: reads the PR text (untrusted: parsed, never run; blocks inside HTML comments and code fences
+  are ignored) and says ready only when the head's Gates table equals the base's row for row and every row passed,
+  the block's commit is the head (`+dirty` while files are staged) and no gate changed the tree, one `### Review`
+  block names implementer, reviewer and `rules: <base sha>` with no open blocker, and every `### Verification` line
+  names a defined REQ and a regular file at the head. A change to the Gates table is never ready: it goes to the
+  human. Same-family reviewer and a reviewer below the label's tier are warnings. Prints `### Readiness` or `--json`.
+- Run both from a trusted copy of the base, never from the PR's own `.specs/kit/`:
+  `git worktree add --detach /tmp/specter-base <base>`, then
+  `python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md` (staged, before the
+  commit: a preflight), and after the commit rerun `gates.py` and use `--range <base>...HEAD --pr /tmp/pr.md` (the
+  binding check). The first upgrade to 0.7.0 runs the scripts from the specter release checkout. Ready means the
+  declarations agree with the base's rules and the head commit; it does not prove the gates ran.
+- Decisions log: an optional `Checked by` column; a gate it names must be a row of the Gates table (lint FAIL).
+- Autonomy template: a Tiers section with three suggested tiers, and a note to put gate scripts in the last tier;
+  setup Q10 proposes them; acme-shop ships a table.
+- Selftest cases 11b-11e, 12 (Checked by), 13b and 14 (install, label, verdict end to end).
+
+### Changed
+- Review loop, reviewer role, model routing and spec-rules §7.4: the reviewer's tier comes from `tiers.py`; reviewers
+  read the rules at the base and check verification artifacts against acceptance.
+- Kit scripts no longer write `__pycache__`; projects that committed one under `.specs/kit/` should delete it.
+
+### Known limits (`shortcut:` in code and design)
+- A gate command that runs a repository script is only as trusted as that script at the head (setup puts gate
+  scripts in the last tier). Model ids are self-declared and families are a prefix heuristic (`o3` vs `gpt` is not
+  detected). A reviewer tier below the label is a warning until slice 4. A committed `merged_ref` naming the branch
+  itself hides the branch's commits in staged mode; only `--range` binds. `+dirty` binds no content. Evidence is
+  checked for presence, not content. `gates.py` stops at the first failure. Verification URLs are never fetched.
+  The guarded list is kept by hand.
+
 ## [0.6.5] - 2026-11-22
 
 The acme-shop example gets real code, so the factory has a codebase to work on. The kit is unchanged: installed projects see no difference.

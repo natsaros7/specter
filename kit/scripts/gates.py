@@ -63,7 +63,7 @@ def tree(root):
     """git status plus the diff against HEAD: what a run must leave as it found.
     shortcut: an untracked file's content is not compared, only its name; add it if a gate edits untracked files."""
     run = lambda *a: subprocess.run(["git", "-C", str(root)] + list(a), capture_output=True).stdout
-    return run("status", "--porcelain") + run("diff", "HEAD")
+    return run("rev-parse", "HEAD") + run("status", "--porcelain") + run("diff", "HEAD")
 
 
 def commit(root):
