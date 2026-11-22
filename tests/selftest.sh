@@ -593,4 +593,18 @@ out=$(rv '| blocker | src/a.c:42 | | total 0 | ships free | x |' | rd) && echo "
 out=$(rv '| blocker | nowhere | "q" | t | c | x |' | rd) && echo "$out" | grep -q "advisory (no location)" || fail "11c: blocker without file:line is advisory: $out"
 js=$(rv "$BL" | rd --json) || true; printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d["review"]; assert d["verdict"]=="not ready" and r["implementer"]=="claude-sonnet-5-5" and r["reviewer"]=="gpt-5-1" and r["same_family"] is False and len(r["blockers"])==1 and r["advisories"]==[] and r["problems"], d' || fail "11c: --json review shape: $js"
 
+echo "11d. ready.py: ### Verification lines: REQ defined, path at the head, URL declared not fetched, --json verification"
+mkdir -p "$R/.specs/features/f" "$R/docs"; printf '### [REQ-F-01] x\n' > "$R/.specs/features/f/requirements.md"; echo png > "$R/docs/a.png"; ln -s /etc/hosts "$R/docs/link.png"
+gitq -C "$R" add -A; gitq -C "$R" commit -m art; RH=$(git -C "$R" rev-parse --short HEAD)
+vb() { blk "$OK" "$RH" "ready (2 passed)" | sed '/^### Review/,$d'; RV '| advisory | a.txt:1 | | | | f |'; printf '\n### Verification\n%b\n' "$1"; }
+out=$(vb '- [REQ-F-01] docs/a.png: shows it\n- [REQ-F-01] https://ci.example/r/1.mp4: video' | rd) && echo "$out" | grep -q "https://ci.example/r/1.mp4: declared, not fetched" && echo "$out" | grep -q "docs/a.png: ok" || fail "11d: valid lines: $out"
+nr "unknown REQ" "$(vb '- [REQ-F-99] docs/a.png: x')" "REQ-F-99"
+nr "missing path" "$(vb '- [REQ-F-01] docs/none.png: x')" "missing at the head"
+nr "path with .." "$(vb '- [REQ-F-01] ../etc/hosts: x')" "outside the repository"
+nr "absolute path" "$(vb '- [REQ-F-01] /etc/hosts: x')" "outside the repository"
+nr "symlink out" "$(vb '- [REQ-F-01] docs/link.png: x')" "symlink or not a file"
+nr "malformed line" "$(vb '- REQ-F-01 docs/a.png')" "verification line"
+js=$(vb '- [REQ-F-01] docs/a.png: s' | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verification"]=={"lines":[{"req":"REQ-F-01","target":"docs/a.png","status":"ok"}],"problems":[]}, d' || fail "11d: --json verification shape: $js"
+js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="ready" and d["verification"]["lines"]==[], d' || fail "11d: no block is ready: $js"
+
 echo "selftest: OK"

@@ -13,15 +13,20 @@ verdict other than `ready (N passed)` is not ready. A row whose label is not in 
 trusted. The block's Risk tier (tiers.py) is printed. Exit 0 ready, 1 not ready, 2 bad argument or unreadable input.
 Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, one
 verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready, else advisory.
+Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
+that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
+not fetched`. A missing block changes nothing.
 --json: {verdict, gates, tier, review, verification, warnings}.
 """
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
+import spec_lint  # noqa: E402
 import tiers  # noqa: E402
 
 USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help"
@@ -127,6 +132,42 @@ def check_review(text, base):
     return r
 
 
+VLINE = re.compile(r"- \[([^\]\s]+)\] (\S+?):(?: .*)?")
+
+
+def check_verification(text, root, head, ranged, req_pattern):
+    """{lines: [{req, target, status}], problems} for the ### Verification block; reads git at the head, never the tree."""
+    v, blocks = {"lines": [], "problems": []}, block(text, "Verification")
+    if len(blocks) > 1:
+        v["problems"].append("needs at most one ### Verification block, found " + str(len(blocks)))
+    ref = head + ":" if ranged else ":"
+    listing = ["ls-tree", "-r", "--name-only", head] if ranged else ["ls-files"]
+    defined_re = re.compile(r"\[(" + req_pattern + r")\]")
+    defined = set()
+    for f in (tiers.git(root, *listing) or "").splitlines():
+        if re.fullmatch(r"(?:.*/)?(?:features|domains)/[^/]+/requirements\.md", f):
+            defined.update(defined_re.findall(tiers.git(root, "show", ref + f) or ""))
+    for line in blocks[0] if len(blocks) == 1 else []:
+        m = VLINE.fullmatch(line)
+        if not m:
+            v["problems"].append("verification line is not `- [REQ] <path or URL>: <what it shows>`: " + line[:60])
+            continue
+        req, target = m.groups()
+        if re.match(r"https?://", target):
+            status = "declared, not fetched"
+        elif target.startswith("/") or ".." in target.split("/") or "\\" in target:
+            status = "path outside the repository"
+        else:
+            ent = (tiers.git(root, "--literal-pathspecs", "ls-tree" if ranged else "ls-files", *(["-s"] if not ranged else []), *([head] if ranged else []), "--", target) or "").split()
+            status = "ok" if ent and ent[0] in ("100644", "100755") else "symlink or not a file" if ent else "missing at the head"
+        v["lines"].append({"req": req, "target": target, "status": status})
+        if req not in defined:
+            v["problems"].append("verification REQ " + req + " is not defined in any requirements.md")
+        if status not in ("ok", "declared, not fetched"):
+            v["problems"].append("verification artifact " + target + ": " + status)
+    return v
+
+
 def refuse(msg):
     print("ready: " + msg, file=sys.stderr)
     return 2
@@ -174,9 +215,10 @@ def main(argv):
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
     g = check_gates(text, [r[0] for r in rows], head, bool(rng))
-    # Seam for 11d: its check adds `verification` here and its problems join `problems`.
-    review, verification = check_review(text, base), None
-    problems = g["problems"] + review["problems"]
+    review = check_review(text, base)
+    # shortcut: req_id_pattern comes from the working tree's spec-kit.json, not the head; upgrade if a PR can edit it to pass.
+    verification = check_verification(text, root, head, bool(rng), spec_lint.load_config(specs)["req_id_pattern"])
+    problems = g["problems"] + review["problems"] + verification["problems"]
     warnings = g["warnings"] + review["warnings"]
     verdict = "not ready" if problems else "ready"
     tier = {k: change[k] for k in ("tier", "reviewer", "human")}
@@ -188,6 +230,8 @@ def main(argv):
         print("- gates: %d/%d pass at %s" % (g["passed"], g["total"], head[:7]))
         print("- tier: %s (reviewer: %s, human: %s)" % (tier["tier"], tier["reviewer"], tier["human"]))
         print("- verdict: " + verdict)
+        for ln in verification["lines"]:
+            print("- verification: %s %s: %s" % (ln["req"], ln["target"], ln["status"]))
         for p in problems:
             print("- not ready: " + p)
         for w in warnings:
