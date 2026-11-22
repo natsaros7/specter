@@ -30,8 +30,8 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
 - Nothing runs on a schedule: `kit/playbooks/refresh.md:3` says "run this periodically", and nothing does.
 - The one dashboard is spec health: `kit/scripts/spec_report.py` (before slice 1) shows features, drift, coverage and citations.
   It does not show which sessions are working on what, although parallel worktrees are the documented way to run
-  workers (`kit/docs/review-loop.md:42-46`).
-- Every change ends at a human: `kit/docs/review-loop.md:28` ("Human check: rerun the gate yourself … then commit").
+  workers (review-loop.md lines 42-46 at aabed8b).
+- Every change ends at a human: review-loop.md lines 28 at aabed8b ("Human check: rerun the gate yourself … then commit").
   The only routing by risk is prose: the reviewer goes deep "when the diff touches security" (`kit/roles/reviewer.md:3`),
   and the review rule in `kit/templates/steering/spec-rules.md:62` is a free-text placeholder.
 - There is no record of how changes fared after merge (reverts, follow-up fixes, what the human still caught), so no
@@ -50,9 +50,9 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:
   (`kit/scripts/gates.py:103-106`); the `### Gates` block exists only when every row passed (`kit/scripts/gates.py:109`).
   The selftest pins today's block lines (`tests/selftest.sh:370`).
 - The reviewer reads "the project rules" with no commit named, so in practice the working tree, which the diff may
-  have edited (`kit/docs/review-loop.md:23-25`). Its findings are `blocker/major/minor` with no evidence required
-  (`kit/docs/review-loop.md:38`, `kit/roles/reviewer.md:14`), and every finding goes back to the worker
-  (`kit/docs/review-loop.md:26-27`).
+  have edited (review-loop.md lines 23-25 at aabed8b). Its findings are `blocker/major/minor` with no evidence required
+  (review-loop.md lines 38 at aabed8b, the 0.6 `kit/roles/reviewer.md` output line), and every finding goes back to the worker
+  (review-loop.md lines 26-27 at aabed8b).
 - Fix rounds are bounded only up to the deep tier: retry once, then escalate (`kit/docs/model-routing.md:28-29`).
   Nothing says what happens when the deep round fails too.
 - The clean-clone rule for scheduled chores exists as prose only (`kit/docs/chores.md:19-21`); the Guardrails table
