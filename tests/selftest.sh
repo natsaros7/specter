@@ -372,9 +372,13 @@ GR="$GT/.specs/steering/spec-rules.md"; gates() { python3 "$KIT/kit/scripts/gate
 printf '## Gates\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo first ok` |\n| G2 | bad | `echo broke; exit 3` |\n| G3 | never | `touch ran3` |\n' > "$GR"
 rc=0; out=$(gates 2>&1) || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "GATE FAILED: G2 bad (exit 3)" && echo "$out" | grep -q broke && [ ! -e "$GT/ran3" ] || fail "gates.py did not stop at G2: rc=$rc $out"
+out=$(gates 2>/dev/null) && fail "red run exited 0" || true
+printf '### Gates\n- G1 ok: pass (first ok)\n- G2 bad: FAIL (exit 3)\n- G3 never: not run\n' > "$TMP/g.want"; echo "$out" | head -4 | cmp -s - "$TMP/g.want" || fail "red gates block on stdout: $out"
+echo "$out" | tail -1 | grep -qx -- "- verdict: not ready (1 failed, 1 not run)" || fail "red verdict: $out"
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `echo one` |\n| G2 | pipe | `printf "a\\n\\n" && echo x \\| tr x y` |\n' > "$GR"
 out=$(gates 2>/dev/null) || fail "gates.py failed a green table"
-printf '### Gates\n- G1 ok: one\n- G2 pipe: y\n' > "$TMP/g.want"; echo "$out" | head -3 | cmp -s - "$TMP/g.want" || fail "gates block: $out"
+printf '### Gates\n- G1 ok: pass (one)\n- G2 pipe: pass (y)\n' > "$TMP/g.want"; echo "$out" | head -3 | cmp -s - "$TMP/g.want" || fail "gates block: $out"
+echo "$out" | tail -1 | grep -qx -- "- verdict: ready (2 passed)" || fail "gates verdict: $out"
 echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}\+dirty$" || fail "gates commit line: $out"
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | ok | `touch ran1` |\n| G2 | prose | run the tests |\n' > "$GR"
 rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && [ ! -e "$GT/ran1" ] && echo "$out" | grep -q "G2" || fail "row without a command: rc=$rc $out"
@@ -425,7 +429,7 @@ rc=0; out=$(gates --help 2>&1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q 
 out=$(gates 2>/dev/null) || fail "gates.py green run"; echo "$out" | grep -Eq "^- commit: [0-9a-f]{7,}$" || fail "commit taken after the gates ran: $out"
 I="$TMP/t12i"; mkdir -p "$I"; gitq -C "$I" init; "$KIT/install.sh" "$I" >/dev/null
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | where | `pwd -P` |\n' > "$I/.specs/steering/spec-rules.md"
-out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: $(cd "$I" && pwd -P)$" || fail "installed gates.py root: $out"
+out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: pass ($(cd "$I" && pwd -P))$" || fail "installed gates.py root: $out"
 
 echo "13. in flight: a worktree branch lists its feature, no git shows one line"
 W="$TMP/t13"; mkdir -p "$W/.specs/features/base"; gitq -C "$W" init

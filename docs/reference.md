@@ -110,7 +110,7 @@ default is a WARN for REQ ids that are cited but defined nowhere.
 - **Gates.** `gates.py` executes, with `sh -c` from the project root, the commands in this project's own
   `| # | Gate | Command |` table of `steering/spec-rules.md` (or `--file`), in order, and nothing else. Whoever can edit
   that table decides what runs, so treat it like code: read it before you run `gates.py` on a branch you didn't write.
-  It stops at the first failure and prints a `### Gates` block with the commit as it was before the run (`+dirty` when
+  It stops at the first failure and prints a `### Gates` block, also on a red run (`pass (…)`, `FAIL (exit n)`, `not run`, then `verdict:`), with the commit as it was before the run (`+dirty` when
   the tree had changes; `none` outside git). It never guesses a command: no table, no run.
 - **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
   [`kit/docs/review-loop.md`](../kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
@@ -135,8 +135,8 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   (a Gates row, a lint rule or a test), and a rule in spec-rules, code-standards or decisions only when no check can
   catch it (`sync.md`).
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
-  `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); on success it prints
-  the same `### Gates` block. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
+  `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
+  the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
   are in [`kit/docs/chores.md`](../kit/docs/chores.md).
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.

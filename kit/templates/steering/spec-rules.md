@@ -46,7 +46,8 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 ## 7. Definition of Done
 
 1. Every gate below exits 0. `python3 .specs/kit/scripts/gates.py` runs them in order, stops at the first failure and
-   prints a `### Gates` block for the PR description. One command per row, in backticks; write a `|` inside a command
+   prints a `### Gates` block for the PR description, red runs too (rows after a failure read `not run`). Put the
+   cheapest rows first: the run stops at the first failure. One command per row, in backticks; write a `|` inside a command
    as `\|`. `gates.py` executes these commands with `sh -c` from the project root, and nothing else: treat this table
    like code, and read it before running `gates.py` on a branch you didn't write.
 

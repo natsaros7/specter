@@ -38,7 +38,7 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
   tier could earn autonomy on numbers. Searched `grep -rniE 'autonom|auto-merge|codeowners|audit' kit`: the only hit
   is "Work autonomously" in `kit/templates/feature/AGENT_PROMPT.md:2`.
 
-Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:25`, it already skips
+Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:32`, it already skips
 tables without Gate and Command columns), changed-file listing and fnmatch globs (`kit/scripts/spec_sync_check.py:18-27`),
 the relative-link check that already resolves paths outside `.specs/` (`kit/scripts/spec_lint.py:188-200`), the
 merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:234`) and

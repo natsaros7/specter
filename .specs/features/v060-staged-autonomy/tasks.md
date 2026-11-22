@@ -24,8 +24,9 @@ changes until it adds `steering/autonomy.md`)
   - Evidence: `kit/scripts/tiers.py` (`parse_tiers`, `guarded_globs`, `profile_at`, `--check`); selftest 13b red (no script) then green.
 - [x] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]
   - Evidence: `kit/scripts/tiers.py` (`label`); selftest 13b label part red ("expected --check") then green.
-- [ ] 11a `gates.py`: every row in the `### Gates` block as `pass (…)`, `FAIL (exit n)` or `not run`, a verdict line,
+- [x] 11a `gates.py`: every row in the `### Gates` block as `pass (…)`, `FAIL (exit n)` or `not run`, a verdict line,
   the block on red runs too; spec-rules §7.1 "cheapest rows first"; selftest case 11 expectation — [REQ-V060-12]
+  - Evidence: `kit/scripts/gates.py`; selftest 11 red ("red gates block on stdout") then green; spec-rules §7.1, `docs/reference.md` updated.
 - [ ] 11b `ready.py`: PR text from `--pr` or stdin, base and head as `tiers.py`, `### Gates` against the base's table
   and the head commit, `### Readiness` block, `--json`, no command run — [REQ-V060-12]
 - [ ] 11c `ready.py`: `### Review` block: both model ids, families compared, `rules:` at the base, blocker form — [REQ-V060-13]
