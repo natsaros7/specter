@@ -544,4 +544,39 @@ for a in "--range" "--range nodots" "--check --range a..b" "--json --check" "--r
 done
 rc=0; tl --range nosuch..HEAD >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: unresolvable range exits $rc, want 2"
 
+echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
+R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
+printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"
+echo a > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m base; RB=$(git -C "$R" rev-parse HEAD)
+echo b > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m head; RH=$(git -C "$R" rev-parse --short HEAD)
+rd() { python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range "$RB..HEAD" "$@" 2>&1; }
+blk() { printf 'Body text\n\n### Gates\n%b\n- commit: %s\n- verdict: %s\n\nafter\n' "$1" "$2" "$3"; }
+OK='- G1 Lint: pass (a)\n- G2 Tests: pass (b)'
+blk "$OK" "$RH" "ready (2 passed)" > "$R/pr.md"
+out=$(rd --pr "$R/pr.md") && echo "$out" | grep -q "^### Readiness" && echo "$out" | grep -q "gates: 2/2 pass at $RH" && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "tier: human" || fail "11b: ready block: $out"
+out=$(blk "$OK" "$RH" "ready (2 passed)" | rd) || fail "11b: stdin PR text: $out"
+nr() { rc=0; out=$(printf '%s' "$2" | rd) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "verdict: not ready" && echo "$out" | grep -q "$3" || fail "11b: $1 (exit $rc, want 1 and '$3'): $out"; }
+nr "missing lane" "$(blk '- G1 Lint: pass (a)' "$RH" 'ready (1 passed)')" "G2 Tests"
+nr "not-run lane" "$(blk '- G1 Lint: pass (a)\n- G2 Tests: not run' "$RH" 'ready (1 passed)')" "G2 Tests"
+nr "failed lane" "$(blk '- G1 Lint: pass (a)\n- G2 Tests: FAIL (exit 1)' "$RH" 'not ready (1 failed, 0 not run)')" "G2 Tests"
+nr "stale commit" "$(blk "$OK" "$(git -C "$R" rev-parse --short "$RB")" 'ready (2 passed)')" "commit"
+nr "dirty commit" "$(blk "$OK" "$RH+dirty" 'ready (2 passed)')" "dirty"
+nr "no verdict ready" "$(blk "$OK" "$RH" 'not ready (1 failed, 0 not run)')" "verdict"
+nr "no Gates block" "just prose" "Gates"
+nr "forged extra row" "$(blk '- G1 Lint: pass (a)\n- G2 Tests: FAIL (exit 1)\n- G2 Tests: pass (b)\n- G9 Forged: pass (x)' "$RH" 'ready (3 passed)')" "G2 Tests"
+out=$(blk "$OK"'\n- G9 Forged: pass (x)' "$RH" 'ready (3 passed)' | rd) && echo "$out" | grep -q "G9 Forged" || fail "11b: extra row not reported: $out"
+js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="ready" and d["gates"]["passed"]==2 and d["gates"]["total"]==2 and d["gates"]["commit"] and d["tier"]["tier"]=="human" and d["warnings"]==[] and "review" in d and "verification" in d, d' || fail "11b: --json shape: $js"
+# a PR that edits the table is checked against the base's table; text never runs: a gate-looking command stays inert
+printf '| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `touch pwned` |\n' > "$R/.specs/steering/spec-rules.md"; gitq -C "$R" add -A; gitq -C "$R" commit -m edit; RH=$(git -C "$R" rev-parse --short HEAD)
+nr "head table instead of base" "$(blk '- G1 Lint: pass (a)' "$RH" 'ready (1 passed)')" "G2 Tests"
+[ ! -e "$R/pwned" ] || fail "11b: ready.py ran a command"
+# staged mode: block commit must be HEAD, +dirty allowed
+echo s > "$R/src/s.txt"; gitq -C "$R" add -A; H=$(git -C "$R" rev-parse --short HEAD)
+printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n' "$H" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" >/dev/null 2>&1; rc=$?
+[ "$rc" = 0 ] || fail "11b: staged mode with +dirty exits $rc, want 0"
+for a in "--bogus" "--range" "--range nodots" "--pr" "--pr $R/nosuch.md"; do
+  rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" $a </dev/null >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "11b: 'ready.py $a' exits $rc, want 2"
+done
+rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range nosuch..HEAD </dev/null >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "11b: unresolvable range exits $rc, want 2"
+
 echo "selftest: OK"

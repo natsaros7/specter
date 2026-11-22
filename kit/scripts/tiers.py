@@ -124,8 +124,9 @@ def git(root, *args):
     return run.stdout.strip() if run.returncode == 0 else None
 
 
-def label(root, rel, rng, as_json):
-    """Print the Risk tier block for the staged change or the range; return the exit code."""
+def classify(root, rel, rng):
+    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, why}
+    (why is None when a profile was read) or raises ValueError(message). ready.py reuses it."""
     if rng:
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
         base = git(root, "merge-base", a, b) if a and b else None
@@ -134,13 +135,13 @@ def label(root, rel, rng, as_json):
         base = git(root, "rev-parse", "--verify", "-q", "HEAD")
         files = git(root, "diff", "--cached", "--no-renames", "--name-only", "--relative")
     if rng and files is None:
-        return refuse("cannot resolve --range " + rng + " in " + str(root))
+        raise ValueError("cannot resolve --range " + rng + " in " + str(root))
     files = (files or "").splitlines()
     text = profile_at(root, base, rel) if base else None
     try:
         rows = parse_tiers(text) if text else None
     except ValueError as err:
-        return refuse(rel + " at " + str(base)[:7] + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+        raise ValueError(rel + " at " + str(base)[:7] + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
     short = (base or "HEAD")[:7]
     if rows is None:
         # Not configured: the human tier, as in 0.5.0.
@@ -158,8 +159,20 @@ def label(root, rel, rng, as_json):
         top = max(top, (idx, f, glob), key=lambda t: t[0])
     idx = top[0] if files else last
     tier, _, reviewer, human, _ = rows[idx]
-    set_by = {"file": top[1], "glob": top[2]} if files else None
-    ordered = {r[0]: counts[r[0]] for r in rows if r[0] in counts}
+    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why,
+            "set_by": {"file": top[1], "glob": top[2]} if files else None,
+            "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
+
+
+def label(root, rel, rng, as_json):
+    """Print the Risk tier block for the staged change or the range; return the exit code."""
+    try:
+        c = classify(root, rel, rng)
+    except ValueError as err:
+        return refuse(str(err))
+    base, files, tier, reviewer, human, why, set_by, ordered = (c[k] for k in (
+        "base", "files", "tier", "reviewer", "human", "why", "set_by", "counts"))
+    short = (base or "HEAD")[:7]
     if as_json:
         print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
                           "profile_commit": base if why is None else None, "labels_only": True}))
