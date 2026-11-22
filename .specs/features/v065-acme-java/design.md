@@ -206,7 +206,8 @@ README "Try it" block: lint the example (passes), check its citations (passes), 
 Script behaviour, about fifteen lines of POSIX sh: find `java` (`JAVA_HOME` first, then `PATH`), read the major
 version, skip below 21; otherwise `cd examples/acme-shop && ./mvnw -B verify`, adding `-o` when `ACME_OFFLINE=1`.
 On a dependency resolution failure it prints one hint line ("the first run needs network to fill ~/.m2") before
-exiting 1.
+exiting 1. After a green build it runs `scripts/scan-agent-text.sh` on the log (the jqwik fence, gate G3b), so G5
+cannot pass on a build that printed agent-directed text (added in task 12).
 
 `AGENTS.md` table after the change:
 

@@ -129,8 +129,11 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
 - [x] 11 `examples/cite-demo/` fixture, README Try it block and sentence, selftest case 1 `--cites` and the cite-demo
   case, `AGENTS.md` G1 and G2 commands — [REQ-V065-08] [REQ-V065-09]
   Done 2026-11-22. `spec_lint.py --specs examples/cite-demo/.specs --cites` prints the two FAIL lines (`past end of file (39 lines)`, `no such file`) and `2 FAIL of 3 citation(s)`, exit 1; acme `--cites` 0 FAIL of 7, exit 0.
-- [ ] 12 `tests/acme-build.sh` and the G5 row; with no `java` on `PATH` it prints `G5 SKIPPED: needs JDK 21+` and exits
+- [x] 12 `tests/acme-build.sh` and the G5 row; with no `java` on `PATH` it prints `G5 SKIPPED: needs JDK 21+` and exits
   0; run it also online and with `ACME_OFFLINE=1` — [REQ-V065-09]
+  Evidence 2026-11-22: no java on PATH → `G5 SKIPPED: needs JDK 21+ (found: none)`, exit 0; JDK 17 → `(found: 17)`,
+  exit 0; JDK 21 online → `G5 OK`, exit 0; `ACME_OFFLINE=1` → `G5 OK (JDK 21, offline)`, exit 0; offline with an empty
+  local repo → the ~/.m2 hint and `G5 FAILED`, exit 1. G5 also runs the G3b agent-text scan on the build log.
 - [ ] 13 Dry run in a sandbox: S5 up to its stop, S2 end to end; record what the agent did, the gate lines and what
   the human caught, here under the task — [REQ-V065-10]
 - [ ] 14 Gate green: specter G1 to G5 (G5 run, not skipped) and the example's G1 to G3; `git diff --stat` shows nothing

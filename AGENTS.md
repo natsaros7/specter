@@ -17,21 +17,24 @@ offer GO.
 | `install.sh` | One-command install, upgrade and uninstall (used by GO) |
 | `kit/` | What gets copied into `<project>/.specs/kit/`: rules, playbooks, templates, scripts, docs |
 | `kit/adapters/` | Thin per-agent extras (Claude skill and agents, Cursor rule) |
-| `examples/acme-shop/.specs/` | A complete worked example on a fictional shop |
+| `examples/acme-shop/` | A worked example: a Java 21 / Spring Boot 4 shop and its full `.specs/` tree |
+| `examples/cite-demo/` | A tiny fixture whose citations fail on purpose (README demo) |
 | `tests/selftest.sh` | Lints the examples and dry-runs the installer |
+| `tests/acme-build.sh` | Optional G5: builds acme-shop with JDK 21 |
 | `.specs/` | Specter's own development specs, written with specter |
 
 ## Working on specter itself
 
 Only when the user asks to change specter (not to install it). Spec non-trivial changes in `.specs/features/` first.
-A change is mergeable only if every gate exits 0. Run them from the repo root; they are non-interactive and need no
-network, and the selftest works in a `mktemp` dir and leaves the tree untouched.
+A change is mergeable only if every gate exits 0. Run them from the repo root; they are non-interactive and G1 to G4 need no
+network or JDK, and the selftest works in a `mktemp` dir and leaves the tree untouched.
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh` |
-| G2 | Example specs lint | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
+| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh` |
+| G2 | Example specs lint and citations | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
 | G4 | Specter's own specs | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites` |
+| G5 | Example build (optional; needs JDK 21 and, on the first run, network; must run, not skip, when the diff touches `examples/acme-shop/` outside `.specs/`) | `sh tests/acme-build.sh` |
 
 Don't invent features of the kit. If these files don't answer something, say so.
