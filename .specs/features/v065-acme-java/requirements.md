@@ -1,6 +1,6 @@
 # v065 acme-shop gets real Java code — Requirements
 
-Status: Proposed
+Status: Done 2026-11-22 (feat/0.6.5-acme-java)
 Tracker: none. Branch `feat/0.6.5-acme-java`. Size L (about 1.5k to 2k lines of Java, tests and build files in the
 example; one shell script and two selftest lines in specter).
 

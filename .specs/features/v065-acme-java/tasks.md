@@ -158,7 +158,11 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
     the example's §1 should say whether an event-suppressing fix is a "Kafka change"; the Gates table gives no
     offline form (agents added `-o`); G2's output prints the jqwik clause and is not scanned (only G3's log is,
     which runs the same tests, so the fence holds); REQ rows are not checked for a test (slice 2 evidence).
-- [ ] 14 Gate green: specter G1 to G5 (G5 run, not skipped) and the example's G1 to G3; `git diff --stat` shows nothing
+- [x] 14 Gate green: specter G1 to G5 (G5 run, not skipped) and the example's G1 to G3; `git diff --stat` shows nothing
   under `kit/`; deep review of the security filter and the G5 script — [REQ-V065-03] [REQ-V065-11]
-- [ ] 15 CHANGELOG `[0.6.5]`, `VERSION`, `docs/reference.md` line, `docs/assets/report.png` regenerated or noted;
+  Evidence 2026-11-22: specter G1–G5 exit 0 (G5 `G5 OK: acme-shop verify (JDK 21)`), example G1, G2, G3, G3b exit 0;
+  no file under `kit/` changed since 0.6.0. Deep review (planner): 0 BLOCKER, 2 MAJOR (multi-CN subject passed with
+  the last CN; `PeerSubjectResolver.tls()` untested), 9 MINOR; all fixed or labelled in `5ae77da`, each code fix with
+  a red test first. PIT shop-common 71% → 86%, floor raised to 86.
+- [x] 15 CHANGELOG `[0.6.5]`, `VERSION`, `docs/reference.md` line, `docs/assets/report.png` regenerated or noted;
   release 0.6.5 — [REQ-V065-11]

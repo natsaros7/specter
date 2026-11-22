@@ -114,6 +114,13 @@ default is a WARN for REQ ids that are cited but defined nowhere.
 - **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
   [`kit/docs/review-loop.md`](../kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
 
+## The example codebase (0.6.5)
+
+`examples/acme-shop/` is a working Java 21 / Spring Boot 4 service with a full `.specs/` tree, and the project the
+factory slices are tested on. Its README covers the build (JDK 21) and the sandbox recipe: copy it, `git init`, run
+`install.sh`, commit, then hand an agent one of the seed tasks. Specter's optional gate G5 (`sh tests/acme-build.sh`)
+builds it.
+
 ## Autonomy profile (0.6.0, slice 1)
 
 `.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
