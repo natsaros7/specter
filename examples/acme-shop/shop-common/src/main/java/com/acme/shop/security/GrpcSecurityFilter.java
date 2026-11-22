@@ -77,13 +77,17 @@ public final class GrpcSecurityFilter implements ServerInterceptor {
     }
 
     private static void authFailed(final String subject, final @Nullable String claimed) {
-        // The claim is client-controlled: strip control characters and cap the length so it cannot forge log lines.
-        final String safeClaimed = claimed == null ? null : claimed.replaceAll("\\p{Cntrl}", "?");
         LOG.log(
                 Logger.Level.WARNING,
                 "AUTH_FAILED subject={0} claimedPartnerId={1}",
-                subject,
-                safeClaimed == null || safeClaimed.length() <= 64 ? safeClaimed : safeClaimed.substring(0, 64));
+                safe(subject, 256),
+                claimed == null ? null : safe(claimed, 64));
+    }
+
+    /** Both values can carry line breaks (a CA-issued DN, a client claim): replace them so no log line is forged. */
+    private static String safe(final String value, final int max) {
+        final String clean = value.replaceAll("[\\p{Cc}\\p{Zl}\\p{Zp}]", "?");
+        return clean.length() <= max ? clean : clean.substring(0, max);
     }
 
     /** The CN of the subject; empty unless it has exactly one CN attribute (multi-valued RDNs included) and is valid. */

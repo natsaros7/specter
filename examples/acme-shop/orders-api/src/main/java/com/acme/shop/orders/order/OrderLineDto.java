@@ -5,6 +5,6 @@ import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 public record OrderLineDto(
-        @NotBlank @Size(max = 64) String sku,
+        @NotBlank @Size(min = 1, max = 64) String sku,
         @Positive int quantity,
         @Positive long unitPriceCents) {}

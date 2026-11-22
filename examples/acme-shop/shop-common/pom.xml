@@ -12,7 +12,7 @@
   <artifactId>shop-common</artifactId>
 
   <properties>
-    <!-- First PIT run 2026-11-21: 20 of 28 mutants killed. Raise by hand only. -->
+    <!-- PIT 2026-11-22: 31 of 36 mutants killed (86%), 5 equivalent survivors. Raise by hand only. -->
     <pit.threshold>86</pit.threshold>
   </properties>
 

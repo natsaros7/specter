@@ -226,4 +226,13 @@ class GrpcSecurityFilterTest {
         final String claimed = (String) records.get(0).getParameters()[1];
         assertThat(claimed).doesNotContain("\n").hasSizeLessThanOrEqualTo(64);
     }
+
+    @Test
+    void should_not_forge_log_line_when_subject_or_claim_carries_unicode_line_breaks() {
+        final List<LogRecord> records = captureLog();
+        assertDenied("CN=partner-7\nWARNING: AUTH_OK", "p8 x\u0085y\u009B[8m", Status.Code.PERMISSION_DENIED);
+        final Object[] params = records.get(0).getParameters();
+        assertThat((String) params[0]).doesNotContain("\n");
+        assertThat((String) params[1]).doesNotContain(" ", "\u0085", "\u009B");
+    }
 }

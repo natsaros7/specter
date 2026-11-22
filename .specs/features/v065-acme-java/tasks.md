@@ -162,7 +162,9 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   under `kit/`; deep review of the security filter and the G5 script — [REQ-V065-03] [REQ-V065-11]
   Evidence 2026-11-22: specter G1–G5 exit 0 (G5 `G5 OK: acme-shop verify (JDK 21)`), example G1, G2, G3, G3b exit 0;
   no file under `kit/` changed since 0.6.0. Deep review (planner): 0 BLOCKER, 2 MAJOR (multi-CN subject passed with
-  the last CN; `PeerSubjectResolver.tls()` untested), 9 MINOR; all fixed or labelled in `5ae77da`, each code fix with
+  the last CN; `PeerSubjectResolver.tls()` untested), 8 MINOR, 5 NIT; MAJORs and MINORs fixed or labelled in `5ae77da`, each code fix with
   a red test first. PIT shop-common 71% → 86%, floor raised to 86.
+  Review round 2 of that fix: 0 BLOCKER/MAJOR, 4 MINOR it introduced (scan false red on paths with `agent`, an
+  unreadable log passing, the subject logged unescaped, `minLength: 0` for `sku`), fixed with a red test for the log.
 - [x] 15 CHANGELOG `[0.6.5]`, `VERSION`, `docs/reference.md` line, `docs/assets/report.png` regenerated or noted;
   release 0.6.5 — [REQ-V065-11]
