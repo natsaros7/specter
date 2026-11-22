@@ -22,6 +22,11 @@ import sys
 from pathlib import Path
 
 
+def split_row(line):
+    """The cells of one table row, trimmed, with \\| read as |."""
+    return [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+
+
 def gate_rows(text):
     """[(label, command)] from the first Gate/Command table, or None when there is none. Raises ValueError on a row
     whose Command cell doesn't hold exactly one code span."""
@@ -32,7 +37,7 @@ def gate_rows(text):
                 break
             head = None
             continue
-        cells = [c.strip().replace("\\|", "|") for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        cells = split_row(line)
         if head is None:
             head = [c.lower() for c in cells]
             if not ("gate" in head and "command" in head):

@@ -20,7 +20,8 @@ changes until it adds `steering/autonomy.md`)
 
 - [x] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
   [REQ-V060-05] [REQ-V060-13] [REQ-V060-14]
-- [ ] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
+- [x] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
+  - Evidence: `kit/scripts/tiers.py` (`parse_tiers`, `guarded_globs`, `profile_at`, `--check`); selftest 13b red (no script) then green.
 - [ ] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]
 - [ ] 11a `gates.py`: every row in the `### Gates` block as `pass (…)`, `FAIL (exit n)` or `not run`, a verdict line,
   the block on red runs too; spec-rules §7.1 "cheapest rows first"; selftest case 11 expectation — [REQ-V060-12]

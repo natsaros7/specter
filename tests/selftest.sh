@@ -477,4 +477,38 @@ printf '# Autonomy\n\n## Tiers\n| Tier | Paths |\n|---|---|\n| routine | docs |\
 printf '# Autonomy\n\n## Chores\n| # | Gate | Command |\n|---|---|---|\n| C1 | todo | `<command>` |\n' > "$A/.specs/steering/autonomy.md"
 rc=0; (cd "$A" && python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md >/dev/null 2>&1) || rc=$?; [ "$rc" = 2 ] || fail "13a: placeholder chore exits $rc, want 2"
 
+echo "13b. tiers.py --check: valid table passes; bad rows exit 2 with file:line; a guarded path in a lower row exits 1; profile read at the base"
+B="$TMP/t13b"; mkdir -p "$B"; gitq -C "$B" init; "$KIT/install.sh" "$B" >/dev/null
+tprof() { printf '# Autonomy\n\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Decisions | [adrs](../../docs/adr/) | start |\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n' "$1" > "$B/.specs/steering/autonomy.md"; }
+tchk() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --check 2>&1; }
+GOOD='| routine | `tests/*` `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` `CODEOWNERS` | deep | required |'
+rc=0; out=$(tchk) || rc=$?; [ "$rc" = 0 ] || fail "13b: --check without a profile exits $rc, want 0: $out"
+tprof "$GOOD"; rc=0; out=$(tchk) || rc=$?; [ "$rc" = 0 ] || fail "13b: valid table exits $rc: $out"
+bad() { tprof "$2"; rc=0; out=$(tchk) || rc=$?; [ "$rc" = "$3" ] || fail "13b: $1 exits $rc, want $3: $out"; case "$out" in *autonomy.md:*) ;; *) fail "13b: $1 lacks file:line: $out";; esac; }
+bad "unknown reviewer" '| routine | `tests/*` | medium | none |\n| critical | `*` | deep | required |' 2
+bad "unknown human" '| routine | `tests/*` | standard | maybe |\n| critical | `*` | deep | required |' 2
+bad "decreasing human" '| domain | `src/*` | standard | spot |\n| routine | `tests/*` | standard | none |\n| critical | `*` | deep | required |' 2
+bad "last row not required" '| routine | `tests/*` | standard | none |\n| domain | `src/*` | standard | spot |' 2
+bad "duplicate tier" '| routine | `tests/*` | standard | none |\n| routine | `src/*` | deep | required |' 2
+bad "no code span in Paths" '| routine | tests | standard | none |\n| critical | `*` | deep | required |' 2
+bad "placeholder left in" '| routine | `<tests glob>` | standard | none |\n| critical | `*` | deep | required |' 2
+bad "short row" '| routine | `tests/*` |\n| critical | `*` | deep | required |' 2
+bad "guarded path in a lower row" '| routine | `docs/adr/*` | standard | none |\n| critical | `*` | deep | required |' 1
+bad "agent file in a lower row" '| routine | `CLAUDE.md` | standard | none |\n| critical | `*` | deep | required |' 1
+python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" >/dev/null 2>&1 && fail "13b: no mode exits 0"
+python3 "$B/.specs/kit/scripts/tiers.py" --bogus >/dev/null 2>&1 && fail "13b: unknown flag exits 0"
+tprof "$GOOD"; gitq -C "$B" add .; gitq -C "$B" commit -m profile; tprof '| critical | `*` | deep | required |'
+python3 -I - "$B" "$KIT/kit/scripts" <<'PY' || fail "13b: guarded globs or base read"
+import sys; sys.path.insert(0, sys.argv[2])
+import tiers, install
+root = sys.argv[1]
+txt = tiers.profile_at(root, "HEAD", ".specs/steering/autonomy.md")
+assert txt and "src/*" in txt, "profile_at must read the committed text, not the working tree"
+assert tiers.profile_at(root, "HEAD", ".specs/steering/none.md") is None
+g = tiers.guarded_globs(txt, ".specs/steering/autonomy.md")
+assert "docs/adr/*" in g and ".specs/steering/*" in g and "AGENTS.md" in g, g
+for a in install.AGENTS.values():
+    assert any(x.startswith(a[3].split("/")[0] + "/") for x in g), ("agent dir not guarded", a[3])
+PY
+
 echo "selftest: OK"

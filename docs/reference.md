@@ -67,6 +67,7 @@ python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdou
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
+python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (labelling comes next)
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
