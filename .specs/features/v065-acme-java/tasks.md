@@ -134,8 +134,30 @@ decisions are recorded under Decided in requirements.md (Boot 4.x, release 0.6.5
   Evidence 2026-11-22: no java on PATH → `G5 SKIPPED: needs JDK 21+ (found: none)`, exit 0; JDK 17 → `(found: 17)`,
   exit 0; JDK 21 online → `G5 OK`, exit 0; `ACME_OFFLINE=1` → `G5 OK (JDK 21, offline)`, exit 0; offline with an empty
   local repo → the ~/.m2 hint and `G5 FAILED`, exit 1. G5 also runs the G3b agent-text scan on the build log.
-- [ ] 13 Dry run in a sandbox: S5 up to its stop, S2 end to end; record what the agent did, the gate lines and what
+- [x] 13 Dry run in a sandbox: S5 up to its stop, S2 end to end; record what the agent did, the gate lines and what
   the human caught, here under the task — [REQ-V065-10]
+  Dry run 2026-11-22 (specter 6e1b355; fresh agents, ticket text only, one sandbox each from the README recipe with
+  `--agents=claude`; the maintainer's role played by the dispatching session, which answered the S2 questions as
+  the stand-in human):
+  - S5 "Implement ORD-142": stopped at the open DECISION gate (`next-task.md` step 2, `AGENT_PROMPT.md` "Do not code
+    before it"); no files, no branch, no gates run. Asked option A/B, `W`, and the enforcement date, each with a
+    default (A, `PT5M`, ship `enforce=false`). Pass.
+  - S2 "two OrderCancelled events": found `OrderService.cancel` publishing on every call; red test first
+    (`OrderOutboxIT.should_publishOneCancelledEvent_when_cancelRequestIsRepeated`: `Expected size: 1 but was: 2`).
+    Then it stopped and asked: no spec says cancel is idempotent, and §1 "spec for any Kafka change" was ambiguous.
+    After the answers (idempotent, no feature folder, Deploy impact none): guard in `OrderService.cancel`,
+    a sandbox-only orders-api requirement row (cancel is idempotent) added, G1, G2, G3, G3b, G4, G5 all exit 0, one commit `f58c90c` with code, test and spec. Pass, with
+    one extra round.
+  - Human caught in review (no gate did): (a) the guard is check-then-act with no `@Version` or lock, so two
+    concurrent cancels still publish twice; (b) the test awaits at least one event then asserts exactly one, so a
+    late second event could slip past (it was red on the bug, but the shape can pass falsely); (c) the ticket
+    decision went into `project-profile.md`'s interview log.
+  - Findings for later work: kit `AGENTS.md` block "Record each answer in project-profile.md" reads as covering
+    ticket decisions too (S5 and S2 both hit it; kit change, v060 slice 2); `review-loop.md` "workers never commit"
+    vs a ticket that says commit (slice 2 tiers decide who commits); no tier→workflow-depth mapping yet (slice 2);
+    the example's §1 should say whether an event-suppressing fix is a "Kafka change"; the Gates table gives no
+    offline form (agents added `-o`); G2's output prints the jqwik clause and is not scanned (only G3's log is,
+    which runs the same tests, so the fence holds); REQ rows are not checked for a test (slice 2 evidence).
 - [ ] 14 Gate green: specter G1 to G5 (G5 run, not skipped) and the example's G1 to G3; `git diff --stat` shows nothing
   under `kit/`; deep review of the security filter and the G5 script — [REQ-V065-03] [REQ-V065-11]
 - [ ] 15 CHANGELOG `[0.6.5]`, `VERSION`, `docs/reference.md` line, `docs/assets/report.png` regenerated or noted;
