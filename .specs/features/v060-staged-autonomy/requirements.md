@@ -308,22 +308,25 @@ Blocked on the auto-merge decision.
   (slice 3), E3 and E7 (slice 4); E6, E9 and E10 go to v070. Lands on [REQ-V060-07], [REQ-V060-10], [REQ-V060-11]
   and [REQ-V060-12] to [REQ-V060-16].
 
+- 2026-11-22, maintainer ("please dive in": the lead's recommended calls, open to correction): the eight open
+  decisions are settled as follows.
+  - Strictest file wins: a test kept next to the source takes the source's tier; no exclusion syntax. Lands on
+    [REQ-V060-05].
+  - A model's family is the model id's first `-`-separated token (`claude`, `gpt`, `gemini`); no config. Lands on
+    [REQ-V060-13].
+  - A reviewer in the implementer's family is a WARN that bars Human `none` once [REQ-V060-09] lands; never
+    `not ready` on its own, so a single-vendor repository can still work. Lands on [REQ-V060-13].
+  - A declared artifact path missing at the head is `not ready`: a declared artifact that is not there is a false
+    claim. Lands on [REQ-V060-14].
+  - Evidence thresholds ship as placeholders, so no tier is eligible until the repository sets numbers; the template
+    suggests numbers in a comment. Lands on [REQ-V060-08].
+  - Auto-merge (Human `none`) is allowed only on the lowest tier, only when the repository opts in, its evidence
+    thresholds are met and every guardrail row passes; otherwise `none` behaves as `spot`. Lands on [REQ-V060-09].
+  - `spot` means approve on the readiness verdict, gates and tests; reading a sampled diff in full is not shipped.
+    Lands on [REQ-V060-09].
+  - The planner's escalation counts as fix round 2: worker retry, planner, then the human (Stripe caps at two CI
+    rounds; the model-routing rule already escalates this way). Lands on [REQ-V060-15].
+
 ## Open decisions
 
-- DECISION: Is auto-merge (Human `none`) ever allowed, and for which tier? Default until answered: no; `none` behaves
-  as `spot`. Blocks REQ-V060-09. — maintainer
-- DECISION: `spot` means approve on verdict, gates and tests (default), or read one sampled diff in N in full? — maintainer
-- DECISION: Evidence thresholds: ship placeholders, so no tier is ever eligible until the repo sets numbers (default),
-  or ship suggested numbers? — maintainer
-- DECISION: Strictest file wins, so a test kept next to the source takes the source's tier. Accept (default), or add
-  an exclusion syntax? — maintainer
-- DECISION: How is a model's family read? The model id's first `-`-separated token (`claude-…`, `gpt-…`,
-  `gemini-…`; default, no config), a Family → id-prefix table in the profile, or a free-text `family:` the lead
-  writes? Blocks REQ-V060-13. — maintainer
-- DECISION: A reviewer in the implementer's family: a WARN that bars Human `none` once REQ-V060-09 lands (default),
-  `not ready` on every tier, or no check? A single-vendor repository can never pass the second. Blocks REQ-V060-13.
-  — maintainer
-- DECISION: A declared artifact path missing at the head: FAIL, `not ready` (default: a declared artifact that is not
-  there is a false claim), or WARN? Blocks REQ-V060-14. — maintainer
-- DECISION: Does the planner's escalation count as fix round 2 (default: worker retry, planner, then the human), or
-  do two worker rounds come before the planner? Blocks REQ-V060-15. — maintainer
+None. Platform-wide (multi-repository) specs are pinned until the CRRD split proves the model (2026-11-22).

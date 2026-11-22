@@ -18,7 +18,7 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 2: risk-tier labels (release 0.7.0)
 
-- [ ] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
+- [x] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
   [REQ-V060-05] [REQ-V060-13] [REQ-V060-14]
 - [ ] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
 - [ ] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]
@@ -40,7 +40,7 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 3: guardrails and evidence (release 0.8.0)
 
-- [ ] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
+- [x] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
 - [ ] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
 - [ ] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
   a clean clone) in the template and the example; `chores.md` points to row eight — [REQ-V060-07]
@@ -50,7 +50,7 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 4: the pipeline (release 0.9.0)
 
-- [ ] 20 Gate: record the auto-merge, `spot` and planner-round decisions as decision rows — [REQ-V060-09] [REQ-V060-15]
+- [x] 20 Gate: record the auto-merge, `spot` and planner-round decisions as decision rows — [REQ-V060-09] [REQ-V060-15]
 - [ ] 21 Review-loop step 5 by tier; `labels_only` off; the platform recipe with a merge queue; a shared family bars
   `none` — [REQ-V060-09] [REQ-V060-13] [REQ-V060-16]
 - [ ] 21a Fix-round cap: review-loop diagram and step 4, model-routing rule 3, generator role, `next-task.md`;
