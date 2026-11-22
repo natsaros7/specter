@@ -116,8 +116,11 @@ shortcut: local worktrees and branches only; read remote branches when sessions 
 
 `python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --evidence | --help`
 
-1. **Base.** Staged mode: `HEAD`. Range mode: `git merge-base A B`. Read the profile with `git show <base>:.specs/steering/autonomy.md`.
+1. **Base.** Staged mode: `git merge-base HEAD <merged_ref>` (merged_ref via `spec_lint.merged_ref`; files are `git diff --cached <base>`, so the branch's own commits count); no merged_ref or merge base: `HEAD`, and the block says `base: HEAD (no merge base)`. Range mode: `git merge-base A B`. Read the profile with `git show <base>:.specs/steering/autonomy.md`.
    Missing at the base: the human tier, reason "no autonomy profile at <base>". `--check` reads the working-tree file.
+   Review fix (task 15): git runs from the repo top-level with `-z` (NUL-split, no quoted paths); Tiers globs and guarded
+   globs are repo-root-relative even when `.specs/` sits in a subfolder (guarded globs also match under that subfolder);
+   guarded globs match case-insensitively (case-folding checkouts); a bad `spec-kit.json` exits 2.
 2. **Parse.** Same cell split as `gates.py` (`\|` escapes). Validate: unique tier names; every Paths cell holds at
    least one code span; Reviewer in {standard, deep}; Human in {none, spot, required}, non-decreasing down the table;
    the last row `required`; no `<…>` placeholder. Any failure: exit 2 with `file:line`.

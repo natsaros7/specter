@@ -545,7 +545,26 @@ tprof '| critical | `*` | deep | required |'; ( cd "$B" && echo q > docs/e.md );
 out=$(tl --range "$BASE..HEAD") && echo "$out" | grep -q "tier: critical" || fail "13b: guarded profile edit not critical: $out"
 tprof '| critical | `*` | deep | required |'; gitq -C "$B" add -A; gitq -C "$B" commit -q -m same || true
 echo w > "$B/docs/w.md"; gitq -C "$B" add docs/w.md
-out=$(tl) && echo "$out" | grep -q "tier: critical" || fail "13b: head table not used for staged: $out"
+printf '{"merged_ref": "%s"}' "$BASE" > "$B/.specs/spec-kit.json"
+out=$(tl) && echo "$out" | grep -q "at ${BASE%"${BASE#???????}"}" && echo "$out" | grep -q "tier: critical" && ! echo "$out" | grep -q "no merge base" || fail "13b: staged mode did not use the merge-base table after the branch committed a profile change: $out"
+out=$(tl) && echo "$out" | grep -q "files: 4" || fail "13b: staged mode dropped committed-and-staged branch changes: $out"
+printf '{bad' > "$B/.specs/spec-kit.json"; rc=0; tl >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: bad spec-kit.json exits $rc, want 2"
+rm "$B/.specs/spec-kit.json"; out=$(tl) && echo "$out" | grep -q "base: HEAD (no merge base)" || fail "13b: no merged_ref lacks the HEAD fallback note: $out"
+echo "13b. tiers.py guards: case-folded, nested, quoted paths, subfolder .specs"
+G="$TMP/t13b-g"; mkdir -p "$G"; gitq -C "$G" init; "$KIT/install.sh" "$G" >/dev/null
+printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `src/security/*` | deep | required |\n' > "$G/.specs/steering/autonomy.md"
+echo r > "$G/readme"; gitq -C "$G" add -A; gitq -C "$G" commit -m g
+tg() { python3 "$G/.specs/kit/scripts/tiers.py" --specs "$G/.specs" 2>&1; }
+for f in .Claude/skills/x/SKILL.md claude.md a/b/AGENTS.md sub/CLAUDE.md .github/instructions/x.md .github/prompts/x.md .github/agents/x.md .github/copilot-instructions.md .clinerules .windsurfrules .cursorrules .mcp.json CODEOWNERS docs/CODEOWNERS .github/CODEOWNERS .specs/README.md .specs/steering/x.md .specs/kit/x.py ".claude/é.md" ".claude/a
+b.md"; do
+  mkdir -p "$G/$(dirname "$f")"; echo x > "$G/$f"; gitq -C "$G" add -A
+  out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "files: 1 " || fail "13b: guarded path '$f' did not take the last tier with 1 file: $out"
+  gitq -C "$G" reset -q --hard; gitq -C "$G" clean -fdq
+done
+S="$TMP/t13b-sub"; mkdir -p "$S/proj"; gitq -C "$S" init; "$KIT/install.sh" "$S/proj" >/dev/null
+cp "$G/.specs/steering/autonomy.md" "$S/proj/.specs/steering/autonomy.md"; echo r > "$S/readme"; gitq -C "$S" add -A; gitq -C "$S" commit -m s
+mkdir -p "$S/.claude"; echo x > "$S/.claude/settings.json"; gitq -C "$S" add -A
+out=$(python3 "$S/proj/.specs/kit/scripts/tiers.py" --specs "$S/proj/.specs" 2>&1) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "files: 1 " || fail "13b: root file outside a subfolder .specs not counted as guarded: $out"
 N="$TMP/t13b-none"; mkdir -p "$N/.specs/steering"; gitq -C "$N" init; echo x > "$N/x"; gitq -C "$N" add -A; gitq -C "$N" commit -m x; echo y > "$N/x"; gitq -C "$N" add -A
 out=$(python3 "$B/.specs/kit/scripts/tiers.py" --specs "$N/.specs" 2>&1) && echo "$out" | grep -q "no autonomy profile at" && echo "$out" | grep -q "human: required" || fail "13b: no profile at base is not the human tier: $out"
 for a in "--range" "--range nodots" "--check --range a..b" "--json --check" "--range a..b --range c..d"; do
