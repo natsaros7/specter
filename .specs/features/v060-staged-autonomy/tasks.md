@@ -75,8 +75,16 @@ ones are already in).
   - Evidence: template and acme `autonomy.md` gain `## Guardrails` (eight rows; acme declares all, row seven "no such job, checked `.github/workflows/`") and `## Evidence` (template placeholders with suggested numbers in a comment); `chores.md` "On your machine" points to row eight.
 - [x] 18 `tiers.py --evidence`; the `Fixes:` and `Human-Findings:` trailers in review-loop and `sync.md` — [REQ-V060-08]
   - Evidence: `tiers.parse_evidence` and `tiers.evidence` added (`--evidence [--json]`, conflicts with `--check`/`--range`); the merged_ref read is factored out of `classify` as `committed_ref`. One `git log --first-parent -z`, one `classify` per commit by its first parent. Selftest 13c evidence rows red first (`--evidence` was an unknown argument), then green; the docs half (review-loop step 5, sync.md Trailers) was already in.
+  - Evidence (review fix): red then green: merge-commit revert (`--no-ff` branch + `git revert -m 1`) eligible then breach; `Fixes:` naming a branch commit; human-caught over 2 of 10 trailered merges (was eligible, now hold); note, repeated and CRLF trailers read as 0 (now caught); backdated commit hiding history (`--since`); sha-256 revert not matched; non-ASCII Window and percent accepted (now exit 2); guardrail rows `TBD`, `N/A`, `-` and a 2099 Verified (were declared, now undeclared). Lead fix: a commit above the oldest counted one is scanned for reverts and `Fixes:` whatever its date (selftest t13e7: pre-patch `eligible`, then `breach (reverted 25.0% > 10%)`).
 - [ ] 19 Selftest case 13c (eight guardrail rows included); gate G1-G4 green; docs; release 0.8.0 — [REQ-V060-07]
   [REQ-V060-08] [REQ-V060-11]
+
+### Follow-ups from the slice 3 review (advisories, `docs/reviews/2026-11-23-slice3-deep-review.md`)
+
+- [ ] 19a `--evidence` reads thresholds from the profile at the `merged_ref` tip, not the working tree, and prints its commit (advisory 6) — [REQ-V060-08]
+- [ ] 19b `section()` skips fenced code and HTML comments, for Tiers, Guardrails and Evidence (advisory 7) — [REQ-V060-07]
+- [ ] 19c Docs: evidence assumes squash or merge commits; a rebase merge counts each commit (advisory 9) — [REQ-V060-08]
+- [ ] 19d `--evidence` flags a tier row whose name or globs changed inside the window, and counts a renamed tier's commits (advisory 10) — [REQ-V060-08]
 
 ## Slice 4: the pipeline (release 0.9.0)
 

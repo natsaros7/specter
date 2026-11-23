@@ -357,12 +357,12 @@ shortcut: row seven is declared, not probed; scan CI files for untrusted trigger
 | Metric | Source on `merged_ref`, first-parent, inside the tier's window |
 |---|---|
 | merged | commits, each labelled with the profile as of its first parent (unprofiled ones are left out and counted separately) |
-| reverted | a later commit whose body has `This reverts commit <sha>` (git's own revert text) naming it |
-| escaped | a later commit with a `Fixes: <sha>` trailer naming it (prefix match, at least 7 hex) |
-| human-caught | its own `Human-Findings: <n>` trailer, n > 0, written at the human check |
+| reverted | a later first-parent commit whose change set (the commit, or for a merge every commit it brought in, `F^1..F`) has `This reverts commit <sha>` (git's own revert text) naming any commit of this one's change set |
+| escaped | the same, with a `Fixes: <sha>` trailer (prefix match, 7 to 64 hex; "later" is the position on the first-parent chain, not the date) |
+| human-caught | caught / commits that carry a `Human-Findings:` line, read from the commit's own body, written at the human check; the max over its lines, caught when above 0 or when a value is not exactly ASCII digits |
 
-Verdict per tier: `hold (n < min)` · `hold (no Human-Findings trailers)` when that limit is set and no commit carries
-one · `breach (<metric> x% > y%)` · else `eligible`. Exit 0; `--json` has the counts. `kit/docs/review-loop.md` step 5
+Verdict per tier: `hold (n < min)` · `hold (Human-Findings on k of n merges)` when that limit is set and k, the commits
+that carry a trailer, is below max(Min merged, 1): a merge without the trailer is no data, never "no findings" · `breach (<metric> x% > y%)` · else `eligible`. Exit 0; `--json` has the counts. `kit/docs/review-loop.md` step 5
 and `sync.md` document the two trailers.
 
 shortcut: one git log per run, no cache; cache by commit when a window holds thousands of merges.

@@ -23,7 +23,7 @@ merges on its own yet (that is slice 4). Re-run `install.sh` to get the new scri
 - `tiers.py --evidence [--json]`: reads first-parent commits on `merged_ref`, labels each with the profile as of its
   parent, and prints per tier `eligible`, `hold (<why>)` or `breach (<metric> x% > y%)` with the counts. Reverted is a
   later `This reverts commit <sha>`; escaped a later `Fixes: <sha>` trailer; human-caught a `Human-Findings: <n>`
-  trailer, n > 0. Too few merges, placeholder thresholds or no `Human-Findings` trailers at all is a hold, never a
+  trailer, n > 0. Too few merges, placeholder thresholds or too few `Human-Findings` trailers (human-caught % is over the merges that carry one) is a hold, never a
   pass. Commits whose parent has no profile are left out and counted. It edits nothing.
 - `kit/playbooks/sync.md` § Trailers and review-loop step 5: write `Human-Findings: <n>` on every merge (`0` when
   none) and `Fixes: <sha>` on a fix for an escaped defect.
@@ -40,8 +40,7 @@ merges on its own yet (that is slice 4). Re-run `install.sh` to get the new scri
 - Guardrails are declared, never probed: specter cannot see branch protection or CI permissions.
 - `--evidence` runs one git log and labels each commit separately, no cache; slow on windows of thousands of merges.
   `Human-Findings:` and `Fixes:` are read as written; their honesty is the human's and the platform's review record.
-  The window uses `git log --since`, which stops at the first commit older than the window on the first-parent
-  chain. A `Fixes:` sha is matched against first-parent commits only.
+  A `Fixes:` sha is matched against first-parent commits only.
 
 ## [0.7.0] - 2026-11-22
 

@@ -30,11 +30,12 @@ No profile or Tiers section at the base: the human tier (the last row's strictne
 --evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
 `## Evidence` table `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
 (a Max of `-` is not checked; a row that keeps a <placeholder> is `hold (thresholds not set)`). It reads the first-parent
-commits on merged_ref (as --check's staged mode finds it) inside each tier's window, labels each with the profile as of
+commits on merged_ref (as the label's staged mode finds it) inside each tier's window, labels each with the profile as of
 its first parent (a parent with no profile or Tiers, and the root commit, are `unprofiled`: left out and counted), and
-counts per tier: merged; reverted (a later `This reverts commit <sha>` line); escaped (a later `Fixes: <sha, 7+ hex>`
-trailer; `Fixes: #12` is ignored); human-caught (its own `Human-Findings: <n>` trailer, n > 0). With a Max human-caught
-set, a window with no `Human-Findings:` trailer at all is a hold, never a pass. It never edits the profile.
+counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
+any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
+human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
+share of the merges that carry one. With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold. It never edits the profile.
 Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `file:line` for a bad row.
 """
 import datetime
@@ -147,11 +148,11 @@ def parse_guardrails(text):
             raise ValueError((n, "row needs 3 cells, found " + str(len(cells))))
         name, by, ver = cells
         try:
-            dated = re.fullmatch(r"\d{4}-\d{2}-\d{2}", ver) and datetime.date.fromisoformat(ver)
+            dated = re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", ver) and datetime.date.fromisoformat(ver)
         except ValueError:
             dated = None
-        why = ("no Enforced by" if not by else "placeholder in Enforced by" if PLACEHOLDER.search(by)
-               else None if dated else "Verified is not a YYYY-MM-DD date")
+        why = ("no Enforced by" if not by or by.lower() in ("-", "tbd", "todo", "n/a") else "placeholder in Enforced by" if PLACEHOLDER.search(by)
+               else "Verified is not a YYYY-MM-DD date" if not dated else "Verified is in the future" if dated > datetime.date.today() else None)
         rows.append((name, by, ver, n, why))
     return rows
 
@@ -185,12 +186,12 @@ def parse_evidence(text, tiers):
             rows[cells[0]] = None
             continue
         win, low, *caps = cells[1:]
-        if not (re.fullmatch(r"\d+", win) and int(win) > 0):
+        if not (re.fullmatch(r"[0-9]+", win) and int(win) > 0):
             raise ValueError((n, "Window (days) must be a whole number above 0, found " + win))
-        if not re.fullmatch(r"\d+", low):
+        if not re.fullmatch(r"[0-9]+", low):
             raise ValueError((n, "Min merged must be a whole number, found " + low))
         for i, c in enumerate(caps):
-            if c != "-" and not (re.fullmatch(r"\d+(\.\d+)?", c) and float(c) <= 100):
+            if c != "-" and not (re.fullmatch(r"[0-9]+(\.[0-9]+)?", c) and float(c) <= 100):
                 raise ValueError((n, EHEAD[3 + i] + " must be 0 to 100 or -, found " + c))
         rows[cells[0]] = (int(win), int(low), [None if c == "-" else float(c) for c in caps], n)
     return rows
@@ -354,6 +355,13 @@ def label(root, rel, rng, as_json, specs=None):
     return 0
 
 
+def findings(body):
+    """(carries, caught) for the Human-Findings: lines of a commit body: carries when there is one; caught when a value is
+    not exactly ASCII digits (a note, junk: fails closed) or any value is above 0. Takes the max over lines, never the first."""
+    vals = [v.strip() for v in re.findall(r"^Human-Findings:(.*)$", body.replace("\r", ""), re.M | re.I)]
+    return bool(vals), any(not re.fullmatch(r"[0-9]+", v) or v.strip("0") for v in vals)
+
+
 def evidence(root, rel, specs, profile, as_json):
     """Print the Evidence report for the working-tree profile; return the exit code. Never writes anything."""
     try:
@@ -376,43 +384,63 @@ def evidence(root, rel, specs, profile, as_json):
         return refuse("no merged_ref, origin/HEAD or HEAD resolves in " + str(root))
     now = time.time()
     longest = max([r[0] for r in (ev or {}).values() if r] or [90])
-    run = subprocess.run(["git", "-C", str(root), "log", "--first-parent", "-z", "--since=" + str(int(now - longest * 86400)),
-                          "--format=%H%x00%P%x00%ct%x00%B", head], capture_output=True)
+    # The whole first-parent chain, never --since: git stops at the first old-dated commit, which would hide the rest.
+    run = subprocess.run(["git", "-C", str(root), "log", "--first-parent", "-z", "--format=%H%x00%P%x00%ct%x00%B", head], capture_output=True)
     toks = run.stdout.decode("utf-8", "replace").split("\0")
     toks = toks[:-1] if toks and toks[-1] == "" else toks  # -z ends every record with a NUL; an empty body is a real token
     if run.returncode or len(toks) % 4:
         return refuse("cannot read the history of " + ref)
-    log, unprofiled = [], 0  # newest first: (sha, committer time, body, tier or None)
-    for sha, parents, ct, body in zip(*[iter(toks)] * 4):
+    # newest first: (committer time, tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).
+    # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
+    log, unprofiled, inwin = [], 0, 0
+    recs = list(zip(*[iter(toks)] * 4))
+    # Position, not date, says what is later; date only says what is counted. Every commit above the oldest counted one
+    # is scanned for reverts and Fixes:, whatever its date, so a backdated revert still counts.
+    last = max([i for i, r in enumerate(recs) if int(r[2]) >= now - longest * 86400] or [-1])
+    for sha, parents, ct, body in recs[:last + 1]:
         parent = parents.split()[0] if parents else None
-        try:
-            c = classify(root, rel, parent + "..." + sha, specs) if parent else None
-        except ValueError:
-            c = None  # shortcut: a parent whose profile is unreadable counts as unprofiled; --check on that commit names the error
-        log.append((sha, int(ct), body, c["tier"] if c and c["why"] is None else None))
-        unprofiled += not (c and c["why"] is None)
+        c = None
+        if int(ct) >= now - longest * 86400:
+            inwin += 1
+            try:
+                c = classify(root, rel, parent + "..." + sha, specs) if parent else None
+            except ValueError:
+                c = None  # shortcut: a parent whose profile is unreadable counts as unprofiled; --check on that commit names the error
+            unprofiled += not (c and c["why"] is None)
+        cs = [(sha, body)]
+        if parent:
+            sub_ = subprocess.run(["git", "-C", str(root), "log", "-z", "--format=%H%x00%B", parent + ".." + sha], capture_output=True)
+            t = sub_.stdout.decode("utf-8", "replace").split("\0")
+            t = t[:-1] if t and t[-1] == "" else t
+            cs = list(zip(t[::2], t[1::2])) if not sub_.returncode and len(t) % 2 == 0 and t else cs
+        named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
+        log.append((int(ct), c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
+                    named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body))
     out = {}
     for name in names:
         row = (ev or {}).get(name)
         m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
-                 window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=False)
+                 window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=0)
         out[name] = m
         if row is None:
             continue
         win, low, caps, _ = row
-        mine = [(i, e) for i, e in enumerate(log) if e[3] == name and e[1] >= now - win * 86400]
+        mine = [(i, e) for i, e in enumerate(log) if e[1] == name and e[0] >= now - win * 86400]
         m.update(window_days=win, merged=len(mine))
-        for i, (sha, _, body, _) in mine:
+        for i, (_, _, shas, _, _, body) in mine:
             later = log[:i]  # the log is newest first, so these came after this commit
-            hit_ = lambda pat: any(sha.startswith(x.lower()) for e in later for x in re.findall(pat, e[2], re.M | re.I))
-            m["reverted"] += hit_(r"^This reverts commit ([0-9a-f]{7,40})\b")
-            m["escaped"] += hit_(r"^Fixes:[ \t]*([0-9a-f]{7,40})\b")
-            n = re.search(r"^Human-Findings:[ \t]*(\d+)[ \t]*$", body, re.M | re.I)
-            m["human_caught"] += bool(n and int(n.group(1)) > 0)
-            m["with_trailer"] |= bool(re.search(r"^Human-Findings:", body, re.M | re.I))
-        pct = {k: m[k] * 100.0 / m["merged"] for k in ("reverted", "escaped", "human_caught")} if m["merged"] else {}
+            hit_ = lambda k: any(h.startswith(x) for e in later for x in e[k] for h in shas)
+            m["reverted"] += hit_(3)
+            m["escaped"] += hit_(4)
+            carries, caught = findings(body)
+            m["human_caught"] += caught
+            m["with_trailer"] += carries
+        den = {"reverted": m["merged"], "escaped": m["merged"], "human_caught": m["with_trailer"]}
+        pct = {k: m[k] * 100.0 / den[k] if den[k] else 0.0 for k in den}
+        # a merge without the trailer is no data, never "no findings": the rate is over the merges that carry one
         why = ("merged " + str(m["merged"]) + " < min " + str(low)) if m["merged"] < max(low, 1) else \
-              "no Human-Findings trailers" if caps[2] is not None and not m["with_trailer"] else None
+              "Human-Findings on %d of %d merges" % (m["with_trailer"], m["merged"]) \
+              if caps[2] is not None and m["with_trailer"] < max(low, 1) else None
         if why:
             m["why"] = why
             continue
@@ -423,17 +451,17 @@ def evidence(root, rel, specs, profile, as_json):
         print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
         return 0
     print("### Evidence")
-    print("- history: " + ref + " at " + head[:7] + ", first-parent, " + str(len(log)) + " commit(s) in the longest window")
+    print("- history: " + ref + " at " + head[:7] + ", first-parent, " + str(inwin) + " commit(s) in the longest window")
     if ev is None:
         print("- no Evidence section in " + str(profile))
     for name, m in out.items():
-        pc = lambda k: str(m[k]) + (" (%.1f%%)" % (m[k] * 100.0 / m["merged"]) if m["merged"] else "")
+        pc = lambda k, d="merged": str(m[k]) + (" (%.1f%%)" % (m[k] * 100.0 / m[d]) if m[d] else "")
         print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
-            " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught"), m["window_days"])
+            " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught", "with_trailer"), m["window_days"])
             if m["window_days"] else ""))
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
-    # shortcut: one git log and one classify per commit, no cache; cache by commit when a window holds thousands of merges.
+    # shortcut: one history log, then one classify and one change-set log per commit in the window, no cache; cache by commit when a window holds thousands of merges.
     return 0
 
 

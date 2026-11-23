@@ -61,7 +61,8 @@ flowchart LR
    run CI/CD hear before the merge. A job that runs from the default branch picks up every merge on its next run.
    At the merge, the human adds `Human-Findings: <n>` to the merge (or squash) commit message: the number of
    problems the human found that the gates and the reviewer missed, `0` when none. Write it on every merge, so
-   `tiers.py --evidence` can tell "no findings" from "no data" (see [sync.md](../playbooks/sync.md) § Trailers).
+   `tiers.py --evidence` can tell "no findings" from "no data": human-caught % counts only merges that carry the trailer,
+   and a window with too few of them is a hold (see [sync.md](../playbooks/sync.md) § Trailers).
 
 ## Reviewer prompt (works with any agent)
 

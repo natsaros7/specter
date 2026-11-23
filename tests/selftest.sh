@@ -622,6 +622,8 @@ js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sy
 cset "${GH}| Protected branch | branch rule main | 2026-13-45 |\n| Untrusted jobs | no such job, checked CI | 2026-01-02 |\n"; out=$(cl)
 echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: bad date was not undeclared: $out"
 js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["tier"]=="routine" and d["guardrails"]=={"rows":2,"undeclared":1,"downgraded":True}, d' || fail "13c: --json downgraded: $js"
+cset "${GH}| A | TBD | 2026-01-02 |\n| B | N/A | 2026-01-02 |\n| C | - | 2026-01-02 |\n| D | x | 2099-01-01 |\n"; out=$(cl --check)
+[ "$(echo "$out" | grep -c 'undeclared (no Enforced by)')" = 3 ] && echo "$out" | grep -q "undeclared (Verified is in the future)" || fail "13c: TBD/N/A/-/future date are declared: $out"
 cset "${GH}| Protected branch | | 2026-01-02 |\n"; out=$(cl --check)
 echo "$out" | grep -q "guardrail .*autonomy.md:[0-9]*: undeclared (no Enforced by)" || fail "13c: --check lacks the undeclared row with file:line: $out"
 cset "${GH}| A | x | 2026-01-02 |\n| B | y | soon |\n| C | <z> | 2026-01-02 |\n"; rc=0; out=$(cl --check) || rc=$?
@@ -642,29 +644,29 @@ ev() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---
 mk() { d=$1; shift; n=$((n+1)); echo $n > "$D/$d/f$n"; gitq -C "$D" add "$d"; gitq -C "$D" commit -q "$@"; }
 sha() { git -C "$D" rev-parse HEAD; }
 printf '{"merged_ref": "HEAD"}' > "$D/.specs/spec-kit.json"
-# the root commit is older than every window (git stops walking at a too-old commit, so it must be the oldest); the profile commit has no profile above it
+# c1 is dated before every window (not counted); this dir also holds case 13's `base` root commit and the profile commit has no profile above it: 2 unprofiled
 export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mk docs -m c1-before-the-profile; unset GIT_COMMITTER_DATE
 ev ""; gitq -C "$D" add .specs/steering/autonomy.md .specs/spec-kit.json; gitq -C "$D" commit -q -m profile
 mk docs -m d1; D1=$(sha); mk docs -m d2; mk docs -m d3; mk docs -m d4
 gitq -C "$D" revert --no-edit "$D1"
-mk src -m s1; S1=$(sha | cut -c1-7); mk src -m s2; mk src -m s3 -m "Fixes: $S1"; mk src -m s4 -m "Fixes: #12"
+mk src -m s1; S1=$(sha | cut -c1-7); mk src -m s2; mk src -m s3 -m "Fixes: $S1"; mk src -m s4 -m "Fixes: #12" -m "Human-Findings: 0"
 # no Evidence section: every tier holds, exit 0
 rc=0; out=$(el) || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "^### Evidence" && [ "$(echo "$out" | grep -c 'hold (no Evidence row)')" = 3 ] || fail "13c evidence: no section (exit $rc): $out"
-echo "$out" | grep -q "unprofiled: 1 commit(s) left out" && echo "$out" | grep -q "history: HEAD at $(sha | cut -c1-7), first-parent" || fail "13c evidence: unprofiled or history line: $out"
+echo "$out" | grep -q "unprofiled: 2 commit(s) left out" && echo "$out" | grep -q "history: HEAD at $(sha | cut -c1-7), first-parent" || fail "13c evidence: unprofiled or history line: $out"
 EV1='| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | <days> | <n> | <%> | <%> | <%> |\n'
 ev "${EVH}${EV1}"; SUM=$(cksum < "$AP"); rc=0; out=$(el) || rc=$?
-[ "$rc" = 0 ] && echo "$out" | grep -q "routine: breach (reverted 20.0% > 10%)" && echo "$out" | grep -q "domain: hold (no Human-Findings trailers)" && echo "$out" | grep -q "critical: hold (thresholds not set)" || fail "13c evidence: revert breach, no trailers, placeholder (exit $rc): $out"
+[ "$rc" = 0 ] && echo "$out" | grep -q "routine: breach (reverted 20.0% > 10%)" && echo "$out" | grep -q "domain: hold (Human-Findings on 1 of 4 merges)" && echo "$out" | grep -q "critical: hold (thresholds not set)" || fail "13c evidence: revert breach, no trailers, placeholder (exit $rc): $out"
 [ "$SUM" = "$(cksum < "$AP")" ] || fail "13c evidence: the profile changed"
 mk src -m s5 -m "Human-Findings: 0"
 out=$(el) && echo "$out" | grep -q "domain: eligible" || fail "13c evidence: domain not eligible: $out"
 js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]
-assert d["ref"]=="HEAD" and d["unprofiled"]==1, d
-assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":False}, t["routine"]
-assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":True}, t["domain"]
+assert d["ref"]=="HEAD" and d["unprofiled"]==2, d
+assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0}, t["routine"]
+assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2}, t["domain"]
 assert t["critical"]["verdict"]=="hold" and t["critical"]["why"]=="thresholds not set", t["critical"]' || fail "13c evidence: --json: $js"
 mk src -m s6 -m "Human-Findings: 2"
-out=$(el) && echo "$out" | grep -q "domain: breach (human-caught 16.7% > 10%)" || fail "13c evidence: human-caught breach: $out"
+out=$(el) && echo "$out" | grep -q "domain: breach (human-caught 33.3% > 10%)" || fail "13c evidence: human-caught breach: $out"
 ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n"
 out=$(el) && echo "$out" | grep -q "domain: hold (merged 6 < min 100)" || fail "13c evidence: min merged: $out"
 # the parent's table labels, not the working tree: docs no longer match routine, the counts do not move
@@ -680,6 +682,44 @@ bad "percent over 100" "${EVH}| routine | 90 | 3 | 150 | 20 | - |\n" "Max revert
 bad "wrong cell count" "${EVH}| routine | 90 | 3 |\n" "row needs 6 cells"
 bad "unknown tier" "${EVH}| nosuch | 90 | 3 | 10 | 20 | - |\n" "unknown tier"
 bad "duplicate tier" "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| routine | 90 | 3 | 10 | 20 | - |\n" "duplicate tier"
+bad "non-ASCII window" "${EVH}| routine | ９０ | 3 | 10 | 20 | - |\n" "Window"
+bad "non-ASCII percent" "${EVH}| routine | 90 | 3 | ４ | 20 | - |\n" "Max reverted"
+# review fixes: merge commits, trailer denominators, trailer parsing, backdated commits, sha-256 (each repo is a bare-bones copy of the kit)
+nr() { R="$TMP/$1"; shift; mkdir -p "$R/.specs/steering" "$R/.specs/kit" "$R/docs" "$R/src"; gitq -C "$R" init "$@"; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
+  printf '{"merged_ref": "main"}' > "$R/.specs/spec-kit.json"; N=0
+  printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TD" "${EVH}${ER}" > "$R/.specs/steering/autonomy.md"
+  gitq -C "$R" add -A; gitq -C "$R" commit -qm profile; }
+mr() { d=$1; shift; N=$((N+1)); echo $N > "$R/$d/f$N"; gitq -C "$R" add "$d"; gitq -C "$R" commit -q "$@"; }
+er() { python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" --evidence "$@" 2>&1; }
+want() { out=$(er) && echo "$out" | grep -qF "$2" || fail "13c evidence: $1 (want '$2'): $out"; }
+# a PR branch merged --no-ff: pr <name> <commit args...> (returns to main)
+pr() { b=$1; shift; gitq -C "$R" checkout -q -b "$b"; mr docs "$@"; gitq -C "$R" checkout -q main; gitq -C "$R" merge -q --no-ff "$b" -m "merge $b"; }
+ER='| routine | 90 | 1 | 10 | - | -  |\n| domain | 90 | 1 | - | - | - |\n'
+nr t13e1 -b main; mr docs -m d0; pr p1 -m p1; P1=$(git -C "$R" rev-parse HEAD); pr p2 -m p2; pr p3 -m p3; pr p4 -m p4
+gitq -C "$R" checkout -q -b rv; gitq -C "$R" revert --no-edit -m 1 "$P1"; gitq -C "$R" checkout -q main; gitq -C "$R" merge -q --no-ff rv -m "merge rv"
+want "revert on a merged branch counts" "routine: breach (reverted 16.7% > 10%)"
+ER='| routine | 90 | 1 | - | 10 | -  |\n| domain | 90 | 1 | - | - | - |\n'
+nr t13e2 -b main; mr docs -m d0; pr p1 -m p1; B1=$(git -C "$R" rev-parse HEAD^2); pr p2 -m p2; pr p3 -m p3; pr p4 -m p4; pr fx -m fx -m "Fixes: $B1"
+want "Fixes naming a branch commit counts" "routine: breach (escaped 16.7% > 10%)"
+ER='| routine | 90 | 1 | - | - | - |\n| domain | 90 | 5 | - | - | 10 |\n'
+nr t13e3 -b main; for i in 1 2 3 4 5 6 7 8; do mr src -m "s$i"; done; mr src -m s9 -m "Human-Findings: 1"; mr src -m s10 -m "Human-Findings: 1"
+want "human-caught denominator is the commits with a trailer" "domain: hold (Human-Findings on 2 of 10 merges)"
+printf '%s' "$out" > /dev/null; js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]["domain"]; assert t["with_trailer"]==2 and t["merged"]==10, t' || fail "13c evidence: with_trailer count: $js"
+ER='| routine | 90 | 1 | - | - | - |\n| domain | 90 | 1 | - | - | 10 |\n'
+nr t13e4 -b main; mr src -m s1 -m "Human-Findings: 2 (missing null check)"; mr src -m s2 -m "Human-Findings: 0" -m "Human-Findings: 3"
+printf 's3\n\nHuman-Findings: 4\r\n' > "$TMP/crlf"; mr src -F "$TMP/crlf"; mr src -m s4 -m "Human-Findings: ٣"; mr src -m s5 -m "Human-Findings: 0"
+want "malformed, repeated and CRLF trailers count as caught" "domain: breach (human-caught 80.0% > 10%)"
+ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'
+nr t13e5 -b main; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; gitq -C "$R" revert --no-edit "$A1"
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mr docs -m backdated; unset GIT_COMMITTER_DATE; mr docs -m c1; mr docs -m c2; mr docs -m c3
+want "a backdated commit does not hide older history" "routine: breach (reverted 16.7% > 10%)"
+nr t13e7 -b main; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; mr docs -m a3
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; gitq -C "$R" revert --no-edit "$A1"; unset GIT_COMMITTER_DATE; mr docs -m c1
+want "a backdated revert above a counted commit still counts" "routine: breach (reverted 25.0% > 10%)"
+if git init -q --object-format=sha256 "$TMP/t13e6x" 2>/dev/null; then
+  nr t13e6 -q --object-format=sha256; mr docs -m a1; mr docs -m a2; gitq -C "$R" revert --no-edit HEAD~1
+  want "a sha-256 revert counts" "routine: breach (reverted 33.3% > 10%)"
+fi
 for a in "--range a..b" "--check"; do rc=0; el $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13c evidence: '--evidence $a' exits $rc, want 2"; done
 
 echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
