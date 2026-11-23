@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Check the Tiers table of the autonomy profile. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check [--specs DIR] [--file PATH] | --help
+Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check [--specs DIR] [--file PATH]
+       | --evidence [--specs DIR] [--file PATH] [--json] | --help
        default DIR = the .specs/ this script is installed in; default PATH = DIR/steering/autonomy.md
 
 --check reads the working-tree profile and validates its `## Tiers` table: unique tier names, at least one `glob`
@@ -20,14 +21,30 @@ full case fold), the way APFS and NTFS open them. Each file takes the lowest row
 guarded: the last row) and the change takes its strictest file's tier. Renames count under both paths. Staged mode is
 a preflight; the binding label is --range after the commit, run from a trusted copy of the kit.
 Exit 0, or 2 on a bad argument, profile or spec-kit.json.
+Guardrails: an optional `## Guardrails` table `| Guardrail | Enforced by | Verified |` records what the platform is
+declared to enforce (specter never checks it). A row is declared when Enforced by is filled with no <placeholder> and
+Verified is a YYYY-MM-DD date. A tier whose Human is `none` is reported as `spot` ("none → spot") while the section is
+absent or empty or any row is undeclared; --check prints one line per row (undeclared rows keep exit 0), a bad header is exit 2.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
+
+--evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
+`## Evidence` table `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
+(a Max of `-` is not checked; a row that keeps a <placeholder> is `hold (thresholds not set)`). It reads the first-parent
+commits on merged_ref (as --check's staged mode finds it) inside each tier's window, labels each with the profile as of
+its first parent (a parent with no profile or Tiers, and the root commit, are `unprofiled`: left out and counted), and
+counts per tier: merged; reverted (a later `This reverts commit <sha>` line); escaped (a later `Fixes: <sha, 7+ hex>`
+trailer; `Fixes: #12` is ignored); human-caught (its own `Human-Findings: <n>` trailer, n > 0). With a Max human-caught
+set, a window with no `Human-Findings:` trailer at all is a hold, never a pass. It never edits the profile.
+Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `file:line` for a bad row.
 """
+import datetime
 import fnmatch
 import json
 import posixpath
 import re
 import subprocess
 import sys
+import time
 import unicodedata
 from pathlib import Path
 
@@ -37,6 +54,7 @@ import gates  # noqa: E402
 import spec_lint  # noqa: E402
 
 HEAD = ["Tier", "Paths", "Reviewer", "Human"]
+GHEAD = ["Guardrail", "Enforced by", "Verified"]
 REVIEWER = ("standard", "deep")
 HUMAN = ("none", "spot", "required")
 # The installer writes these; install.py is not copied into projects, so they are listed here.
@@ -50,6 +68,7 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
            "docs/CODEOWNERS"]
+EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
 
@@ -105,6 +124,78 @@ def parse_tiers(text):
     return rows
 
 
+def parse_guardrails(text):
+    """[(guardrail, enforced_by, verified, lineno, why)] or None when there is no Guardrails section. why is None for
+    a declared row (Enforced by filled, no <placeholder>, Verified a real YYYY-MM-DD date), else the reason it is not.
+    Placeholders are the undeclared state, not an error; raises ValueError((lineno, message)) on a bad header or row."""
+    lines = section(text, "Guardrails")
+    if lines is None:
+        return None
+    rows, head = [], None
+    for n, line in lines:
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = gates.split_row(line)
+        if head is None:
+            head = [c.lower() for c in cells]
+            if head != [h.lower() for h in GHEAD]:
+                raise ValueError((n, "header must be | " + " | ".join(GHEAD) + " |"))
+            continue
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if len(cells) != 3:
+            raise ValueError((n, "row needs 3 cells, found " + str(len(cells))))
+        name, by, ver = cells
+        try:
+            dated = re.fullmatch(r"\d{4}-\d{2}-\d{2}", ver) and datetime.date.fromisoformat(ver)
+        except ValueError:
+            dated = None
+        why = ("no Enforced by" if not by else "placeholder in Enforced by" if PLACEHOLDER.search(by)
+               else None if dated else "Verified is not a YYYY-MM-DD date")
+        rows.append((name, by, ver, n, why))
+    return rows
+
+
+def parse_evidence(text, tiers):
+    """{tier: (window, min_merged, [max reverted, escaped, human-caught or None], lineno)} or None when there is no
+    Evidence section; a row that keeps a <placeholder> maps to None (thresholds not set, a hold, not an error).
+    Raises ValueError((lineno, message)) on a bad header, a bad cell, an unknown or duplicate tier."""
+    lines = section(text, "Evidence")
+    if lines is None:
+        return None
+    rows, head = {}, None
+    for n, line in lines:
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = gates.split_row(line)
+        if head is None:
+            head = [c.lower() for c in cells]
+            if head != [h.lower() for h in EHEAD]:
+                raise ValueError((n, "header must be | " + " | ".join(EHEAD) + " |"))
+            continue
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if len(cells) != len(EHEAD):
+            raise ValueError((n, "row needs " + str(len(EHEAD)) + " cells, found " + str(len(cells))))
+        if cells[0] not in tiers:
+            raise ValueError((n, "unknown tier '" + cells[0] + "' (not in the Tiers table)"))
+        if cells[0] in rows:
+            raise ValueError((n, "duplicate tier '" + cells[0] + "'"))
+        if PLACEHOLDER.search(line):
+            rows[cells[0]] = None
+            continue
+        win, low, *caps = cells[1:]
+        if not (re.fullmatch(r"\d+", win) and int(win) > 0):
+            raise ValueError((n, "Window (days) must be a whole number above 0, found " + win))
+        if not re.fullmatch(r"\d+", low):
+            raise ValueError((n, "Min merged must be a whole number, found " + low))
+        for i, c in enumerate(caps):
+            if c != "-" and not (re.fullmatch(r"\d+(\.\d+)?", c) and float(c) <= 100):
+                raise ValueError((n, EHEAD[3 + i] + " must be 0 to 100 or -, found " + c))
+        rows[cells[0]] = (int(win), int(low), [None if c == "-" else float(c) for c in caps], n)
+    return rows
+
+
 def guarded_globs(text, rel):
     """GUARDED plus the in-repo link targets of the Knowledge table (a folder becomes folder/*). rel is the profile's
     path from the repo root, which relative links resolve against."""
@@ -139,7 +230,7 @@ def profile_at(root, base, rel):
     return run.stdout if run.returncode == 0 else None
 
 
-USAGE = "usage: tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --help"
+USAGE = "usage: tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --evidence [--json] | --help"
 
 
 def refuse(msg):
@@ -158,9 +249,28 @@ def gitz(root, *args):
     return [x.decode("utf-8", "surrogateescape") for x in run.stdout.split(b"\0") if x] if run.returncode == 0 else None
 
 
+def committed_ref(root, specs, head):
+    """merged_ref as spec-kit.json is committed at head (next to the profile's .specs/ folder `specs`, default root/.specs),
+    resolved like spec_lint.merged_ref; None when nothing resolves. Raises ValueError on a bad spec-kit.json."""
+    cfg = (Path(specs).name if specs else ".specs") + "/spec-kit.json"
+    try:
+        # As committed at HEAD: a work-tree edit must not move the base. An edit the branch committed is in the
+        # diff from any older merge base, and spec-kit.json is guarded.
+        # shortcut: a committed merged_ref naming the branch itself makes HEAD the base and hides its commits;
+        # only --range binds, upgrade if staged labels ever gate a merge.
+        conf = json.loads(profile_at(root, "HEAD", cfg) or "{}") if head else {}
+        want = conf.get("merged_ref") if isinstance(conf, dict) else 0
+        if not (want is None or isinstance(want, str)):
+            raise ValueError("merged_ref must be a ref name or null")
+        return spec_lint.merged_ref(root, {"merged_ref": want})
+    except (ValueError, OSError, subprocess.SubprocessError) as err:
+        raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
+
+
 def classify(root, rel, rng, specs=None):
-    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, why, note}
-    (why is None when a profile was read; note names the base and how it was found) or raises ValueError(message).
+    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
+    (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
+    `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
     ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
     root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref."""
     top = git(root, "rev-parse", "--show-toplevel")
@@ -173,19 +283,7 @@ def classify(root, rel, rng, specs=None):
         note = str(base)[:7] + " (merge base of " + rng + ")"
     else:
         head = git(root, "rev-parse", "--verify", "-q", "HEAD")
-        cfg = (Path(specs).name if specs else ".specs") + "/spec-kit.json"
-        try:
-            # As committed at HEAD: a work-tree edit must not move the base. An edit the branch committed is in the
-            # diff from any older merge base, and spec-kit.json is guarded.
-            # shortcut: a committed merged_ref naming the branch itself makes HEAD the base and hides its commits;
-            # only --range binds, upgrade if staged labels ever gate a merge.
-            conf = json.loads(profile_at(root, "HEAD", cfg) or "{}") if head else {}
-            want = conf.get("merged_ref") if isinstance(conf, dict) else 0
-            if not (want is None or isinstance(want, str)):
-                raise ValueError("merged_ref must be a ref name or null")
-            ref = spec_lint.merged_ref(root, {"merged_ref": want})
-        except (ValueError, OSError, subprocess.SubprocessError) as err:
-            raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
+        ref = committed_ref(root, specs, head)
         merge = git(root, "merge-base", "HEAD", ref) if ref and ref != "HEAD" and head else None
         # No merge base: fail closed, every file takes the last row.
         base, closed = merge or head, not merge
@@ -196,6 +294,7 @@ def classify(root, rel, rng, specs=None):
     text = profile_at(root, base, rel) if base else None
     try:
         rows = parse_tiers(text) if text else None
+        gr = parse_guardrails(text) if rows else None
     except ValueError as err:
         raise ValueError(rel + " at " + str(base)[:7] + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
     short = (base or "HEAD")[:7]
@@ -216,7 +315,13 @@ def classify(root, rel, rng, specs=None):
         top = max(top, (idx, f, glob), key=lambda t: t[0])
     idx = top[0] if files else last
     tier, _, reviewer, human, _ = rows[idx]
-    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note,
+    guard = None
+    if why is None:
+        undeclared = sum(1 for r in gr or [] if r[4])
+        down = human == "none" and (not gr or undeclared > 0)
+        guard = {"rows": len(gr or []), "undeclared": undeclared, "downgraded": down}
+        human = "spot" if down else human
+    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
             "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
@@ -227,12 +332,12 @@ def label(root, rel, rng, as_json, specs=None):
         c = classify(root, rel, rng, specs)
     except ValueError as err:
         return refuse(str(err))
-    base, files, tier, reviewer, human, why, set_by, ordered = (c[k] for k in (
-        "base", "files", "tier", "reviewer", "human", "why", "set_by", "counts"))
+    base, files, tier, reviewer, human, why, set_by, ordered, guard = (c[k] for k in (
+        "base", "files", "tier", "reviewer", "human", "why", "set_by", "counts", "guardrails"))
     short = (base or "HEAD")[:7]
     if as_json:
         print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
-                          "profile_commit": base if why is None else None, "labels_only": True}))
+                          "guardrails": guard, "profile_commit": base if why is None else None, "labels_only": True}))
         return 0
     print("### Risk tier")
     print("- tier: " + tier + " (reviewer: " + reviewer + ", human: " + human + ")")
@@ -241,7 +346,94 @@ def label(root, rel, rng, as_json, specs=None):
     print("- files: " + str(len(files)) + (" (" + ", ".join(k + " " + str(v) for k, v in ordered.items()) + ")" if files else ""))
     print("- base: " + c["note"])
     print("- profile: " + (why or rel + " at " + short))
+    if guard:
+        n, m = guard["rows"], guard["undeclared"]
+        print("- guardrails: " + ("no Guardrails section" if not n else str(m) + " of " + str(n) + " undeclared" if m else str(n) + " declared")
+              + (", none → spot" if guard["downgraded"] else ""))
     print("- autonomy: labels only; every change still gets the human check")
+    return 0
+
+
+def evidence(root, rel, specs, profile, as_json):
+    """Print the Evidence report for the working-tree profile; return the exit code. Never writes anything."""
+    try:
+        text = profile.read_text()
+        tiers = parse_tiers(text)
+        names = [r[0] for r in tiers or []]
+        ev = parse_evidence(text, names)
+    except OSError:
+        return refuse("no " + str(profile) + ": nothing to count")
+    except ValueError as err:
+        return refuse(str(profile) + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+    if tiers is None:
+        return refuse("no Tiers section in " + str(profile) + ": nothing to count")
+    try:
+        ref = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+    except ValueError as err:
+        return refuse(str(err))
+    head = git(root, "rev-parse", "--verify", "-q", ref + "^{commit}") if ref else None
+    if not head:
+        return refuse("no merged_ref, origin/HEAD or HEAD resolves in " + str(root))
+    now = time.time()
+    longest = max([r[0] for r in (ev or {}).values() if r] or [90])
+    run = subprocess.run(["git", "-C", str(root), "log", "--first-parent", "-z", "--since=" + str(int(now - longest * 86400)),
+                          "--format=%H%x00%P%x00%ct%x00%B", head], capture_output=True)
+    toks = run.stdout.decode("utf-8", "replace").split("\0")
+    toks = toks[:-1] if toks and toks[-1] == "" else toks  # -z ends every record with a NUL; an empty body is a real token
+    if run.returncode or len(toks) % 4:
+        return refuse("cannot read the history of " + ref)
+    log, unprofiled = [], 0  # newest first: (sha, committer time, body, tier or None)
+    for sha, parents, ct, body in zip(*[iter(toks)] * 4):
+        parent = parents.split()[0] if parents else None
+        try:
+            c = classify(root, rel, parent + "..." + sha, specs) if parent else None
+        except ValueError:
+            c = None  # shortcut: a parent whose profile is unreadable counts as unprofiled; --check on that commit names the error
+        log.append((sha, int(ct), body, c["tier"] if c and c["why"] is None else None))
+        unprofiled += not (c and c["why"] is None)
+    out = {}
+    for name in names:
+        row = (ev or {}).get(name)
+        m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
+                 window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=False)
+        out[name] = m
+        if row is None:
+            continue
+        win, low, caps, _ = row
+        mine = [(i, e) for i, e in enumerate(log) if e[3] == name and e[1] >= now - win * 86400]
+        m.update(window_days=win, merged=len(mine))
+        for i, (sha, _, body, _) in mine:
+            later = log[:i]  # the log is newest first, so these came after this commit
+            hit_ = lambda pat: any(sha.startswith(x.lower()) for e in later for x in re.findall(pat, e[2], re.M | re.I))
+            m["reverted"] += hit_(r"^This reverts commit ([0-9a-f]{7,40})\b")
+            m["escaped"] += hit_(r"^Fixes:[ \t]*([0-9a-f]{7,40})\b")
+            n = re.search(r"^Human-Findings:[ \t]*(\d+)[ \t]*$", body, re.M | re.I)
+            m["human_caught"] += bool(n and int(n.group(1)) > 0)
+            m["with_trailer"] |= bool(re.search(r"^Human-Findings:", body, re.M | re.I))
+        pct = {k: m[k] * 100.0 / m["merged"] for k in ("reverted", "escaped", "human_caught")} if m["merged"] else {}
+        why = ("merged " + str(m["merged"]) + " < min " + str(low)) if m["merged"] < max(low, 1) else \
+              "no Human-Findings trailers" if caps[2] is not None and not m["with_trailer"] else None
+        if why:
+            m["why"] = why
+            continue
+        m["why"] = next(("%s %.1f%% > %g%%" % (k.replace("_", "-"), pct[k], cap) for k, cap in zip(pct, caps)
+                         if cap is not None and pct[k] > cap), None)
+        m["verdict"] = "breach" if m["why"] else "eligible"
+    if as_json:
+        print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
+        return 0
+    print("### Evidence")
+    print("- history: " + ref + " at " + head[:7] + ", first-parent, " + str(len(log)) + " commit(s) in the longest window")
+    if ev is None:
+        print("- no Evidence section in " + str(profile))
+    for name, m in out.items():
+        pc = lambda k: str(m[k]) + (" (%.1f%%)" % (m[k] * 100.0 / m["merged"]) if m["merged"] else "")
+        print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
+            " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught"), m["window_days"])
+            if m["window_days"] else ""))
+    print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
+    print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
+    # shortcut: one git log and one classify per commit, no cache; cache by commit when a window holds thousands of merges.
     return 0
 
 
@@ -265,8 +457,10 @@ def main(argv):
         if i + 1 >= len(argv) or not re.fullmatch(r"[^.\s][^\s]*?\.\.\.?[^.\s][^\s]*", argv[i + 1]):
             return refuse("--range needs A...B; " + USAGE)
         rng, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+    evid = "--evidence" in argv
+    argv = [a for a in argv if a != "--evidence"]
     check = argv == ["--check"]
-    if argv and not check or check and (rng or as_json):
+    if argv and not check or check and (rng or as_json) or evid and (check or rng):
         return refuse("unknown or conflicting argument(s) " + " ".join(argv + (["--json"] if as_json else []) + (["--range"] if rng else [])) + "; " + USAGE)
     profile = profile or specs / "steering" / "autonomy.md"
     if not check:
@@ -274,6 +468,8 @@ def main(argv):
             rel = profile.relative_to(specs.parent).as_posix()
         except ValueError:
             return refuse(str(profile) + " is outside " + str(specs.parent) + "; " + USAGE)
+        if evid:
+            return evidence(specs.parent, rel, specs, profile, as_json)
         return label(specs.parent, rel, rng, as_json, specs)
     try:
         text = profile.read_text()
@@ -282,6 +478,7 @@ def main(argv):
         return 0
     try:
         rows = parse_tiers(text)
+        gr = parse_guardrails(text)
     except ValueError as err:
         return refuse(str(profile) + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
     if rows is None:
@@ -291,6 +488,10 @@ def main(argv):
         rel = profile.relative_to(specs.parent).as_posix()
     except ValueError:
         rel = ".specs/steering/autonomy.md"
+    for _, _, _, n, why in gr or []:
+        print("guardrail " + str(profile) + ":" + str(n) + ": " + ("declared" if not why else "undeclared (" + why + ")"))
+    if gr is None:
+        print("guardrail: no Guardrails section in " + str(profile))
     guarded = guarded_globs(text, rel)
     for tier, globs, _, _, n in rows[:-1]:
         for g in globs:

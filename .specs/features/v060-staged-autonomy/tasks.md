@@ -68,10 +68,13 @@ ones are already in).
 ## Slice 3: guardrails and evidence (release 0.8.0)
 
 - [x] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
-- [ ] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
-- [ ] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
+- [x] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
+  - Evidence: `tiers.parse_guardrails` added; `classify` gains `guardrails` and reports `spot` for an undeclared `none`; `label`, `--json` and `--check` print it (docstring updated). Selftest 13c rows red first (no section left `human: none`), then green; 13b `tprof` now carries a declared Guardrails row so its `none` rows stay `none`; `ready.py` unchanged (reads `change["human"]`).
+- [x] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
   a clean clone) in the template and the example; `chores.md` points to row eight — [REQ-V060-07]
-- [ ] 18 `tiers.py --evidence`; the `Fixes:` and `Human-Findings:` trailers in review-loop and `sync.md` — [REQ-V060-08]
+  - Evidence: template and acme `autonomy.md` gain `## Guardrails` (eight rows; acme declares all, row seven "no such job, checked `.github/workflows/`") and `## Evidence` (template placeholders with suggested numbers in a comment); `chores.md` "On your machine" points to row eight.
+- [x] 18 `tiers.py --evidence`; the `Fixes:` and `Human-Findings:` trailers in review-loop and `sync.md` — [REQ-V060-08]
+  - Evidence: `tiers.parse_evidence` and `tiers.evidence` added (`--evidence [--json]`, conflicts with `--check`/`--range`); the merged_ref read is factored out of `classify` as `committed_ref`. One `git log --first-parent -z`, one `classify` per commit by its first parent. Selftest 13c evidence rows red first (`--evidence` was an unknown argument), then green; the docs half (review-loop step 5, sync.md Trailers) was already in.
 - [ ] 19 Selftest case 13c (eight guardrail rows included); gate G1-G4 green; docs; release 0.8.0 — [REQ-V060-07]
   [REQ-V060-08] [REQ-V060-11]
 

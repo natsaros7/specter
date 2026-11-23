@@ -26,3 +26,15 @@ that still says Proposed.
 
 If you can't make a spec statement true right now, add a dated Drift Register row instead.
 A logged drift can be fixed later; a confident spec that has gone stale misleads everyone who reads it.
+
+## Trailers (evidence per tier)
+
+Two commit trailers on the default branch feed `tiers.py --evidence`, which counts per tier what was merged, reverted,
+fixed later and caught by a human. Write them as the last lines of the commit message, after a blank line.
+
+| Trailer | Where | Means |
+|---|---|---|
+| `Fixes: <sha>` | the commit that fixes a defect an earlier merged commit shipped (at least 7 hex of the merged commit on the default branch) | that change escaped the gates and the review |
+| `Human-Findings: <n>` | the merge (or squash) commit, written at the human check, `0` when none | the human found n problems the gates and the reviewer missed |
+
+A revert needs no trailer: `git revert` writes `This reverts commit <sha>.`, which counts as reverted.

@@ -498,7 +498,7 @@ rc=0; (cd "$A" && python3 .specs/kit/scripts/gates.py --file .specs/steering/aut
 
 echo "13b. tiers.py --check: valid table passes; bad rows exit 2 with file:line; a guarded path in a lower row exits 1; profile read at the base"
 B="$TMP/t13b"; mkdir -p "$B"; gitq -C "$B" init; "$KIT/install.sh" "$B" >/dev/null
-tprof() { printf '# Autonomy\n\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Decisions | [adrs](../../docs/adr/) | start |\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n' "$1" > "$B/.specs/steering/autonomy.md"; }
+tprof() { printf '# Autonomy\n\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Decisions | [adrs](../../docs/adr/) | start |\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n' "$1" > "$B/.specs/steering/autonomy.md"; }
 tchk() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --check 2>&1; }
 GOOD='| routine | `tests/*` `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` `CODEOWNERS` | deep | required |'
 rc=0; out=$(tchk) || rc=$?; [ "$rc" = 0 ] || fail "13b: --check without a profile exits $rc, want 0: $out"
@@ -601,6 +601,86 @@ for a in "--range" "--range nodots" "--check --range a..b" "--json --check" "--r
   rc=0; tl $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: 'tiers.py $a' exits $rc, want 2"
 done
 rc=0; tl --range nosuch..HEAD >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: unresolvable range exits $rc, want 2"
+
+echo "13c. tiers.py guardrails: undeclared rows turn Human none into spot; declared rows keep it; --check lists rows; bad header exits 2"
+C="$TMP/t13c"; mkdir -p "$C/docs" "$C/src"; gitq -C "$C" init; "$KIT/install.sh" "$C" >/dev/null
+TIERS='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+printf '{"merged_ref": "trunk"}' > "$C/.specs/spec-kit.json"; echo a > "$C/docs/d.md"; echo a > "$C/src/s.txt"
+cl() { python3 "$C/.specs/kit/scripts/tiers.py" --specs "$C/.specs" "$@" 2>&1; }
+# cset <Guardrails section or empty>: commit the profile as the base, then stage a docs change
+cset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TIERS" "$1" > "$C/.specs/steering/autonomy.md"
+  gitq -C "$C" add -A; gitq -C "$C" commit -m p; gitq -C "$C" branch -f trunk; date +%s%N > "$C/docs/d.md"; gitq -C "$C" add -A; }
+GH='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n'
+cset ''; out=$(cl)
+echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: no Guardrails section did not downgrade none: $out"
+echo "$out" | tail -1 | grep -q "^- autonomy: labels only" || fail "13c: autonomy line not last: $out"
+cset "${GH}| Protected branch | branch rule main | 2026-01-02 |\n| Untrusted jobs | <platform setting> | 2026-01-02 |\n"; out=$(cl)
+echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: placeholder row did not downgrade: $out"
+cset "${GH}| Protected branch | branch rule main | 2026-01-02 |\n| Untrusted jobs | no such job, checked CI workflows | 2026-01-02 |\n"; out=$(cl)
+echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && echo "$out" | grep -q "guardrails: 2 declared$" && ! echo "$out" | grep -q "none → spot" || fail "13c: declared rows changed the label: $out"
+js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="none" and d["guardrails"]=={"rows":2,"undeclared":0,"downgraded":False}, d' || fail "13c: --json declared: $js"
+cset "${GH}| Protected branch | branch rule main | 2026-13-45 |\n| Untrusted jobs | no such job, checked CI | 2026-01-02 |\n"; out=$(cl)
+echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: bad date was not undeclared: $out"
+js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["tier"]=="routine" and d["guardrails"]=={"rows":2,"undeclared":1,"downgraded":True}, d' || fail "13c: --json downgraded: $js"
+cset "${GH}| Protected branch | | 2026-01-02 |\n"; out=$(cl --check)
+echo "$out" | grep -q "guardrail .*autonomy.md:[0-9]*: undeclared (no Enforced by)" || fail "13c: --check lacks the undeclared row with file:line: $out"
+cset "${GH}| A | x | 2026-01-02 |\n| B | y | soon |\n| C | <z> | 2026-01-02 |\n"; rc=0; out=$(cl --check) || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "autonomy.md:[0-9]*: declared" && echo "$out" | grep -q "undeclared (Verified is not a YYYY-MM-DD date)" && echo "$out" | grep -q "undeclared (placeholder in Enforced by)" || fail "13c: --check rows (exit $rc): $out"
+cset "${GH}| A | x | 2026-01-02 |\n"; sed -i.bak 's/^| Guardrail | Enforced by | Verified |/| Guardrail | Enforced | Date |/' "$C/.specs/steering/autonomy.md"; rm -f "$C/.specs/steering/autonomy.md.bak"
+rc=0; out=$(cl --check) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md:[0-9]*: header must be" || fail "13c: bad Guardrails header --check exits $rc: $out"
+gitq -C "$C" add -A; gitq -C "$C" commit -m badhead; gitq -C "$C" branch -f trunk; echo q > "$C/docs/d.md"; gitq -C "$C" add -A
+rc=0; out=$(cl) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "header must be" || fail "13c: bad Guardrails header label exits $rc: $out"
+cset "${GH}| A | <x> | 2026-01-02 |\n"; echo b > "$C/src/s.txt"; gitq -C "$C" add -A; out=$(cl)
+echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 1 undeclared$" && ! echo "$out" | grep -q "none → spot" || fail "13c: a spot change was touched by the downgrade: $out"
+echo "13c. evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"
+D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
+el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }
+AP="$D/.specs/steering/autonomy.md"; n=0
+TD='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+EVH='\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |\n|---|---|---|---|---|---|\n'
+ev() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TD" "$1" > "$AP"; }
+mk() { d=$1; shift; n=$((n+1)); echo $n > "$D/$d/f$n"; gitq -C "$D" add "$d"; gitq -C "$D" commit -q "$@"; }
+sha() { git -C "$D" rev-parse HEAD; }
+printf '{"merged_ref": "HEAD"}' > "$D/.specs/spec-kit.json"
+# the root commit is older than every window (git stops walking at a too-old commit, so it must be the oldest); the profile commit has no profile above it
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mk docs -m c1-before-the-profile; unset GIT_COMMITTER_DATE
+ev ""; gitq -C "$D" add .specs/steering/autonomy.md .specs/spec-kit.json; gitq -C "$D" commit -q -m profile
+mk docs -m d1; D1=$(sha); mk docs -m d2; mk docs -m d3; mk docs -m d4
+gitq -C "$D" revert --no-edit "$D1"
+mk src -m s1; S1=$(sha | cut -c1-7); mk src -m s2; mk src -m s3 -m "Fixes: $S1"; mk src -m s4 -m "Fixes: #12"
+# no Evidence section: every tier holds, exit 0
+rc=0; out=$(el) || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "^### Evidence" && [ "$(echo "$out" | grep -c 'hold (no Evidence row)')" = 3 ] || fail "13c evidence: no section (exit $rc): $out"
+echo "$out" | grep -q "unprofiled: 1 commit(s) left out" && echo "$out" | grep -q "history: HEAD at $(sha | cut -c1-7), first-parent" || fail "13c evidence: unprofiled or history line: $out"
+EV1='| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | <days> | <n> | <%> | <%> | <%> |\n'
+ev "${EVH}${EV1}"; SUM=$(cksum < "$AP"); rc=0; out=$(el) || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "routine: breach (reverted 20.0% > 10%)" && echo "$out" | grep -q "domain: hold (no Human-Findings trailers)" && echo "$out" | grep -q "critical: hold (thresholds not set)" || fail "13c evidence: revert breach, no trailers, placeholder (exit $rc): $out"
+[ "$SUM" = "$(cksum < "$AP")" ] || fail "13c evidence: the profile changed"
+mk src -m s5 -m "Human-Findings: 0"
+out=$(el) && echo "$out" | grep -q "domain: eligible" || fail "13c evidence: domain not eligible: $out"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]
+assert d["ref"]=="HEAD" and d["unprofiled"]==1, d
+assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":False}, t["routine"]
+assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":True}, t["domain"]
+assert t["critical"]["verdict"]=="hold" and t["critical"]["why"]=="thresholds not set", t["critical"]' || fail "13c evidence: --json: $js"
+mk src -m s6 -m "Human-Findings: 2"
+out=$(el) && echo "$out" | grep -q "domain: breach (human-caught 16.7% > 10%)" || fail "13c evidence: human-caught breach: $out"
+ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n"
+out=$(el) && echo "$out" | grep -q "domain: hold (merged 6 < min 100)" || fail "13c evidence: min merged: $out"
+# the parent's table labels, not the working tree: docs no longer match routine, the counts do not move
+TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+ev "${EVH}${EV1}"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["merged"]==5 and t["domain"]["merged"]==6, t' || fail "13c evidence: working-tree table relabelled history: $js"
+TD='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+bad() { ev "$2"; rc=0; out=$(el) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md:[0-9]*: $3" || fail "13c evidence: $1 (exit $rc, want 2 and '$3'): $out"; }
+bad "bad header" '\n## Evidence\n| Tier | Days |\n|---|---|\n| routine | 90 |\n' "header must be"
+bad "bad window" "${EVH}| routine | abc | 3 | 10 | 20 | - |\n" "Window"
+bad "zero window" "${EVH}| routine | 0 | 3 | 10 | 20 | - |\n" "Window"
+bad "bad min" "${EVH}| routine | 90 | -1 | 10 | 20 | - |\n" "Min merged"
+bad "percent over 100" "${EVH}| routine | 90 | 3 | 150 | 20 | - |\n" "Max reverted"
+bad "wrong cell count" "${EVH}| routine | 90 | 3 |\n" "row needs 6 cells"
+bad "unknown tier" "${EVH}| nosuch | 90 | 3 | 10 | 20 | - |\n" "unknown tier"
+bad "duplicate tier" "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| routine | 90 | 3 | 10 | 20 | - |\n" "duplicate tier"
+for a in "--range a..b" "--check"; do rc=0; el $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13c evidence: '--evidence $a' exits $rc, want 2"; done
 
 echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
@@ -731,5 +811,28 @@ EH=$(git -C "$E" rev-parse --short HEAD)
 pr() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n' "$1" "$(echo "$EB" | cut -c1-7)"; }
 out=$(pr "$EH" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" 2>&1) && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "tier: critical" || fail "14: ready verdict: $out"
 rc=0; pr "$EB" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || fail "14: stale commit exits $rc, want 1"
+
+echo "14b. the eight guardrail rows: template undeclared, acme declared; an undeclared row seven turns none into spot"
+python3 -I - "$KIT/kit/scripts" "$KIT/kit/templates/steering/autonomy.md" "$E/.specs/steering/autonomy.md" <<'PY2' || fail "14b: guardrail rows"
+import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1])
+import tiers
+t = tiers.parse_guardrails(open(sys.argv[2]).read()); a = tiers.parse_guardrails(open(sys.argv[3]).read())
+assert len(t) == 8 and all(r[4] for r in t), ("template: eight undeclared rows", t)
+assert len(a) == 8 and not any(r[4] for r in a), ("acme: eight declared rows", a)
+assert "untrusted text" in t[6][0] and "clean clone" in t[7][0], "rows seven and eight"
+assert a[6][1].startswith("no such job, checked"), "acme row seven: no such job, dated"
+PY2
+chg orders-api/src/test/java/com/acme/shop/orders/order/rest/FooTest.java; et | grep -q "human: none" && et | grep -q "guardrails: 8 declared$" || fail "14b: acme declared rows did not keep none: $(et)"
+git -C "$E" reset -q --hard "$EB"
+python3 - "$E/.specs/steering/autonomy.md" <<'PY2'
+import sys; p = sys.argv[1]; s = open(p).read().splitlines(True)
+i = next(n for n, l in enumerate(s) if "untrusted text" in l)
+s[i] = s[i].split("|")[0] + "|" + s[i].split("|")[1] + "| <CI permissions and the platform's safe-output step> | <YYYY-MM-DD> |\n"
+open(p, "w").write("".join(s))
+PY2
+gitq -C "$E" commit -qam "row seven undeclared"; E7=$(git -C "$E" rev-parse HEAD)
+mkdir -p "$E/docs"; echo x >> "$E/docs/x.md"; gitq -C "$E" add -A; gitq -C "$E" commit -qm docs
+out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range "$E7..HEAD" 2>&1) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 8 undeclared, none → spot" || fail "14b: undeclared row seven did not downgrade none: $out"
+out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1) && echo "$out" | grep -q "autonomy.md:[0-9]*: undeclared (placeholder in Enforced by)" || fail "14b: --check did not list row seven: $out"
 
 echo "selftest: OK"

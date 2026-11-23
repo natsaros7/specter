@@ -27,3 +27,25 @@ Runs: C1 weekly, Monday 06:00; C2 weekly, Sunday 22:00. By a schedule you set up
 |---|---|---|
 | C1 | Spec health | `python3 .specs/kit/scripts/spec_lint.py --cites && python3 .specs/kit/scripts/spec_report.py` |
 | C2 | Mutation testing (PIT), weekly; the threshold is the first measured score, raised by hand only | `./mvnw -B -Ppit verify` |
+
+## Guardrails
+Declared here, enforced by the platform; specter checks only that each row names what enforces it and a date. The platform settings named are the shop's, outside this example.
+
+| Guardrail | Enforced by | Verified |
+|---|---|---|
+| No direct or force push to the default branch | GitHub ruleset `protect-main` on `main`: no bypass, no force push | 2026-11-23 |
+| The Gates run as required checks before a merge | Ruleset `protect-main`: required check `build` (`./mvnw -B verify`) | 2026-11-23 |
+| A human must approve a change to a `required` tier's paths | Ruleset `protect-main` requires code-owner review; the platform repo's `CODEOWNERS` gives the `critical` globs to the platform team (not shipped in the example) | 2026-11-23 |
+| Agent credentials cannot approve or merge | Agents push as `acme-agent` with a fine-grained token: contents and pull requests write, no admin; not a code owner | 2026-11-23 |
+| Agent permissions come from the host's configuration, not from a prompt | The agent host's managed settings on the build host (not in this repository, so no prompt or commit can widen them) | 2026-11-23 |
+| Agents cannot edit merged history or review records | Ruleset `protect-main` (no force push, no deletion); GitHub keeps the review log | 2026-11-23 |
+| An agent job triggered by untrusted text (an issue, a PR, a comment, an outside contribution) runs read-only, without secrets; its writes go through a separate step that validates them | no such job, checked `.github/workflows/` (the example ships no workflow) | 2026-11-23 |
+| Scheduled chores run from a clean clone or the CI checkout of the default branch, never a working copy | launchd `dev.specter.chores` on the build host, from `/srv/chores/acme-shop` (a clone only it pulls), as in `kit/docs/chores.md` | 2026-11-23 |
+
+## Evidence
+`python3 .specs/kit/scripts/tiers.py --evidence` counts merges on `main` per tier. Raising a tier's Human value is a human edit of this file, on that report.
+
+| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |
+|---|---|---|---|---|---|
+| routine | 90 | 20 | 2 | 5 | 10 |
+| domain | 90 | 30 | 2 | 5 | 10 |

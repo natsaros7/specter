@@ -101,8 +101,10 @@ Details in [the reference](docs/reference.md#adding-specter-to-a-project-that-al
 ## Autonomy profile
 
 Add `.specs/steering/autonomy.md` to tell agents where your project keeps its knowledge and which checks to run on a
-schedule. A `lessons.md` next to it collects corrections so a repeated one becomes a rule. Details in
-[the reference](docs/reference.md#autonomy-profile-060-slice-1).
+schedule. A `lessons.md` next to it collects corrections so a repeated one becomes a rule. Its Tiers table labels
+each change by risk (`tiers.py`, `ready.py`); Guardrails records what your platform enforces, and Evidence lets
+`tiers.py --evidence` say from merged history which tier has earned more autonomy. Details in
+[the reference](docs/reference.md#autonomy-profile-060).
 
 ## Reference
 
