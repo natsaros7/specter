@@ -622,8 +622,8 @@ js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sy
 cset "${GH}| Protected branch | branch rule main | 2026-13-45 |\n| Untrusted jobs | no such job, checked CI | 2026-01-02 |\n"; out=$(cl)
 echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: bad date was not undeclared: $out"
 js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["tier"]=="routine" and d["guardrails"]=={"rows":2,"undeclared":1,"downgraded":True}, d' || fail "13c: --json downgraded: $js"
-cset "${GH}| A | TBD | 2026-01-02 |\n| B | N/A | 2026-01-02 |\n| C | - | 2026-01-02 |\n| D | x | 2099-01-01 |\n"; out=$(cl --check)
-[ "$(echo "$out" | grep -c 'undeclared (no Enforced by)')" = 3 ] && echo "$out" | grep -q "undeclared (Verified is in the future)" || fail "13c: TBD/N/A/-/future date are declared: $out"
+cset "${GH}| A | TBD | 2026-01-02 |\n| B | N/A | 2026-01-02 |\n| C | - | 2026-01-02 |\n| D | x | 2099-01-01 |\n| E | none | 2026-01-02 |\n| F | — | 2026-01-02 |\n| G | – | 2026-01-02 |\n| H | ? | 2026-01-02 |\n| I | TBD. | 2026-01-02 |\n| J | Pending | 2026-01-02 |\n| K | na | 2026-01-02 |\n"; out=$(cl --check)
+[ "$(echo "$out" | grep -c 'undeclared (no Enforced by)')" = 10 ] && echo "$out" | grep -q "undeclared (Verified is in the future)" || fail "13c: TBD/N/A/-/future date are declared: $out"
 cset "${GH}| Protected branch | | 2026-01-02 |\n"; out=$(cl --check)
 echo "$out" | grep -q "guardrail .*autonomy.md:[0-9]*: undeclared (no Enforced by)" || fail "13c: --check lacks the undeclared row with file:line: $out"
 cset "${GH}| A | x | 2026-01-02 |\n| B | y | soon |\n| C | <z> | 2026-01-02 |\n"; rc=0; out=$(cl --check) || rc=$?
@@ -644,7 +644,7 @@ ev() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---
 mk() { d=$1; shift; n=$((n+1)); echo $n > "$D/$d/f$n"; gitq -C "$D" add "$d"; gitq -C "$D" commit -q "$@"; }
 sha() { git -C "$D" rev-parse HEAD; }
 printf '{"merged_ref": "HEAD"}' > "$D/.specs/spec-kit.json"
-# c1 is dated before every window (not counted); this dir also holds case 13's `base` root commit and the profile commit has no profile above it: 2 unprofiled
+# c1 is dated before every window but sits above case 13's `base` root commit, dated now, so it counts by position: base, c1 and the profile commit have no profile above them: 3 unprofiled
 export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mk docs -m c1-before-the-profile; unset GIT_COMMITTER_DATE
 ev ""; gitq -C "$D" add .specs/steering/autonomy.md .specs/spec-kit.json; gitq -C "$D" commit -q -m profile
 mk docs -m d1; D1=$(sha); mk docs -m d2; mk docs -m d3; mk docs -m d4
@@ -653,7 +653,7 @@ mk src -m s1; S1=$(sha | cut -c1-7); mk src -m s2; mk src -m s3 -m "Fixes: $S1";
 # no Evidence section: every tier holds, exit 0
 rc=0; out=$(el) || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "^### Evidence" && [ "$(echo "$out" | grep -c 'hold (no Evidence row)')" = 3 ] || fail "13c evidence: no section (exit $rc): $out"
-echo "$out" | grep -q "unprofiled: 2 commit(s) left out" && echo "$out" | grep -q "history: HEAD at $(sha | cut -c1-7), first-parent" || fail "13c evidence: unprofiled or history line: $out"
+echo "$out" | grep -q "unprofiled: 3 commit(s) left out" && echo "$out" | grep -q "history: HEAD at $(sha | cut -c1-7), first-parent" || fail "13c evidence: unprofiled or history line: $out"
 EV1='| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | <days> | <n> | <%> | <%> | <%> |\n'
 ev "${EVH}${EV1}"; SUM=$(cksum < "$AP"); rc=0; out=$(el) || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "routine: breach (reverted 20.0% > 10%)" && echo "$out" | grep -q "domain: hold (Human-Findings on 1 of 4 merges)" && echo "$out" | grep -q "critical: hold (thresholds not set)" || fail "13c evidence: revert breach, no trailers, placeholder (exit $rc): $out"
@@ -661,7 +661,7 @@ ev "${EVH}${EV1}"; SUM=$(cksum < "$AP"); rc=0; out=$(el) || rc=$?
 mk src -m s5 -m "Human-Findings: 0"
 out=$(el) && echo "$out" | grep -q "domain: eligible" || fail "13c evidence: domain not eligible: $out"
 js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]
-assert d["ref"]=="HEAD" and d["unprofiled"]==2, d
+assert d["ref"]=="HEAD" and d["unprofiled"]==3, d
 assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0}, t["routine"]
 assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2}, t["domain"]
 assert t["critical"]["verdict"]=="hold" and t["critical"]["why"]=="thresholds not set", t["critical"]' || fail "13c evidence: --json: $js"
@@ -708,18 +708,35 @@ printf '%s' "$out" > /dev/null; js=$(er --json); printf '%s' "$js" | python3 -c 
 ER='| routine | 90 | 1 | - | - | - |\n| domain | 90 | 1 | - | - | 10 |\n'
 nr t13e4 -b main; mr src -m s1 -m "Human-Findings: 2 (missing null check)"; mr src -m s2 -m "Human-Findings: 0" -m "Human-Findings: 3"
 printf 's3\n\nHuman-Findings: 4\r\n' > "$TMP/crlf"; mr src -F "$TMP/crlf"; mr src -m s4 -m "Human-Findings: ٣"; mr src -m s5 -m "Human-Findings: 0"
-want "malformed, repeated and CRLF trailers count as caught" "domain: breach (human-caught 80.0% > 10%)"
+printf 's6\n\nnote\rHuman-Findings: 3\n' > "$TMP/cr"; mr src -F "$TMP/cr"
+want "malformed, repeated, CRLF and bare-CR trailers count as caught" "domain: breach (human-caught 83.3% > 10%)"
+echo "$out" | grep -qF "human-caught 5 of 6 (83.3%)" || fail "13c evidence: human-caught names its denominator: $out"
 ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'
 nr t13e5 -b main; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; gitq -C "$R" revert --no-edit "$A1"
 export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mr docs -m backdated; unset GIT_COMMITTER_DATE; mr docs -m c1; mr docs -m c2; mr docs -m c3
-want "a backdated commit does not hide older history" "routine: breach (reverted 16.7% > 10%)"
+want "a backdated commit does not hide older history, and counts by position" "routine: breach (reverted 14.3% > 10%)"
 nr t13e7 -b main; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; mr docs -m a3
 export GIT_COMMITTER_DATE=2020-01-01T00:00:00; gitq -C "$R" revert --no-edit "$A1"; unset GIT_COMMITTER_DATE; mr docs -m c1
-want "a backdated revert above a counted commit still counts" "routine: breach (reverted 25.0% > 10%)"
+want "a backdated revert above a counted commit still counts, and is counted itself" "routine: breach (reverted 20.0% > 10%)"
 if git init -q --object-format=sha256 "$TMP/t13e6x" 2>/dev/null; then
   nr t13e6 -q --object-format=sha256; mr docs -m a1; mr docs -m a2; gitq -C "$R" revert --no-edit HEAD~1
   want "a sha-256 revert counts" "routine: breach (reverted 33.3% > 10%)"
 fi
+ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'
+nr t13e8 -b main; mr docs -m a1; mr docs -m a2; mr docs -m a3
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mr docs -m backdated; unset GIT_COMMITTER_DATE; gitq -C "$R" revert --no-edit HEAD
+want "a backdated commit above a dated one counts by position, and so does its revert" "routine: breach (reverted 20.0% > 10%)"
+R="$TMP/t13e11"; gitq clone -q --depth 2 "file://$TMP/t13e8" "$R"
+want "a shallow clone holds every tier with a row" "routine: hold (shallow clone: fetch the full history)"
+echo "$out" | grep -qF "domain: hold (shallow clone: fetch the full history)" && echo "$out" | grep -qF "first-parent, shallow clone, not read" && echo "$out" | grep -qF "critical: hold (no Evidence row)" || fail "13c evidence: shallow clone: $out"
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; nr t13e9 -b main; mr docs -m old1; export GIT_COMMITTER_DATE=2099-01-01T00:00:00; mr docs -m future
+export GIT_COMMITTER_DATE=2020-01-01T00:00:00; mr docs -m old2; unset GIT_COMMITTER_DATE; mr docs -m recent
+want "a future-dated commit below the window neither counts nor sets the cut" "routine: eligible — merged 1, reverted 0"
+nr t13e10 -b main; mr docs -m bad; X=$(git -C "$R" rev-parse HEAD); mr docs -m c1; T=$(git -C "$R" rev-parse HEAD^{tree})
+printf 'tree %s\nparent %s\nauthor a <a@a> 1700000000 +0000\ncommitter a <a@a> 1700000000 +0000\n\nThis reverts commit %s.\n' "$T" 1111111111111111111111111111111111111111 "$X" > "$TMP/orphan"
+B=$(git -C "$R" hash-object --literally -t commit -w "$TMP/orphan"); M=$(git -C "$R" -c user.name=t -c user.email=t@t commit-tree "$T" -p main -p "$B" -m "merge rv")
+gitq -C "$R" update-ref refs/heads/main "$M"; rc=0; out=$(er) || rc=$?
+[ "$rc" = 2 ] && echo "$out" | grep -qF "cannot read the change set of $(echo "$M" | cut -c1-7)" || fail "13c evidence: an unreadable change set exits $rc, want 2: $out"
 for a in "--range a..b" "--check"; do rc=0; el $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13c evidence: '--evidence $a' exits $rc, want 2"; done
 
 echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"

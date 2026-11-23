@@ -155,16 +155,21 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   lists eight rows: protected default branch, the Gates as required checks, human review on `required` paths,
   agent credentials that cannot approve or merge, agent permissions from the host's configuration, history and review
   records agents cannot edit, agent jobs triggered by untrusted text run read-only and without secrets, and chores
-  from a clean clone. A row is declared when Enforced by names something (no `<placeholder>`) and Verified is a
-  `YYYY-MM-DD` date; "no such job, checked <how>" with a date counts. Until every row is declared, a tier whose Human
+  from a clean clone. A row is declared when Enforced by names something (no `<placeholder>`, and not a word that
+  names nothing: `-`, `—`, `–`, `?`, `tbd`, `todo`, `n/a`, `na`, `none`, `pending`, in any case, a trailing `.` ignored)
+  and Verified is a `YYYY-MM-DD` date that is not in the future; "no such job, checked <how>" with a date counts. Until every row is declared, a tier whose Human
   is `none` is labelled `spot`, and the `### Risk tier` block says `- guardrails: <m> of <n> undeclared, none → spot`.
   `tiers.py --check` lists each row as declared or undeclared. Specter records the declaration; it probes nothing.
 - **Evidence (0.8.0).** A `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
-  table. `tiers.py --evidence` reads first-parent commits on `merged_ref`, labels each with the profile as of its
-  parent, and counts per tier: merged, reverted (a later `This reverts commit <sha>`), escaped (a later
-  `Fixes: <sha>` trailer) and human-caught (a `Human-Findings: <n>` trailer, n > 0, written at the merge; see
-  `kit/playbooks/sync.md` § Trailers). Each tier is `eligible`, `hold (<why>)` or `breach (<metric>)`; a placeholder
-  row, too few merges or no `Human-Findings` trailers at all is a hold, never a pass. A Max of `-` is not checked.
+  table. `tiers.py --evidence` reads first-parent commits on `merged_ref` inside each tier's window, labels each with
+  the profile as of its parent, and counts per tier: merged, reverted (a later commit whose change set has
+  `This reverts commit <sha>` naming one of this commit's), escaped (the same with a `Fixes: <sha>` trailer) and
+  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; see
+  `kit/playbooks/sync.md` § Trailers). The window is by position: it runs from the tip down to the oldest commit dated
+  inside it, and every commit above that counts whatever its own date; a future date never sets it. Human-caught is a
+  rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
+  `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
+  max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
   It edits nothing: raising a tier is a human edit of the profile, a guarded path. Still labels only: nothing merges
   by itself until 0.9.0.
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no

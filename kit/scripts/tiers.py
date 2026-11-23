@@ -22,15 +22,18 @@ guarded: the last row) and the change takes its strictest file's tier. Renames c
 a preflight; the binding label is --range after the commit, run from a trusted copy of the kit.
 Exit 0, or 2 on a bad argument, profile or spec-kit.json.
 Guardrails: an optional `## Guardrails` table `| Guardrail | Enforced by | Verified |` records what the platform is
-declared to enforce (specter never checks it). A row is declared when Enforced by is filled with no <placeholder> and
-Verified is a YYYY-MM-DD date. A tier whose Human is `none` is reported as `spot` ("none → spot") while the section is
+declared to enforce (specter never checks it). A row is declared when Enforced by names something (no <placeholder>,
+and not a word that names nothing: - — – ? tbd todo n/a na none pending, in any case, a trailing `.` ignored) and
+Verified is a YYYY-MM-DD date that is not in the future. A tier whose Human is `none` is reported as `spot` ("none → spot") while the section is
 absent or empty or any row is undeclared; --check prints one line per row (undeclared rows keep exit 0), a bad header is exit 2.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
 `## Evidence` table `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
 (a Max of `-` is not checked; a row that keeps a <placeholder> is `hold (thresholds not set)`). It reads the first-parent
-commits on merged_ref (as the label's staged mode finds it) inside each tier's window, labels each with the profile as of
+commits on merged_ref (as the label's staged mode finds it) inside each tier's window, by position: from the tip down to
+the oldest commit dated inside the window, whatever the dates above it (a future date sets no window; a shallow clone
+holds every tier with a row; an unreadable change set is exit 2), labels each with the profile as of
 its first parent (a parent with no profile or Tiers, and the root commit, are `unprofiled`: left out and counted), and
 counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
@@ -58,6 +61,7 @@ HEAD = ["Tier", "Paths", "Reviewer", "Human"]
 GHEAD = ["Guardrail", "Enforced by", "Verified"]
 REVIEWER = ("standard", "deep")
 HUMAN = ("none", "spot", "required")
+EMPTY = ("-", "—", "–", "?", "tbd", "todo", "n/a", "na", "none", "pending")  # Enforced by words that name nothing
 # The installer writes these; install.py is not copied into projects, so they are listed here.
 # Matched under key() (macOS and Windows checkouts fold case and Unicode) against repo-root-relative paths.
 # shortcut: kept by hand; selftest 13b fails when install.AGENTS gains a skills folder not covered, add it here then;
@@ -151,7 +155,8 @@ def parse_guardrails(text):
             dated = re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", ver) and datetime.date.fromisoformat(ver)
         except ValueError:
             dated = None
-        why = ("no Enforced by" if not by or by.lower() in ("-", "tbd", "todo", "n/a") else "placeholder in Enforced by" if PLACEHOLDER.search(by)
+        word = by.strip().rstrip(".").strip().lower()
+        why = ("no Enforced by" if not word or word in EMPTY else "placeholder in Enforced by" if PLACEHOLDER.search(by)
                else "Verified is not a YYYY-MM-DD date" if not dated else "Verified is in the future" if dated > datetime.date.today() else None)
         rows.append((name, by, ver, n, why))
     return rows
@@ -268,14 +273,14 @@ def committed_ref(root, specs, head):
         raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
 
 
-def classify(root, rel, rng, specs=None):
+def classify(root, rel, rng, specs=None, where=None):
     """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
     ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
-    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref."""
-    top = git(root, "rev-parse", "--show-toplevel")
-    prefix = git(root, "rev-parse", "--show-prefix") or ""
+    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. where: (top-level, prefix) of
+    root when the caller already has them (evidence calls this once per commit)."""
+    top, prefix = where or (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
     closed = False
     if rng:
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
@@ -358,7 +363,7 @@ def label(root, rel, rng, as_json, specs=None):
 def findings(body):
     """(carries, caught) for the Human-Findings: lines of a commit body: carries when there is one; caught when a value is
     not exactly ASCII digits (a note, junk: fails closed) or any value is above 0. Takes the max over lines, never the first."""
-    vals = [v.strip() for v in re.findall(r"^Human-Findings:(.*)$", body.replace("\r", ""), re.M | re.I)]
+    vals = [v.strip() for v in re.findall(r"^Human-Findings:(.*)$", body.replace("\r\n", "\n").replace("\r", "\n"), re.M | re.I)]
     return bool(vals), any(not re.fullmatch(r"[0-9]+", v) or v.strip("0") for v in vals)
 
 
@@ -384,37 +389,43 @@ def evidence(root, rel, specs, profile, as_json):
         return refuse("no merged_ref, origin/HEAD or HEAD resolves in " + str(root))
     now = time.time()
     longest = max([r[0] for r in (ev or {}).values() if r] or [90])
+    # commits below the depth, and their reverts, are missing; only an explicit "false" counts as full (git < 2.15 echoes the flag)
+    shallow = git(root, "rev-parse", "--is-shallow-repository") != "false"
     # The whole first-parent chain, never --since: git stops at the first old-dated commit, which would hide the rest.
     run = subprocess.run(["git", "-C", str(root), "log", "--first-parent", "-z", "--format=%H%x00%P%x00%ct%x00%B", head], capture_output=True)
     toks = run.stdout.decode("utf-8", "replace").split("\0")
     toks = toks[:-1] if toks and toks[-1] == "" else toks  # -z ends every record with a NUL; an empty body is a real token
     if run.returncode or len(toks) % 4:
         return refuse("cannot read the history of " + ref)
-    # newest first: (committer time, tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).
-    # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
-    log, unprofiled, inwin = [], 0, 0
     recs = list(zip(*[iter(toks)] * 4))
-    # Position, not date, says what is later; date only says what is counted. Every commit above the oldest counted one
-    # is scanned for reverts and Fixes:, whatever its date, so a backdated revert still counts.
-    last = max([i for i, r in enumerate(recs) if int(r[2]) >= now - longest * 86400] or [-1])
-    for sha, parents, ct, body in recs[:last + 1]:
+    # Position, not date, says what is in a window and what is later: a tier's window runs from the tip down to the oldest
+    # commit dated inside it, and every commit above that one counts whatever its own date, so a backdated commit (or a
+    # fast-forward that kept its date) cannot leave the window. A future date never sets the cut.
+    # shortcut: a recently dated commit deep in history widens the window down to it (merged history is protected by
+    # guardrail row one); cap the window by count if that is ever abused.
+    cut = lambda win: max([i for i, r in enumerate(recs) if now - win * 86400 <= int(r[2]) <= now] or [-1])
+    last = -1 if shallow else cut(longest)  # windows nest, so the longest one's cut is the max of the tier cuts
+    # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).
+    # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
+    log, unprofiled, inwin = [], 0, last + 1
+    where = (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
+    for sha, parents, _, body in recs[:last + 1]:
         parent = parents.split()[0] if parents else None
-        c = None
-        if int(ct) >= now - longest * 86400:
-            inwin += 1
-            try:
-                c = classify(root, rel, parent + "..." + sha, specs) if parent else None
-            except ValueError:
-                c = None  # shortcut: a parent whose profile is unreadable counts as unprofiled; --check on that commit names the error
-            unprofiled += not (c and c["why"] is None)
+        try:
+            c = classify(root, rel, parent + "..." + sha, specs, where) if parent else None
+        except ValueError:
+            c = None  # shortcut: a parent whose profile is unreadable counts as unprofiled; --check on that commit names the error
+        unprofiled += not (c and c["why"] is None)
         cs = [(sha, body)]
         if parent:
             sub_ = subprocess.run(["git", "-C", str(root), "log", "-z", "--format=%H%x00%B", parent + ".." + sha], capture_output=True)
             t = sub_.stdout.decode("utf-8", "replace").split("\0")
             t = t[:-1] if t and t[-1] == "" else t
-            cs = list(zip(t[::2], t[1::2])) if not sub_.returncode and len(t) % 2 == 0 and t else cs
+            if sub_.returncode or len(t) % 2 or not t:
+                return refuse("cannot read the change set of " + sha[:7])  # never the body alone: a missed revert passes
+            cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
-        log.append((int(ct), c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
+        log.append((c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
                     named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body))
     out = {}
     for name in names:
@@ -425,13 +436,16 @@ def evidence(root, rel, specs, profile, as_json):
         if row is None:
             continue
         win, low, caps, _ = row
-        mine = [(i, e) for i, e in enumerate(log) if e[1] == name and e[0] >= now - win * 86400]
+        if shallow:
+            m["why"] = "shallow clone: fetch the full history"
+            continue
+        mine = [(i, e) for i, e in enumerate(log[:cut(win) + 1]) if e[0] == name]
         m.update(window_days=win, merged=len(mine))
-        for i, (_, _, shas, _, _, body) in mine:
+        for i, (_, shas, _, _, body) in mine:
             later = log[:i]  # the log is newest first, so these came after this commit
             hit_ = lambda k: any(h.startswith(x) for e in later for x in e[k] for h in shas)
-            m["reverted"] += hit_(3)
-            m["escaped"] += hit_(4)
+            m["reverted"] += hit_(2)
+            m["escaped"] += hit_(3)
             carries, caught = findings(body)
             m["human_caught"] += caught
             m["with_trailer"] += carries
@@ -451,17 +465,17 @@ def evidence(root, rel, specs, profile, as_json):
         print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
         return 0
     print("### Evidence")
-    print("- history: " + ref + " at " + head[:7] + ", first-parent, " + str(inwin) + " commit(s) in the longest window")
+    print("- history: " + ref + " at " + head[:7] + ", first-parent, " + ("shallow clone, not read" if shallow else str(inwin) + " commit(s) in the longest window"))
     if ev is None:
         print("- no Evidence section in " + str(profile))
     for name, m in out.items():
-        pc = lambda k, d="merged": str(m[k]) + (" (%.1f%%)" % (m[k] * 100.0 / m[d]) if m[d] else "")
+        pc = lambda k, d="merged": str(m[k]) + (" of %d" % m[d] if d != "merged" else "") + (" (%.1f%%)" % (m[k] * 100.0 / m[d]) if m[d] else "")
         print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
             " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught", "with_trailer"), m["window_days"])
             if m["window_days"] else ""))
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
-    # shortcut: one history log, then one classify and one change-set log per commit in the window, no cache; cache by commit when a window holds thousands of merges.
+    # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
     return 0
 
 
