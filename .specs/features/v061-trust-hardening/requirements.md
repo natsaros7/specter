@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
 Status: In progress (started 2026-11-24)
-Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22. Branch `feat/0.10.0`. Size M.
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22, #30 for task 23. Branch `feat/0.10.0`. Size M.
 
 ## Why
 
@@ -93,6 +93,18 @@ they were filed. This feature collects them; v060 is closed.
   on the clock's resolution.
 - A faster selftest SHALL catch every regression the old one caught: re-breaking each fix landed in v061 SHALL still
   fail it.
+
+### [REQ-V061-09] Human `none` only for small changes the reviewer calls trivial
+
+- Human `none` SHALL also need the change to fit the profile's size cap: at most `Max files` files and `Max lines`
+  changed lines (added plus deleted, from `git diff --numstat` on the range). The defaults are 3 and 50. The cap is
+  read from the profile at the base.
+- Human `none` SHALL also need the test paths to only gain lines: no deleted or changed line in a file matching the
+  profile's test globs.
+- Human `none` SHALL also need the reviewer's `### Review` block to say `complexity: trivial`. A missing or other
+  value is `spot`. The reviewer is still from a different model family, as v060 requires.
+- Each condition SHALL only take `none` away and never grant it. A breach prints which one failed, as `human: none →
+  spot (<why>)`.
 
 ## Out of scope
 

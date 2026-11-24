@@ -2,7 +2,7 @@
 
 Security-sensitive: every task changes what can earn `human: none` or `auto-merge: yes`. Review on the deep tier.
 Stdlib only, Python 3.8+, offline, no new dependency. Each task names its source row in `docs/reviews/`; the row has
-the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28; task 22 is #29), red first: add the selftest row, run `sh tests/selftest.sh`,
+the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28; task 22 is #29; task 23 is #30), red first: add the selftest row, run `sh tests/selftest.sh`,
 see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 
 | Requirement | Source rows |
@@ -15,6 +15,7 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 | [REQ-V061-06] | Nikos, 2026-11-24: the README rewritten along Story, How, Output, Worth |
 | [REQ-V061-07] | Nikos, 2026-11-24: the issues are public, so future bypasses go to private advisories |
 | [REQ-V061-08] | Nikos, 2026-11-24: five parallel selftests drained the laptop; make it faster and deterministic |
+| [REQ-V061-09] | Nikos, 2026-11-24: no-human only for trivial changes, tests and easy fixes; the reviewer judges complexity on top |
 
 ## Rules for every worker
 
@@ -374,6 +375,35 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
 - **Proof:** check out the parents of tasks 1, 2, 9 and 13 in turn (`git revert --no-commit` of each fix into a
   scratch worktree). The new selftest must fail on each one at the same row.
 - **Check:** G1 to G4, and the before and after wall time on the same idle machine.
+
+## [REQ-V061-09] Human `none` only for small changes the reviewer calls trivial
+
+### Task 23: size cap, tests only grow, reviewer complexity (#30)
+
+- **Why:** a tier is chosen by path, so a 2,000-line change inside a `none` path could merge with no human. Size is
+  the mechanical stand-in for "trivial". The reviewer's judgment comes on top, and the planner, generator and reviewer
+  loop is unchanged. Each check only takes `none` away.
+- **Profile:** `## Evidence` gets two optional columns, `Max files` and `Max lines`. When they're missing or `-`, the
+  defaults 3 and 50 apply. Test globs come from a new optional `## Tests` section of path globs, defaulting to
+  `tests/*`, `test/*`, `*/test/*`, `*_test.*`, `*.test.*` and `test_*`. Both are read from the profile at the base,
+  like the Tiers table (`earned()`).
+- **`tiers.py`:** in the `none` branch of the label, after `earned()`, run `git diff --numstat <base> <head>` once.
+  - More files or lines than the cap gives `size <f> files / <l> lines > cap <F>/<L>`.
+  - Any deleted line in a test-glob file gives `tests changed, not only added: <path>`.
+  - A binary file in numstat (`-`) counts as over the cap.
+- **`ready.py`:** `check_review()` reads `- complexity: trivial|non-trivial`. With Human `none`, anything other than
+  `trivial` gives `reviewer: complexity <value>` in `human_why`. A repeated `complexity:` line is not ready, as the
+  other id lines are (task 9).
+- **Docs:** `kit/roles/reviewer.md` adds one line. The reviewer writes `complexity: trivial` only for a change a
+  reader understands in one pass, with no new branch, no new dependency, and no changed contract. Also update
+  `kit/templates/steering/autonomy.md`, `docs/reference.md` and `kit/docs/review-loop.md` step 5.
+- **Red rows, in 13c2 on fixture `t13e18`:**
+  - a `none`-eligible change of 4 files must give `spot (size`;
+  - one deleted line in `tests/x_test.py` must give `spot (tests changed`;
+  - `complexity: non-trivial` must make `ready.py --auto-merge` exit 1;
+  - a change within the cap, adding tests only, with `complexity: trivial`, must stay `none`.
+- **Lane:** after task 8, on `tiers.py`'s `none` branch, and after task 9, on `check_review()`. It runs in a later
+  batch.
 
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
