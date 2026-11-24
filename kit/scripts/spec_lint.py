@@ -359,9 +359,16 @@ def branch_ref(path, name):
     refs/remotes/, so a pushed tag `origin/main` would stand in for the remote: a tag or an ambiguous name is refused.
     Raises OSError or subprocess.TimeoutExpired when git is missing or hangs."""
     cand = [name] if name.startswith("refs/") else [p + name for p in ("refs/", "refs/tags/", "refs/heads/", "refs/remotes/")] + ["refs/remotes/" + name + "/HEAD"]
-    run = subprocess.run(["git", "-C", str(path), "for-each-ref", "--format=%(refname)%00%(symref)"] + cand, capture_output=True, text=True, timeout=60)
+    run = subprocess.run(["git", "-C", str(path), "for-each-ref", "--format=%(refname)%00%(symref)"], capture_output=True, text=True, timeout=60)
     found = dict(line.split("\0", 1) for line in run.stdout.splitlines() if "\0" in line) if run.returncode == 0 else {}
-    hits = [c for c in cand if c in found]  # for-each-ref also lists refs below a pattern: keep exact names only
+    hits = [c for c in cand if c in found]  # every ref is listed (no patterns): keep exact names only
+    # shortcut: one listed spelling holding another branch's sha is invisible locally; the recipe's explicit refspec closes it, probe the server with ls-remote if a job must fetch the wildcard
+    fold = lambda n: unicodedata.normalize("NFC", n).casefold()
+    for r in hits[:1] + ([found[hits[0]]] if hits and found[hits[0]] else []):  # on a case-folding disk rev-parse opens the twin's file
+        twin = next((n for n in found if n != r and fold(n) == fold(r)), None)
+        who = name if r == hits[0] else "the target " + r
+        if twin or r not in found:
+            return None, who + (" differs only by case from " + twin if twin else " is not listed under its exact name")
     ok = lambda r: r.startswith(("refs/heads/", "refs/remotes/"))
     if len(hits) > 1:
         return None, name + " is ambiguous (" + ", ".join(hits) + ")"

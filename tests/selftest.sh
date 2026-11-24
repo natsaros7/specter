@@ -808,6 +808,18 @@ rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out
 # D2: a 64-hex end in a SHA-1 repo reads as a ref, not as a full id
 A64=$(printf 'a%.0s' $(seq 1 64)); gitq -C "$C" update-ref "refs/heads/$A64" "$SIDE"
 rc=0; out=$(cl --range "$A64...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e D2: a 64-hex end resolved in a SHA-1 repo (exit $rc): $out"
+# E1: a listed twin that differs only by case (a pushed MAIN next to the real main: loose beside the packed one on every disk)
+xmk xci '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main); gitq -C "$C" pack-refs --all
+gitq -C "$C" update-ref refs/remotes/origin/MAIN HEAD
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -qF "evidence: merged_ref origin/main differs only by case from refs/remotes/origin/MAIN" || fail "13e E1: a case twin of origin/main was accepted: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF "evidence: merged_ref origin/main differs only by case from refs/remotes/origin/MAIN" || fail "13e E1: a case twin gave auto-merge (exit $rc): $out"
+# E2: the CI shape, only on a disk that folds case: only MAIN is listed, origin/HEAD names main, which rev-parse opens as MAIN
+touch "$TMP/ci-a"
+if [ -e "$TMP/CI-A" ]; then
+  xmk xci2 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+  gitq -C "$C" update-ref -d refs/remotes/origin/main; gitq -C "$C" update-ref refs/remotes/origin/MAIN HEAD; gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+  out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e E2: a symref target shadowed by MAIN earned none: $out"
+else echo "13e E2: skipped, this disk keeps case"; fi
 
 # N2: under --auto-merge every warning is a no: no human is there to read it
 xmk n2 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1

@@ -60,7 +60,9 @@ flowchart LR
         shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
         name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
         when the verdict is `ready`, the reported human is `none` (evidence earned at the base, another model family)
-        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`).
+        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`), and fetch it
+        with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
+        disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
         or merge: the Guardrails row), and enables auto-merge; the platform merges when the Gates pass. Any other exit
         does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never

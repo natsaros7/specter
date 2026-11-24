@@ -3,6 +3,13 @@
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
 The installed version is stamped into each project (`.specs/kit/VERSION`; a `spec-kit.json` the installer creates records the first-install version in `kit_version`, and is never rewritten).
 
+## [Unreleased]
+
+### Security
+- A ref is refused when another listed ref differs from it only by case, or when a symref's target is not listed under
+  its exact name: on a case-insensitive disk (APFS, NTFS) a pushed `MAIN` shadowed `origin/main`, so the evidence read
+  the agent's own commits. The recipe fetches `merged_ref` with an explicit refspec.
+
 ## [0.9.0] - 2026-11-24
 
 ### Added
