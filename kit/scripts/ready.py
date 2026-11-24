@@ -24,9 +24,11 @@ that is a regular file at the head (index in staged mode; no `..`, no absolute p
 not fetched`. A missing block changes nothing.
 Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
 implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
---auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready` and the reported human
-is `none`; otherwise exit 1 and `auto-merge: no (<why>)`. Run it as a required platform check from a trusted worktree of
-the base, with --range (without it, `auto-merge: no`); only that check may enable the platform's auto-merge. Without the flag the exit code is as above.
+--auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
+is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
+non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha> (without
+--range, `auto-merge: no`); on exit 0 only, it approves with a non-agent identity and enables auto-merge (review-loop.md
+step 5). --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
 --json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
 """
 import json
@@ -279,7 +281,7 @@ def main(argv):
     except ValueError as err:
         return refuse(str(err))
     base = change["base"]
-    head = tiers.git(root, "rev-parse", "--verify", "-q", (rng.replace("...", "..").split("..")[1] if rng else "HEAD"))
+    head = change["head"]  # resolved by tiers.end_commit: a tag or ambiguous name never stands in for the head
     rules = tiers.profile_at(root, base, rel) if base else None
     try:
         rows = gates.gate_rows(rules) if rules else None
@@ -311,7 +313,7 @@ def main(argv):
     why = []
     if tier["human"] == "none":
         prof = specs / "steering" / "autonomy.md"
-        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base)
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head)
                            if change["why"] is None else None,
                            "same family" if review["same_family"] else None) if w]
     tier["human_why"] = "; ".join(why) or None
@@ -320,6 +322,7 @@ def main(argv):
     # the staged index is not what merges: only a range names the commits the platform would merge
     no_merge = ([] if rng else ["needs --range base...head"]) + (["verdict not ready"] if problems else []) + (
         ["human " + tier["human"] + (": " + tier["human_why"] if tier["human_why"] else "")] if tier["human"] != "none" else [])
+    no_merge = no_merge or warnings  # no human reads a warning on the none path: each one is a no
     if as_json:
         print(json.dumps({"verdict": verdict, "gates": g, "tier": tier, "review": review,
                           "verification": verification, "warnings": warnings, "auto_merge": not no_merge}))

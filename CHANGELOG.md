@@ -6,11 +6,15 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 ## [Unreleased]
 
 ### Added
-- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe: every PR
-  needs a human approval, and only a required check (run from a trusted worktree of the base, again in the merge queue)
-  that runs `ready.py --range … --pr … --auto-merge` may enable the platform's auto-merge. Nothing in the kit merges.
-- `ready.py --auto-merge`: exit 0 only when the verdict is `ready` and the reported human is `none`, else exit 1 with
-  `auto-merge: no (<why>)`; `--json` has `auto_merge`.
+- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe: branch
+  protection requires one approval on every PR, dropped on a new commit, and the Gates as required checks; a
+  non-required job runs `ready.py --range <base sha>...<head sha> --pr … --auto-merge` from a trusted worktree of the
+  base and, on exit 0 only, approves with a non-agent identity and enables auto-merge. The merge queue re-runs the
+  Gates, not `ready.py` (its commit and rules checks are for the PR). One concrete line each for GitHub and GitLab.
+  Nothing in the kit merges.
+- `ready.py --auto-merge`: exit 0 only when the verdict is `ready`, the reported human is `none` and there is no
+  warning (a missing `rounds:` line, a Gates row not in the base's table, a reviewer below the label's tier), else exit
+  1 with `auto-merge: no (<why>)`; `--json` has `auto_merge`.
 - Fix-round cap: at most 2 fix rounds per task (worker retry, then the planner), then the task goes to the human with
   both outputs. The `### Review` block carries `rounds: <n>`; `ready.py` says `not ready` above 2 or for a malformed
   value, warns when the line is missing, and `--json` has `review.rounds`.
@@ -30,6 +34,20 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 - `ready.py` reads a `rounds:` list item in any Markdown spelling (`*`, indent, case, `rounds :`); a rounds item that does not parse is not ready.
 - `ready.py` reports Human `none` as `spot` on the same rules as the label, and when reviewer and implementer share a
   model family (exit code unchanged).
+- Guardrails template: row three is now "every PR needs an approval, dropped on a new commit; only the `ready.py
+  --auto-merge` job's identity approves a `none` PR", and row six also bars agents from creating tags and
+  `refs/replace/` refs. An existing profile keeps its old wording and stays declared: update both rows, check the
+  platform does what they say, and re-date them. acme-shop's rows are re-dated 2026-11-24.
+
+### Security
+- Refs resolve to full names. `merged_ref`, its fallback (now spelled `refs/remotes/origin/HEAD`) and each `--range`
+  end must name exactly one branch or remote-tracking ref (or `HEAD`, or a commit sha for a range end): git's own lookup
+  takes `refs/tags/<name>` first, so a pushed tag `origin/HEAD` or `origin/main` stood in for merged history or moved the
+  range base, and earned `none`. A tag or an ambiguous name is refused: the label says `spot` (`evidence: merged_ref
+  … is ambiguous`), `tiers.py --evidence` and a bad `--range` end exit 2, staged mode takes the last row, and
+  `spec_lint.py`/`spec_report.py` skip that ref. The staged note names the full ref (`merge base with refs/heads/main`).
+- The label and `ready.py` refuse evidence whose history holds any commit of the change (`evidence: <ref> contains the
+  change`), so an `origin/HEAD` pointing at the PR branch earns nothing.
 
 ## [0.8.0] - 2026-11-23
 

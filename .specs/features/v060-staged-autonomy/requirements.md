@@ -152,6 +152,9 @@ Each slice ships and gives value on its own. A later slice never starts before t
   clone or the CI checkout of the default branch, never from a working copy (the rule in `kit/docs/chores.md:19-21`).
   A repository with no such job or no chores SHALL say so in `Enforced by` ("no such job, checked <how>"), with the
   `Verified` date; the row then counts as declared.
+- Amended 2026-11-24 (slice 4 re-review N1, N4): row three SHALL say that every PR needs an approval, dropped on a new
+  commit, which only the `ready.py --auto-merge` job's non-agent identity may give for a `none` PR (REQ-V060-09); row
+  six SHALL also bar agents from creating tags and `refs/replace/` refs.
 - A tier whose Human is `none` SHALL be labelled as `spot`, with the reason, until every row names what enforces it
   and has a `Verified` date.
 - Specter SHALL NOT claim to enforce any guardrail. It records the declaration; the platform enforces it.
@@ -163,6 +166,9 @@ Each slice ships and gives value on its own. A later slice never starts before t
   as of its parent, and count per tier: merged; reverted (a later `This reverts commit <sha>`); escaped (a later
   `Fixes: <sha>` trailer); human-caught (a `Human-Findings: <n>` trailer with n > 0).
 - Per tier it SHALL print `eligible`, `hold (<why>)` or `breach (<metric>)`. A metric with no data is a hold, never a pass.
+- Amended 2026-11-24 (slice 4 re-review N1): `merged_ref` and its fallback (`refs/remotes/origin/HEAD`) SHALL resolve
+  to exactly one branch or remote-tracking ref; a tag or an ambiguous name SHALL be refused, and a label SHALL not
+  count a history that holds any commit of the change.
 - It SHALL never edit the profile. Promotion is a human edit of the profile, which is itself a guarded path.
 
 ### [REQ-V060-09] Human check by tier
@@ -268,7 +274,9 @@ Blocked on the auto-merge decision.
 ### [REQ-V060-16] Merge queue and demotion on breach (slice 4, research E7)
 
 - The platform recipe of REQ-V060-09 SHALL include a merge queue (GitHub merge queue, GitLab merge trains or the
-  platform's equivalent), so changes that are green alone are gated together before they merge.
+  platform's equivalent), so changes that are green alone are gated together before they merge. Amended 2026-11-24
+  (slice 4 re-review N3): the queue re-runs the Gates on the merged result; `ready.py` runs at the PR (its head and base),
+  never on the queue's merge commit.
 - When `tiers.py --evidence` reports `breach` for a tier, it SHALL also print the demotion: the tier row as
   `file:line` and its Human value one step stricter (`none` → `spot`, `spot` → `required`; `required` prints
   "already required"). The human edits the profile; `tiers.py` SHALL NOT (REQ-V060-08). A tier in breach is not

@@ -19,7 +19,7 @@ flowchart LR
 | Triage | planner, [`new-feature.md`](../playbooks/new-feature.md) (a small change skips it) | approved spec and tasks, or "small change" |
 | Implement | generator, [`next-task.md`](../playbooks/next-task.md) | the frozen patch and the `### Gates` block (`gates.py`) |
 | Review | reviewer at the label's tier, [`review-loop.md`](review-loop.md) | the verdict table and the `### Review` block with `rounds: <n>`; the `### Risk tier` block (`tiers.py`) and the `### Readiness` block (`ready.py`) |
-| Merge | a human approval, or for Human `none` only the platform's required check `ready.py … --auto-merge` ([review-loop.md](review-loop.md) step 5) | the merge commit, with `Human-Findings: <n>` when a human checked |
+| Merge | a human approval, or for Human `none` only the approval of a non-required job that runs `ready.py --range <base sha>...<head sha> … --auto-merge` and approves with a non-agent identity; the merge queue re-runs the Gates ([review-loop.md](review-loop.md) step 5) | the merge commit, with `Human-Findings: <n>` when a human checked |
 | Evidence (after merge) | `tiers.py --evidence` over the trailers `Human-Findings:` and `Fixes:` ([sync.md](../playbooks/sync.md) § Trailers) | per tier: eligible, hold or breach; on breach, a `demote:` line |
 
 ## When the human enters

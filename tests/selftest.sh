@@ -565,7 +565,7 @@ G="$TMP/t13b-g"; mkdir -p "$G"; gitq -C "$G" init; "$KIT/install.sh" "$G" >/dev/
 printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `*/security/*` | deep | required |\n' > "$G/.specs/steering/autonomy.md"
 printf '{"merged_ref": "main"}' > "$G/.specs/spec-kit.json"; echo r > "$G/readme"; gitq -C "$G" add -A; gitq -C "$G" commit -m g
 tg() { python3 "$G/.specs/kit/scripts/tiers.py" --specs "$G/.specs" 2>&1; }
-echo x > "$G/readme2"; gitq -C "$G" add -A; out=$(tg) && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "base: $(git -C "$G" rev-parse --short HEAD) (merge base with main)" || fail "13b: control file not routine at the merge base: $out"
+echo x > "$G/readme2"; gitq -C "$G" add -A; out=$(tg) && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "base: $(git -C "$G" rev-parse --short HEAD) (merge base with refs/heads/main)" || fail "13b: control file not routine at the merge base: $out"
 gitq -C "$G" reset -q --hard; gitq -C "$G" clean -fdq
 # Names a folding filesystem opens as a guarded or critical path (APFS: s-long, st-ligature, NFD; NTFS: dotless i).
 # Staged by blob so the folding checkout never rewrites them; a mixed reset leaves the work tree alone.
@@ -586,7 +586,7 @@ gitq -C "$G" checkout -q -b feat
 printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `nothing` | deep | required |\n' > "$G/.specs/steering/autonomy.md"; gitq -C "$G" commit -qam loosen
 mkdir -p "$G/src/security"; echo x > "$G/src/security/k.java"; gitq -C "$G" add src/security/k.java
 printf '{"merged_ref": "feat"}' > "$G/.specs/spec-kit.json"
-out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "(merge base with main)" || fail "13b: a work-tree merged_ref edit moved the staged base: $out"
+out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "(merge base with refs/heads/main)" || fail "13b: a work-tree merged_ref edit moved the staged base: $out"
 gitq -C "$G" reset -q --hard; printf '{"merged_ref": null}' > "$G/.specs/spec-kit.json"; gitq -C "$G" commit -qam nobase
 echo x > "$G/readme3"; gitq -C "$G" add readme3
 out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "base: HEAD (no merge base: last tier)" || fail "13b: no merge base did not fail closed to the last tier: $out"
@@ -679,7 +679,7 @@ rc=0; out=$(fk '- rounds: 3
 ') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds.*repeated" || fail "13c2: a repeated rounds line overrode the cap (exit $rc): $out"
 js=$(fk '- rounds: 1
 ' --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["review"]["rounds"]==1, d' || fail "13c2: --json review.rounds: $js"
-echo "13e. label and ready.py trust only the base: thresholds read at the base, no merged_ref fails closed, --auto-merge is the one exit code for none, a profile outside .specs/steering is guarded, rounds line variants"
+echo "13e. label and ready.py trust only the base: thresholds read at the base, no merged_ref fails closed, --auto-merge is the one exit code for none, a profile outside .specs/steering is guarded, rounds line variants, refs are branches or remotes only (no tag, no ambiguous name, no history holding the change), every warning bars auto-merge"
 X="$TMP/t13e"; mkdir -p "$X"
 xprof() { mkdir -p "$(dirname "$1")"; printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |\n|---|---|---|---|---|---|\n| routine | 30 | %s | - | - | - |\n' "$2" > "$1"; }
 # xmk <name> <spec-kit.json> <min merged> <profile path from the repo root> <merges on main>: the profile commit, then that many docs merges, trunk at the tip
@@ -745,6 +745,49 @@ for v in '* rounds: two' '- rounds 3' '- rounds; 1'; do
 done
 rc=0; out=$(xrd gpt-5-1 '  * Rounds : 2
 ') || rc=$?; [ "$rc" = 0 ] && ! echo "$out" | grep -q "rounds" || fail "13e A6: a valid variant was refused (exit $rc): $out"
+# N1: refs resolve to branches and remote-tracking refs only; a tag or an ambiguous name is never the evidence or a range end.
+# xci <pr ref>: a CI-style checkout of R (heads to refs/remotes/origin/*, tags fetched, no origin/HEAD), detached at the PR head
+xci() { C="$R-ci"; rm -rf "$C"; gitq init "$C"; gitq -C "$C" fetch -q "$R" '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'; gitq -C "$C" checkout -q --detach "$(git -C "$R" rev-parse "$1")"; }
+cl() { python3 "$C/.specs/kit/scripts/tiers.py" --specs "$C/.specs" "$@" 2>&1; }
+# crd <range> [flags]: ready.py on the CI checkout, PR text for its HEAD, base main
+crd() { rng=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 0\n' "$(git -C "$C" rev-parse --short HEAD)" "$(git -C "$C" merge-base refs/remotes/origin/main HEAD | cut -c1-7)" | python3 "$C/.specs/kit/scripts/ready.py" --specs "$C/.specs" --range "$rng" "$@" 2>&1; }
+# a pushed tag origin/HEAD at the PR head, merged_ref null: the change is not its own history
+xmk n1a '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; gitq -C "$R" tag origin/HEAD; xci pr
+MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e N1: tag origin/HEAD at the PR head earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e N1: tag origin/HEAD gave auto-merge (exit $rc): $out"
+# a tag origin/main on a side chain the agent made, merged_ref "origin/main": ambiguous, refused
+xmk n1b '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b side; xdoc 1; xdoc 2; xdoc 3; gitq -C "$R" tag origin/main
+gitq -C "$R" checkout -q main; gitq -C "$R" branch -D side; gitq -C "$R" checkout -q -b pr; xdoc 4; xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: merged_ref origin/main is ambiguous" || fail "13e N1: tag origin/main on a side chain earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: merged_ref origin/main is ambiguous" || fail "13e N1: tag origin/main gave auto-merge (exit $rc): $out"
+rc=0; out=$(cl --evidence) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "merged_ref origin/main is ambiguous" || fail "13e N1: --evidence read a tag origin/main (exit $rc): $out"
+# a tag origin/main on a src/ commit inside the PR, the range given by name: the end is refused, not moved
+xmk n1c '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3
+echo t > "$R/src/t.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m src; gitq -C "$R" tag origin/main; xdoc 5; xci pr
+rc=0; out=$(cl --range origin/main...HEAD) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "origin/main is ambiguous" || fail "13e N1: a tag moved the range base (exit $rc): $out"
+rc=0; out=$(crd origin/main...HEAD --auto-merge) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "origin/main is ambiguous" || fail "13e N1: ready.py took a tag as the range base (exit $rc): $out"
+gitq -C "$C" tag v9 HEAD
+rc=0; out=$(cl --range "$(git -C "$C" rev-parse refs/remotes/origin/main)...v9") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "v9 is a tag" || fail "13e N1: a tag range end was read (exit $rc): $out"
+# origin/HEAD pointing at the PR branch: evidence that contains the change is refused
+xmk n1d '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; xci pr
+gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/pr
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: refs/remotes/origin/HEAD contains the change" || fail "13e N1: origin/HEAD at the PR branch earned none: $out"
+rc=0; out=$(crd origin/main...HEAD --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: refs/remotes/origin/HEAD contains the change" || fail "13e N1: origin/HEAD at the PR branch gave auto-merge (exit $rc): $out"
+# control: the real remote-tracking origin/HEAD, at main, still earns none
+gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "evidence: hold (merged [0-9]* < min 3)" || fail "13e N1: control origin/HEAD at main: $out"
+
+# N2: under --auto-merge every warning is a no: no human is there to read it
+xmk n2 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
+for ex in '' '- **rounds**: 1' '1. rounds: 1'; do
+  rc=0; out=$(xrd gpt-5-1 "$ex
+" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "^auto-merge: no (" || fail "13e N2: a warning under --auto-merge merged ('$ex', exit $rc): $out"
+done
+rc=0; out=$(xrd gpt-5-1 '
+' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False and d["warnings"], d' || fail "13e N2: --json auto_merge with a warning (exit $rc): $out"
+rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (row 'G9 Extra' is not in the base" || fail "13e N2: an unknown Gates row under --auto-merge merged (exit $rc): $out"
 echo "13c. evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
 el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }

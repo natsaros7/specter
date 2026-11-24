@@ -14,7 +14,7 @@ flowchart LR
   R -- "complete blockers: round 1" --> W
   R -- "complete blockers: round 2" --> P
   R -- "clean, required or spot" --> C[Human check<br/>+ commit]
-  R -- "clean, none" --> A[Required check passes:<br/>platform auto-merge]
+  R -- "clean, none" --> A[ready.py --auto-merge job approves:<br/>platform auto-merge]
   G -- "red after round 2" --> H[Human, with both outputs]
   R -- "blockers after round 2" --> H
 ```
@@ -33,7 +33,7 @@ flowchart LR
    edit it). From the repo root:
 
    ```sh
-   git worktree add --detach /tmp/specter-base <base>     # the kit as it is at <base>; works while <base> is checked out
+   git worktree add --detach /tmp/specter-base <base sha> # the kit as it is at the base; a sha, never a name a tag could shadow
    python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs
    ```
 
@@ -53,16 +53,33 @@ flowchart LR
    - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
      reviewer's verdict table, as below.
    - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
-   - `none`: no human before merge, and only through one check. Every PR needs a human approval by default (branch
-     protection requires an approving review on every PR, not only on the `required` paths). The only path to a merge
-     without one is a required check that the platform runs from a trusted worktree of the base (as step 3 shows) and
-     that passes: `ready.py --specs .specs --range <base>...<head> --pr <pr text> --auto-merge` exits 0 only when the
-     verdict is `ready` and the reported human is `none` (evidence earned at the base, another model family). That
-     check alone may enable the platform's auto-merge, with the platform's own credentials: an agent's cannot approve
-     or merge (the Guardrails row). It runs again in the merge queue (GitHub merge queue, GitLab merge trains or the
-     equivalent), so a label made at review time cannot go stale and changes that are green alone are gated together.
-     A failing check leaves the PR for a human approval. The check is the platform's job, never the agent's; nothing in
-     the kit merges.
+   - `none`: no human before merge, through one job and the platform's own rules; nothing in the kit merges.
+     1. Branch protection requires one approval on every PR (not only on the `required` paths) and drops it when a
+        commit is pushed. The required checks are the Gates, and only the Gates.
+     2. A non-required job, defined where the PR cannot edit it, runs from a trusted worktree of the base (as step 3
+        shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
+        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
+        when the verdict is `ready`, the reported human is `none` (evidence earned at the base, another model family)
+        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`).
+     3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
+        or merge: the Guardrails row), and enables auto-merge; the platform merges when the Gates pass. Any other exit
+        does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never
+        blocks a PR a human approved.
+     4. The merge queue (GitHub merge queue, GitLab merge trains or the equivalent) re-runs the Gates on the merged
+        result, so changes that are green alone are gated together. It does not re-run `ready.py`: its block-commit
+        and rules-at-base checks are for the PR head and its base, and on the queue's merge commit they fail every PR.
+        <!-- shortcut: the label is the one made at approval; a base that moves under the PR re-labels it only when the branch is updated (a new commit drops the approval and the job runs again); re-run ready.py in the queue against the PR head when evidence that moved must bar a queued merge. -->
+
+     - GitHub: a ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
+       "Dismiss stale pull request approvals when new commits are pushed"; the job is a `pull_request_target` workflow
+       (its definition comes from the base branch) that checks out the base, fetches the PR head as data without running
+       it, passes the PR body through an environment variable (never `${{ }}` in the script), and on exit 0 runs
+       `gh pr review --approve` and `gh pr merge --auto` with a GitHub App token (or `GITHUB_TOKEN` with "Allow GitHub
+       Actions to create and approve pull requests" on; a merge by `GITHUB_TOKEN` starts no workflow on the default branch).
+     - GitLab: an approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
+       commits are added to the source branch"; the job has `allow_failure: true` and comes from a CI/CD configuration the
+       MR cannot edit (a configuration file in another project); on exit 0 a project access token's bot user approves the
+       MR and sets auto-merge through the merge requests API.
 
    For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
@@ -72,9 +89,9 @@ flowchart LR
    # preflight, staged, before the commit (a +dirty Gates block binds no content)
    python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md
    git commit                                            # then rerun gates.py and put its new block in /tmp/pr.md
-   # the binding check, after the commit: the label and the verdict for <base>...HEAD
-   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base>...HEAD
-   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD --pr /tmp/pr.md
+   # the binding check, after the commit: the label and the verdict for <base sha>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base sha>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base sha>...HEAD --pr /tmp/pr.md
    git worktree remove /tmp/specter-base
    ```
 

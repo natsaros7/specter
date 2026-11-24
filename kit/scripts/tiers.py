@@ -14,8 +14,11 @@ Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or arg
 
 Without --check it labels a change and prints a `### Risk tier` block (--json: the same as JSON). The change is the
 staged files (base = merge-base of HEAD and merged_ref, read from spec-kit.json as committed at HEAD, so the branch's
-own commits count; no merged_ref, origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
-(base = merge-base A B, head B); the block names the base. The profile is read at the base, never the working tree.
+own commits count; no merged_ref, refs/remotes/origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
+(base = merge-base A B, head B); the block names the base. merged_ref must name exactly one branch or remote-tracking
+ref (`refs/remotes/origin/main`, or a short name that is not also a tag or another ref): a tag or an ambiguous name is
+refused (staged: the last row; label: spot; --evidence: exit 2). A --range end is HEAD, a commit sha or such a ref; a
+tag, an ambiguous name or an expression (`main~1`) is exit 2. The binding check passes full shas. The profile is read at the base, never the working tree.
 Paths and globs are repo-root-relative, even when .specs/ sits in a subfolder, and compared under one key (NFKC and a
 full case fold), the way APFS and NTFS open them. Each file takes the lowest row a glob matches (none: the last row;
 guarded: the last row) and the change takes its strictest file's tier. Renames count under both paths. Staged mode is
@@ -29,7 +32,8 @@ absent or empty or any row is undeclared; --check prints one line per row (undec
 Human `none` also needs the lowest row (the first of the Tiers table) and, in the label (not --check), `eligible` from
 --evidence below for that tier; otherwise the label says `spot` and `- human: none → spot (<why>)` names it (--json: `reasons`).
 The label counts history with the Evidence thresholds of the profile at the base (never the working tree), and with no
-merged_ref or origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no merged_ref …`).
+merged_ref or refs/remotes/origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no
+merged_ref …`), and so it does when that history holds any commit of the change (`evidence: <ref> contains the change`).
 A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
@@ -265,8 +269,9 @@ def gitz(root, *args):
 
 
 def committed_ref(root, specs, head):
-    """merged_ref as spec-kit.json is committed at head (next to the profile's .specs/ folder `specs`, default root/.specs),
-    resolved like spec_lint.merged_ref; None when nothing resolves. Raises ValueError on a bad spec-kit.json."""
+    """(ref, why): merged_ref as spec-kit.json is committed at head (next to the profile's .specs/ folder `specs`, default
+    root/.specs), resolved by spec_lint.merged_ref to a full branch or remote-tracking ref name (or HEAD); ref None when
+    nothing resolves, why the reason a tag or ambiguous name was refused. Raises ValueError on a bad spec-kit.json."""
     cfg = (Path(specs).name if specs else ".specs") + "/spec-kit.json"
     try:
         # As committed at HEAD: a work-tree edit must not move the base. An edit the branch committed is in the
@@ -282,8 +287,22 @@ def committed_ref(root, specs, head):
         raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
 
 
+def end_commit(root, end):
+    """The commit a --range end names, or None: HEAD, a full object id, a short sha that no ref is named, or exactly one
+    branch or remote-tracking ref (spec_lint.branch_ref). Raises ValueError for a tag, an ambiguous name or anything
+    else (`main~1`): git would resolve a tag `origin/main` before the remote, and move the base or the head."""
+    name = end
+    if end != "HEAD" and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", end):
+        name, why = spec_lint.branch_ref(root, end)
+        if why:
+            raise ValueError("--range end " + why)
+        if not name and not re.fullmatch(r"[0-9a-f]{4,63}", end):
+            raise ValueError("--range end " + end + " is not a branch, a remote-tracking ref, HEAD or a commit sha")
+    return git(root, "rev-parse", "--verify", "-q", (name or end) + "^{commit}")
+
+
 def classify(root, rel, rng, specs=None, where=None):
-    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
+    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
     ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
@@ -293,16 +312,17 @@ def classify(root, rel, rng, specs=None, where=None):
     closed = False
     if rng:
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
-        base = git(root, "merge-base", a, b) if a and b else None
-        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, b) if base else None
+        a, head = end_commit(root, a), end_commit(root, b)
+        base = git(root, "merge-base", a, head) if a and head else None
+        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, head) if base else None
         note = str(base)[:7] + " (merge base of " + rng + ")"
     else:
         head = git(root, "rev-parse", "--verify", "-q", "HEAD")
-        ref = committed_ref(root, specs, head)
+        ref, rwhy = committed_ref(root, specs, head)
         merge = git(root, "merge-base", "HEAD", ref) if ref and ref != "HEAD" and head else None
-        # No merge base: fail closed, every file takes the last row.
+        # No merge base (or a merged_ref refused as a tag or ambiguous): fail closed, every file takes the last row.
         base, closed = merge or head, not merge
-        note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (no merge base: last tier)"
+        note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (" + (rwhy or "no merge base") + ": last tier)"
         files = gitz(top, "diff", "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
     if files is None:
         raise ValueError("cannot resolve " + (("--range " + rng) if rng else "the staged change") + " in " + str(root))
@@ -339,31 +359,38 @@ def classify(root, rel, rng, specs=None, where=None):
         # none is for the lowest row only; a higher row that says none is read as spot
         no_low = human == "none" and idx != 0
         human = "spot" if no_low else human
-    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
+    return {"base": base, "head": head, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
             "reasons": ["not the lowest tier"] if why is None and no_low else [],
             "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
-def earned(root, rel, specs, profile, tier, base):
+def earned(root, rel, specs, profile, tier, base, head):
     """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed).
     Thresholds are the profile's text at `base`, the text classify() read, never the working tree. With no merged_ref the
-    history would be HEAD, the change itself: refused, as staged mode refuses it."""
-    text = profile_at(root, base, rel) if base else None
+    history would be HEAD, the change itself: refused, as staged mode refuses it. So is a history that holds any commit
+    of the change (base..head), whatever its name: a merged_ref or origin/HEAD at the PR branch, or one that merged it."""
+    text = profile_at(root, base, rel) if base and head else None
     if text is None:
         return "evidence: no profile at the base"
     try:
-        ref = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+        ref, why = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
     except ValueError as err:
         return "evidence: " + str(err)
+    if why:
+        return "evidence: " + why
     if ref in (None, "HEAD"):
-        return "evidence: no merged_ref (set merged_ref or origin/HEAD)"
+        return "evidence: no merged_ref (set merged_ref or refs/remotes/origin/HEAD)"
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         rc = evidence(root, rel, specs, profile, True, text)
     if rc:
         return "evidence: " + (err.getvalue().strip().replace("tiers: ", "", 1) or "cannot be read")
-    m = json.loads(out.getvalue())["tiers"].get(tier) or {}
+    rep_ = json.loads(out.getvalue())
+    mine = git(root, "rev-list", "--count", head, "^" + base)
+    if mine is None or mine != git(root, "rev-list", "--count", head, "^" + base, "^" + rep_["head"]):
+        return "evidence: " + ref + " contains the change"
+    m = rep_["tiers"].get(tier) or {}
     return None if m.get("verdict") == "eligible" else "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
 
 
@@ -378,7 +405,7 @@ def label(root, rel, rng, as_json, specs=None, profile=None):
         c = classify(root, rel, rng, specs)
         # Only a label that would still be none reads history; a profile with no Tiers section has no tier to count.
         if c["human"] == "none" and c["why"] is None:
-            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"])
+            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"], c["head"])
             c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
     except ValueError as err:
         return refuse(str(err))
@@ -428,12 +455,14 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     if tiers is None:
         return refuse("no Tiers section in " + str(profile) + ": nothing to count")
     try:
-        ref = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+        ref, why = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
     except ValueError as err:
         return refuse(str(err))
+    if why:
+        return refuse(why)
     head = git(root, "rev-parse", "--verify", "-q", ref + "^{commit}") if ref else None
     if not head:
-        return refuse("no merged_ref, origin/HEAD or HEAD resolves in " + str(root))
+        return refuse("no merged_ref, refs/remotes/origin/HEAD or HEAD resolves in " + str(root))
     now = time.time()
     longest = max([r[0] for r in (ev or {}).values() if r] or [90])
     # commits below the depth, and their reverts, are missing; only an explicit "false" counts as full (git < 2.15 echoes the flag)

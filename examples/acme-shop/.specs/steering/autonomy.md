@@ -12,7 +12,7 @@ What agents may do here without a human, and on what evidence. Editing this file
 | Memory | [lessons](lessons.md) | start |
 
 ## Tiers
-Rows run from most to least autonomous. A file takes the lowest row a glob matches, so security tests and architecture tests land on `critical` although `*/src/test/*` also matches them; the change takes its strictest file's tier. `pom.xml`, `.mvn/` and the architecture tests are `critical` because a check is switched off there. Until auto-merge is decided, `none` behaves as `spot`.
+Rows run from most to least autonomous. A file takes the lowest row a glob matches, so security tests and architecture tests land on `critical` although `*/src/test/*` also matches them; the change takes its strictest file's tier. `pom.xml`, `.mvn/` and the architecture tests are `critical` because a check is switched off there. `none` holds only on `routine`, with every guardrail declared and `routine` `eligible` in `tiers.py --evidence`; the example ships no `--auto-merge` job, so a `none` PR still waits for a human approval.
 
 | Tier | Paths | Reviewer | Human |
 |---|---|---|---|
@@ -35,7 +35,7 @@ Declared here, enforced by the platform; specter checks only that each row names
 |---|---|---|
 | No direct or force push to the default branch | GitHub ruleset `protect-main` on `main`: no bypass, no force push | 2026-11-23 |
 | The Gates run as required checks before a merge | Ruleset `protect-main`: required check `build` (`./mvnw -B verify`) | 2026-11-23 |
-| A human must approve a change to a `required` tier's paths | Ruleset `protect-main` requires code-owner review; the platform repo's `CODEOWNERS` gives the `critical` globs to the platform team (not shipped in the example) | 2026-11-23 |
+| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | Ruleset `protect-main`: one approving review on every PR, stale approvals dismissed on push, code-owner review on the `critical` globs (the platform repo's `CODEOWNERS` gives them to the platform team; not shipped in the example); no `--auto-merge` job, checked `.github/workflows/` (the example ships no workflow) | 2026-11-24 |
 | Agent credentials cannot approve or merge | Agents push as `acme-agent` with a fine-grained token: contents and pull requests write, no admin; not a code owner | 2026-11-23 |
 | Agent permissions come from the host's configuration, not from a prompt | The agent host's managed settings on the build host (not in this repository, so no prompt or commit can widen them) | 2026-11-23 |
 | Agents cannot edit merged history or review records | Ruleset `protect-main` (no force push, no deletion); GitHub keeps the review log | 2026-11-23 |

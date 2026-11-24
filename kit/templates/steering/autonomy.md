@@ -27,15 +27,15 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | C1 | Spec health | `python3 .specs/kit/scripts/spec_lint.py --cites && python3 .specs/kit/scripts/spec_report.py` |
 
 ## Guardrails
-<!-- Specter records these; the platform enforces them. A row counts as declared when Enforced by names what enforces it (no <placeholder>) and Verified is a YYYY-MM-DD date. Until every row is declared, a tier with Human none is labelled spot. Human none also needs the lowest tier and an eligible Evidence row; the merge is then the platform's auto-merge, enabled only by a required check that runs `ready.py --range <base>...<head> --pr <pr text> --auto-merge` from a trusted worktree of the base (and again in the merge queue); every other PR needs a human approval (review-loop.md step 5). No such job or no chores: say so, e.g. "no such job, checked .github/workflows/", and date it. -->
+<!-- Specter records these; the platform enforces them. A row counts as declared when Enforced by names what enforces it (no <placeholder>) and Verified is a YYYY-MM-DD date. Until every row is declared, a tier with Human none is labelled spot. Human none also needs the lowest tier and an eligible Evidence row; every PR needs an approval; for a none PR a non-required job runs `ready.py --range <base sha>...<head sha> --pr <pr text> --auto-merge` from a trusted worktree of the base and, on exit 0 only, approves with a non-agent identity and enables auto-merge (review-loop.md step 5). No such job or no chores: say so, e.g. "no such job, checked .github/workflows/", and date it. -->
 | Guardrail | Enforced by | Verified |
 |---|---|---|
 | No direct or force push to the default branch | <branch protection or ruleset> | <YYYY-MM-DD> |
 | The Gates run as required checks before a merge | <required status checks> | <YYYY-MM-DD> |
-| A human must approve a change to a `required` tier's paths | <CODEOWNERS or the platform's equivalent> | <YYYY-MM-DD> |
+| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | <required approvals and stale-approval dismissal; the job's App or bot identity, or "no such job, checked <how>"> | <YYYY-MM-DD> |
 | Agent credentials cannot approve or merge | <bot account or token scope> | <YYYY-MM-DD> |
 | Agent permissions come from the host's configuration, not from a prompt | <agent settings file or CI permissions> | <YYYY-MM-DD> |
-| Agents cannot edit merged history or review records | <history protection and the platform's review log> | <YYYY-MM-DD> |
+| Agents cannot edit merged history or review records, or create tags or `refs/replace/` refs | <history protection, tag rules and the platform's review log> | <YYYY-MM-DD> |
 | An agent job triggered by untrusted text (an issue, a PR, a comment, an outside contribution) runs read-only, without secrets; its writes go through a separate step that validates them | <CI permissions and the platform's safe-output step, or "no such job, checked <how>"> | <YYYY-MM-DD> |
 | Scheduled chores run from a clean clone or the CI checkout of the default branch, never a working copy | <the scheduler entry, or "no chores, checked <how>"> | <YYYY-MM-DD> |
 
