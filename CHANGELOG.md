@@ -6,8 +6,11 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 ## [Unreleased]
 
 ### Added
-- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe
-  (Gates as required checks, auto-merge on green, CODEOWNERS for `required` paths, a merge queue). Nothing in the kit merges.
+- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe: every PR
+  needs a human approval, and only a required check (run from a trusted worktree of the base, again in the merge queue)
+  that runs `ready.py --range … --pr … --auto-merge` may enable the platform's auto-merge. Nothing in the kit merges.
+- `ready.py --auto-merge`: exit 0 only when the verdict is `ready` and the reported human is `none`, else exit 1 with
+  `auto-merge: no (<why>)`; `--json` has `auto_merge`.
 - Fix-round cap: at most 2 fix rounds per task (worker retry, then the planner), then the task goes to the human with
   both outputs. The `### Review` block carries `rounds: <n>`; `ready.py` says `not ready` above 2 or for a malformed
   value, warns when the line is missing, and `--json` has `review.rounds`.
@@ -20,7 +23,11 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 ### Changed
 - `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier
   `eligible` in `--evidence`; otherwise `spot`, with `- human: none → spot (<why>)` and `reasons` in `--json`. A failing
-  evidence read fails closed to `spot`. `labels_only` is `false`; the `- autonomy:` line states what the Human value means.
+  evidence read fails closed to `spot`; so does a run with no `merged_ref` or `origin/HEAD` (the history would be the
+  change itself). The label and `ready.py` read the Evidence thresholds from the profile at the base, never the working
+  tree (`tiers.py --evidence` still reads the working tree). `labels_only` is `false`; the `- autonomy:` line states what the Human value means.
+- `tiers.py` guards the profile at the `--file` path too, so an edit of it takes the last tier.
+- `ready.py` reads a `rounds:` list item in any Markdown spelling (`*`, indent, case, `rounds :`); a rounds item that does not parse is not ready.
 - `ready.py` reports Human `none` as `spot` on the same rules as the label, and when reviewer and implementer share a
   model family (exit code unchanged).
 

@@ -140,7 +140,9 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
   glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
-  Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
+  Nothing in the kit merges: Human `none` is the platform's auto-merge, enabled only by a required check that runs
+  `ready.py --range <base>...<head> --pr <pr text> --auto-merge` (exit 0 only when ready and `none`) from a trusted
+  worktree of the base; every other PR needs a human approval. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
   head commit, the Review block with its `rounds: <n>` line (above 2 or malformed is not ready, missing a warning),
   Verification lines) and runs no command; exit 1 means not ready.
   Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base>`,
@@ -181,8 +183,11 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
   guardrail declared and that tier `eligible` in `tiers.py --evidence`; otherwise it says `spot` and
   `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
-  the implementer's model family makes `ready.py` report `spot` too; `ready.py` applies the evidence rule as the label does. The platform recipe (required checks = the
-  Gates, auto-merge on green, CODEOWNERS for `required` paths, a merge queue) is in `kit/docs/review-loop.md` step 5.
+  the implementer's model family makes `ready.py` report `spot` too; `ready.py` applies the evidence rule as the label does, and the label reads the Evidence thresholds at the
+  base; with no `merged_ref` (or `origin/HEAD`) it says `spot`. `ready.py --auto-merge` exits 0 only when the verdict is
+  `ready` and the reported human is `none`. The platform recipe (every PR needs a human approval; only that check,
+  run from a trusted worktree of the base and again in the merge queue, may enable auto-merge) is in
+  `kit/docs/review-loop.md` step 5.
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.
 

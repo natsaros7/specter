@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check a PR description's `### Gates` block against the repository and print a `### Readiness` block. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help
+Usage: python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] [--auto-merge] | --help
        default DIR = the .specs/ this script is installed in; PR text comes from FILE, else stdin.
 
 Reads only: it runs no command, and never executes or evals anything from the PR text. Base and head are as in
@@ -15,8 +15,8 @@ needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeate
 `- tree changed during gates` line, or a verdict other than `ready (N passed)` is not ready. A row whose label is not
 in the base's table is a warning, never trusted. The block's Risk tier (tiers.py) is printed.
 Exit 0 ready, 1 not ready, 2 bad argument or unreadable input (a bad spec-kit.json included).
-Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, `- rounds: <n>` (at most 2
-fix rounds: more, or a value that is not a non-negative integer, is not ready; a missing line is a warning), one
+Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, `- rounds: <n>` (any list item, `-`, `*` or `+`, any case, spaces around the colon; at most 2
+fix rounds: more, a value that is not a non-negative integer or a rounds item that does not parse is not ready; a missing line is a warning), one
 verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready; an empty cell makes
 it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
@@ -24,7 +24,10 @@ that is a regular file at the head (index in staged mode; no `..`, no absolute p
 not fetched`. A missing block changes nothing.
 Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
 implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
---json: {verdict, gates, tier, review, verification, warnings}.
+--auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready` and the reported human
+is `none`; otherwise exit 1 and `auto-merge: no (<why>)`. Run it as a required platform check from a trusted worktree of
+the base, with --range (without it, `auto-merge: no`); only that check may enable the platform's auto-merge. Without the flag the exit code is as above.
+--json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
 """
 import json
 import posixpath
@@ -39,7 +42,7 @@ import gates  # noqa: E402
 import spec_lint  # noqa: E402
 import tiers  # noqa: E402
 
-USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help"
+USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] [--auto-merge] | --help"
 ROW = re.compile(r"- (.+?): (pass \(.*\)|FAIL \(exit -?\d+\)|not run)")
 
 
@@ -139,9 +142,12 @@ def check_review(text, base, want="standard"):
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None
-        elif line.startswith("- rounds:"):
-            v = line[len("- rounds:"):].strip()
-            if r["rounds"] is not None or any(x.startswith("review rounds") for x in r["problems"]):
+        elif re.match(r"\s*[-*+]\s*rounds\b", line, re.I):
+            m = re.fullmatch(r"\s*[-*+]\s*rounds\s*:(.*)", line, re.I)
+            v = m.group(1).strip() if m else None
+            if v is None:
+                r["problems"].append("review rounds line unreadable: " + line.strip()[:30])
+            elif r["rounds"] is not None or any(x.startswith("review rounds") for x in r["problems"]):
                 r["problems"].append("review rounds repeated: one `rounds:` line per Review block")
             elif re.fullmatch(r"[0-9]{1,6}", v):
                 r["rounds"] = int(v)
@@ -237,7 +243,8 @@ def main(argv):
         print(__doc__.strip())
         return 0
     specs, pr, rng, as_json = Path(__file__).resolve().parents[2], None, None, "--json" in argv
-    argv = [a for a in argv if a != "--json"]
+    auto = "--auto-merge" in argv
+    argv = [a for a in argv if a not in ("--json", "--auto-merge")]
     for flag in ("--specs", "--pr", "--range"):
         if flag in argv:
             i = argv.index(flag)
@@ -304,14 +311,18 @@ def main(argv):
     why = []
     if tier["human"] == "none":
         prof = specs / "steering" / "autonomy.md"
-        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"])
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base)
                            if change["why"] is None else None,
                            "same family" if review["same_family"] else None) if w]
     tier["human_why"] = "; ".join(why) or None
     tier["human"] = "spot" if tier["human_why"] else tier["human"]
+    # the one merge-without-a-human test: a ready verdict and a reported human of none (a platform check runs it)
+    # the staged index is not what merges: only a range names the commits the platform would merge
+    no_merge = ([] if rng else ["needs --range base...head"]) + (["verdict not ready"] if problems else []) + (
+        ["human " + tier["human"] + (": " + tier["human_why"] if tier["human_why"] else "")] if tier["human"] != "none" else [])
     if as_json:
         print(json.dumps({"verdict": verdict, "gates": g, "tier": tier, "review": review,
-                          "verification": verification, "warnings": warnings}))
+                          "verification": verification, "warnings": warnings, "auto_merge": not no_merge}))
     else:
         print("### Readiness")
         print("- gates: %d/%d pass at %s" % (g["passed"], g["total"], head[:7]))
@@ -325,7 +336,9 @@ def main(argv):
             print("- not ready: " + p)
         for w in warnings:
             print("- warning: " + w)
-    return 1 if problems else 0
+        if auto:
+            print("auto-merge: " + ("no (" + "; ".join(no_merge) + ")" if no_merge else "yes"))
+    return 1 if problems or auto and no_merge else 0
 
 
 if __name__ == "__main__":

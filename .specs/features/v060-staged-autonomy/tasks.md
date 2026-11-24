@@ -109,3 +109,9 @@ ones are already in).
   - Evidence: case 13d holds the fix-round cap rows (rounds 3, 2, missing, `two`, repeated, `--json`), written red first with 21a; the demotion rows stay in 13c on its evidence fixture (none → spot, spot → required, already required, profile cmp, `--json`), written red first with 21b. The human-check rows are 13c2 (task 21).
 - [ ] 23 Gate G1-G4 green; docs; release 0.9.0; close the feature out — [REQ-V060-09] [REQ-V060-10] [REQ-V060-11]
   [REQ-V060-15] [REQ-V060-16]
+
+### Follow-ups from the slice 4 review (advisories, `docs/reviews/2026-11-24-slice4-deep-review.md`)
+
+- [ ] 23a Under Human `none` no human writes `Human-Findings:`: decide who writes the trailer on an auto-merge, so the tier neither switches itself off nor carries an agent-written `0` (advisory 5) — [REQ-V060-08] [REQ-V060-09]
+- [ ] 23b Model family: read `_`-joined ids and bare model names (`claude_opus_5_5`, `opus-5-5`); a repeated `implementer:` or `reviewer:` line is not ready, as a repeated `rounds:` is (advisory 7) — [REQ-V060-13]
+- [ ] 23c An undecodable profile gives a readable `file: not UTF-8` reason, not `autonomy.md:u: t` (advisory 9) — [REQ-V060-05]

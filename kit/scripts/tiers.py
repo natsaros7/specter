@@ -28,6 +28,8 @@ Verified is a YYYY-MM-DD date that is not in the future. A tier whose Human is `
 absent or empty or any row is undeclared; --check prints one line per row (undeclared rows keep exit 0), a bad header is exit 2.
 Human `none` also needs the lowest row (the first of the Tiers table) and, in the label (not --check), `eligible` from
 --evidence below for that tier; otherwise the label says `spot` and `- human: none → spot (<why>)` names it (--json: `reasons`).
+The label counts history with the Evidence thresholds of the profile at the base (never the working tree), and with no
+merged_ref or origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no merged_ref …`).
 A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
@@ -210,9 +212,9 @@ def parse_evidence(text, tiers):
 
 
 def guarded_globs(text, rel):
-    """GUARDED plus the in-repo link targets of the Knowledge table (a folder becomes folder/*). rel is the profile's
-    path from the repo root, which relative links resolve against."""
-    out = list(GUARDED)
+    """GUARDED, the profile itself (rel, its path from the repo root, which also resolves relative links; --file can put it
+    outside GUARDED) and the in-repo link targets of the Knowledge table (a folder becomes folder/*)."""
+    out = list(GUARDED) + [rel]
     for _, line in section(text, "Knowledge") or []:
         for target in re.findall(r"\]\(([^)\s]+)\)", line):
             target = target.split("#")[0]
@@ -343,11 +345,22 @@ def classify(root, rel, rng, specs=None, where=None):
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
-def earned(root, rel, specs, profile, tier):
-    """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed)."""
+def earned(root, rel, specs, profile, tier, base):
+    """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed).
+    Thresholds are the profile's text at `base`, the text classify() read, never the working tree. With no merged_ref the
+    history would be HEAD, the change itself: refused, as staged mode refuses it."""
+    text = profile_at(root, base, rel) if base else None
+    if text is None:
+        return "evidence: no profile at the base"
+    try:
+        ref = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+    except ValueError as err:
+        return "evidence: " + str(err)
+    if ref in (None, "HEAD"):
+        return "evidence: no merged_ref (set merged_ref or origin/HEAD)"
     out, err = io.StringIO(), io.StringIO()
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        rc = evidence(root, rel, specs, profile, True)
+        rc = evidence(root, rel, specs, profile, True, text)
     if rc:
         return "evidence: " + (err.getvalue().strip().replace("tiers: ", "", 1) or "cannot be read")
     m = json.loads(out.getvalue())["tiers"].get(tier) or {}
@@ -365,7 +378,7 @@ def label(root, rel, rng, as_json, specs=None, profile=None):
         c = classify(root, rel, rng, specs)
         # Only a label that would still be none reads history; a profile with no Tiers section has no tier to count.
         if c["human"] == "none" and c["why"] is None:
-            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"])
+            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"])
             c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
     except ValueError as err:
         return refuse(str(err))
@@ -400,10 +413,11 @@ def findings(body):
     return bool(vals), any(not re.fullmatch(r"[0-9]+", v) or v.strip("0") for v in vals)
 
 
-def evidence(root, rel, specs, profile, as_json):
-    """Print the Evidence report for the working-tree profile; return the exit code. Never writes anything."""
+def evidence(root, rel, specs, profile, as_json, text=None):
+    """Print the Evidence report for the working-tree profile (or `text`, the profile as of the label's base); return the
+    exit code. Never writes anything."""
     try:
-        text = profile.read_text()
+        text = profile.read_text() if text is None else text
         tiers = parse_tiers(text)
         names = [r[0] for r in tiers or []]
         ev = parse_evidence(text, names)

@@ -11,8 +11,10 @@ flowchart LR
   G -- "red again: round 2" --> P[Planner<br/>deep tier]
   P --> G
   G -- green --> R[Reviewer<br/>fresh context]
-  R -- "complete blockers: next round" --> W
-  R -- clean --> C[Human check<br/>+ commit]
+  R -- "complete blockers: round 1" --> W
+  R -- "complete blockers: round 2" --> P
+  R -- "clean, required or spot" --> C[Human check<br/>+ commit]
+  R -- "clean, none" --> A[Required check passes:<br/>platform auto-merge]
   G -- "red after round 2" --> H[Human, with both outputs]
   R -- "blockers after round 2" --> H
 ```
@@ -51,9 +53,16 @@ flowchart LR
    - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
      reviewer's verdict table, as below.
    - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
-   - `none`: no human before merge. Set the platform up once: the Gates as required checks, auto-merge on green,
-     CODEOWNERS for the `required` paths, and a merge queue (GitHub merge queue, GitLab merge trains or the
-     equivalent) so changes that are green alone are gated together. Nothing in the kit merges.
+   - `none`: no human before merge, and only through one check. Every PR needs a human approval by default (branch
+     protection requires an approving review on every PR, not only on the `required` paths). The only path to a merge
+     without one is a required check that the platform runs from a trusted worktree of the base (as step 3 shows) and
+     that passes: `ready.py --specs .specs --range <base>...<head> --pr <pr text> --auto-merge` exits 0 only when the
+     verdict is `ready` and the reported human is `none` (evidence earned at the base, another model family). That
+     check alone may enable the platform's auto-merge, with the platform's own credentials: an agent's cannot approve
+     or merge (the Guardrails row). It runs again in the merge queue (GitHub merge queue, GitLab merge trains or the
+     equivalent), so a label made at review time cannot go stale and changes that are green alone are gated together.
+     A failing check leaves the PR for a human approval. The check is the platform's job, never the agent's; nothing in
+     the kit merges.
 
    For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
