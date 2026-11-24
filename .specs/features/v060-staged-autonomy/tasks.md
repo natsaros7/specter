@@ -68,12 +68,28 @@ ones are already in).
 ## Slice 3: guardrails and evidence (release 0.8.0)
 
 - [x] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
-- [ ] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
-- [ ] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
+- [x] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
+  - Evidence: `tiers.parse_guardrails` added; `classify` gains `guardrails` and reports `spot` for an undeclared `none`; `label`, `--json` and `--check` print it (docstring updated). Selftest 13c rows red first (no section left `human: none`), then green; 13b `tprof` now carries a declared Guardrails row so its `none` rows stay `none`; `ready.py` unchanged (reads `change["human"]`).
+- [x] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
   a clean clone) in the template and the example; `chores.md` points to row eight — [REQ-V060-07]
-- [ ] 18 `tiers.py --evidence`; the `Fixes:` and `Human-Findings:` trailers in review-loop and `sync.md` — [REQ-V060-08]
-- [ ] 19 Selftest case 13c (eight guardrail rows included); gate G1-G4 green; docs; release 0.8.0 — [REQ-V060-07]
+  - Evidence: template and acme `autonomy.md` gain `## Guardrails` (eight rows; acme declares all, row seven "no such job, checked `.github/workflows/`") and `## Evidence` (template placeholders with suggested numbers in a comment); `chores.md` "On your machine" points to row eight.
+- [x] 18 `tiers.py --evidence`; the `Fixes:` and `Human-Findings:` trailers in review-loop and `sync.md` — [REQ-V060-08]
+  - Evidence: `tiers.parse_evidence` and `tiers.evidence` added (`--evidence [--json]`, conflicts with `--check`/`--range`); the merged_ref read is factored out of `classify` as `committed_ref`. One `git log --first-parent -z`, one `classify` per commit by its first parent. Selftest 13c evidence rows red first (`--evidence` was an unknown argument), then green; the docs half (review-loop step 5, sync.md Trailers) was already in.
+  - Evidence (review fix): red then green: merge-commit revert (`--no-ff` branch + `git revert -m 1`) eligible then breach; `Fixes:` naming a branch commit; human-caught over 2 of 10 trailered merges (was eligible, now hold); note, repeated and CRLF trailers read as 0 (now caught); backdated commit hiding history (`--since`); sha-256 revert not matched; non-ASCII Window and percent accepted (now exit 2); guardrail rows `TBD`, `N/A`, `-` and a 2099 Verified (were declared, now undeclared). Lead fix: a commit above the oldest counted one is scanned for reverts and `Fixes:` whatever its date (selftest t13e7: pre-patch `eligible`, then `breach (reverted 25.0% > 10%)`).
+  - Evidence (re-review fix): red then green: a backdated commit and its revert (t13e8: `eligible — merged 4`, now `breach (reverted 20.0% > 10%)`, window by position); a 2099 commit below old ones (t13e9: `merged 2`, now `merged 1`, future dates set no window); a change set git cannot read (t13e10: exit 0 `eligible`, now exit 2 `cannot read the change set of`); a `--depth 2` clone (t13e11: `eligible`, now `hold (shallow clone: fetch the full history)`); a bare-CR `Human-Findings` line (t13e4: 80.0%, now 83.3%, printed `human-caught 5 of 6`); Enforced by `none`, `—`, `–`, `?`, `TBD.`, `Pending`, `na` (were declared, now undeclared). Top-level and prefix are read once per run, not per commit (201 first-parent commits: 93.7 s at 983d8da, 77.2 s after; user+sys 27.4 s to 19.7 s). Backdated commits now count by position in t13d (c1: unprofiled 2 to 3), t13e5 (16.7% to 14.3%) and t13e7 (25.0% to 20.0%); all still breach.
+- [x] 19 Selftest case 13c (eight guardrail rows included); gate G1-G4 green; docs; release 0.8.0 — [REQ-V060-07]
   [REQ-V060-08] [REQ-V060-11]
+  - Evidence: selftest 13c (guardrails, evidence, t13e1-t13e11) and 14b (template 8 undeclared, acme 8 declared, a placeholder row gives `none → spot`); G1-G4 green at 6f85946; three deep reviews (`docs/reviews/2026-11-23-slice3-*.md`), the third says ship; VERSION 0.8.0.
+
+### Follow-ups from the slice 3 review (advisories, `docs/reviews/2026-11-23-slice3-deep-review.md`)
+
+- [ ] 19a `--evidence` reads thresholds from the profile at the `merged_ref` tip, not the working tree, and prints its commit (advisory 6) — [REQ-V060-08]
+- [ ] 19b `section()` skips fenced code and HTML comments, for Tiers, Guardrails and Evidence (advisory 7) — [REQ-V060-07]
+- [ ] 19c Docs: evidence assumes squash or merge commits; a rebase merge counts each commit (advisory 9) — [REQ-V060-08]
+- [ ] 19d `--evidence` flags a tier row whose name or globs changed inside the window, and counts a renamed tier's commits (advisory 10) — [REQ-V060-08]
+- [ ] 19e `--evidence` extends the window down to any commit a revert or `Fixes:` above the cut names (confirmation C1: an idle gap before backdated agent commits hides their reverts) — [REQ-V060-08]
+- [ ] 19f `--evidence` refuses a commit with an unparseable date with exit 2 and its sha, not a traceback (confirmation C2) — [REQ-V060-08]
+- [ ] 19g Every git call in `tiers.py` sets `GIT_NO_REPLACE_OBJECTS=1`, with a selftest row (confirmation C3: a `refs/replace` ref turns a breach into eligible) — [REQ-V060-05] [REQ-V060-08]
 
 ## Slice 4: the pipeline (release 0.9.0)
 

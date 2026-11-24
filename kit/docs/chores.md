@@ -19,6 +19,7 @@ scheduler's own failure mail or notification is the alert.
 Do not point a scheduler at your working copy: an uncommitted chore row, written by an agent or smuggled in through a
 prompt, would run unreviewed as you. Use a separate clean clone that only the scheduler touches (`git clone <url>
 /path/to/chores-clone`). Pull before each run with `git pull --ff-only`, so only reviewed rows run.
+This rule is row eight of the Guardrails table in `autonomy.md`: name your scheduler entry there and date it.
 
 Cron, every weekday at 07:00 (use an absolute path):
 

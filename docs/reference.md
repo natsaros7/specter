@@ -68,6 +68,7 @@ python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progr
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
 python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
+python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric); edits nothing
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -125,7 +126,7 @@ builds it.
 ## Autonomy profile (0.6.0)
 
 `.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
-Sections so far: Knowledge, Tiers, Chores. Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
+Sections: Knowledge, Tiers, Chores, Guardrails (0.8.0), Evidence (0.8.0). Without the file, the lint and the playbooks
 behave as in 0.5.0; the report always gains the In flight card. Setup asks about it in Q10.
 
 - **Knowledge.** A table of where the project keeps what an agent must know (router, steering, decisions, ADRs,
@@ -150,6 +151,27 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
   the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
   are in [`kit/docs/chores.md`](../kit/docs/chores.md).
+- **Guardrails (0.8.0).** A `| Guardrail | Enforced by | Verified |` table of what the platform enforces. The template
+  lists eight rows: protected default branch, the Gates as required checks, human review on `required` paths,
+  agent credentials that cannot approve or merge, agent permissions from the host's configuration, history and review
+  records agents cannot edit, agent jobs triggered by untrusted text run read-only and without secrets, and chores
+  from a clean clone. A row is declared when Enforced by names something (no `<placeholder>`, and not a word that
+  names nothing: `-`, `—`, `–`, `?`, `tbd`, `todo`, `n/a`, `na`, `none`, `pending`, in any case, a trailing `.` ignored)
+  and Verified is a `YYYY-MM-DD` date that is not in the future; "no such job, checked <how>" with a date counts. Until every row is declared, a tier whose Human
+  is `none` is labelled `spot`, and the `### Risk tier` block says `- guardrails: <m> of <n> undeclared, none → spot`.
+  `tiers.py --check` lists each row as declared or undeclared. Specter records the declaration; it probes nothing.
+- **Evidence (0.8.0).** A `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
+  table. `tiers.py --evidence` reads first-parent commits on `merged_ref` inside each tier's window, labels each with
+  the profile as of its parent, and counts per tier: merged, reverted (a later commit whose change set has
+  `This reverts commit <sha>` naming one of this commit's), escaped (the same with a `Fixes: <sha>` trailer) and
+  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; see
+  `kit/playbooks/sync.md` § Trailers). The window is by position: it runs from the tip down to the oldest commit dated
+  inside it, and every commit above that counts whatever its own date; a future date never sets it. Human-caught is a
+  rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
+  `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
+  max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
+  It edits nothing: raising a tier is a human edit of the profile, a guarded path. Still labels only: nothing merges
+  by itself until 0.9.0.
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.
 

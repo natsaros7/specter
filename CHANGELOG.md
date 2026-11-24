@@ -5,6 +5,51 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-23
+
+Slice 3 of staged autonomy: guardrails and evidence. The profile records what the platform enforces, and
+`tiers.py --evidence` says from merged history which tier has earned more autonomy. Still labels only: nothing
+merges on its own yet (that is slice 4). Re-run `install.sh` to get the new script version.
+
+### Added
+- Autonomy profile `## Guardrails`: `| Guardrail | Enforced by | Verified |`, eight template rows (protected default
+  branch, Gates as required checks, human review on `required` paths, agent credentials that cannot approve or merge,
+  agent permissions from the host's configuration, history and review records agents cannot edit, untrusted-text
+  agent jobs read-only and without secrets, chores from a clean clone). A row is declared when Enforced by names
+  something (not `-`, `—`, `–`, `?`, `tbd`, `todo`, `n/a`, `na`, `none` or `pending`, any case, trailing `.` ignored)
+  and Verified is a `YYYY-MM-DD` date that is not in the future. `tiers.py --check` lists each row.
+- Autonomy profile `## Evidence`: `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`,
+  shipped as placeholders (no tier is eligible until you set numbers; suggested numbers in a comment). A Max of `-`
+  is not checked.
+- `tiers.py --evidence [--json]`: reads first-parent commits on `merged_ref`, labels each with the profile as of its
+  parent, and prints per tier `eligible`, `hold (<why>)` or `breach (<metric> x% > y%)` with the counts. Reverted is a
+  later commit whose change set has `This reverts commit <sha>` naming one of this commit's; escaped the same with a
+  `Fixes: <sha>` trailer; human-caught a `Human-Findings: <n>` trailer above 0 or not plain digits, as a rate over the
+  merges that carry one (`human-caught <c> of <k> (<pct>%)`). The window is by position: from the tip down to the
+  oldest commit dated inside it, whatever the dates above it; a future date never sets it. Too few merges, placeholder
+  thresholds, fewer trailered merges than max(Min merged, 1) or a shallow clone is a hold, never a pass; a change set
+  git cannot read is exit 2. Commits whose parent has no profile are left out and counted. It edits nothing.
+- `kit/playbooks/sync.md` § Trailers and review-loop step 5: write `Human-Findings: <n>` on every merge (`0` when
+  none) and `Fixes: <sha>` on a fix for an escaped defect.
+- acme-shop declares all eight guardrails and sets evidence thresholds. Selftest case 13c (guardrails, evidence).
+
+### Changed
+- A tier whose Human is `none` is labelled `spot` while any guardrail row is undeclared or the section is missing;
+  the `### Risk tier` block adds `- guardrails: …` (`, none → spot` when downgraded) and `--json` a `guardrails`
+  object. A 0.7.0 profile without Guardrails therefore labels `none` tiers as `spot`; `ready.py` reports the same.
+- Setup Phase 5 keeps Guardrails and Evidence; it fills a guardrail row only with what the user names, and dates it.
+- `kit/docs/chores.md` points to guardrail row eight.
+
+### Known limits (`shortcut:` in code and design)
+- Guardrails are declared, never probed: specter cannot see branch protection or CI permissions.
+- `--evidence` runs one git log and labels each commit separately, no cache; slow on windows of thousands of merges.
+  `Human-Findings:` and `Fixes:` are read as written; their honesty is the human's and the platform's review record.
+  `Fixes:` and reverts match any commit a merge brought in. A recently dated commit deep in history widens the window
+  down to it (merged history is guardrail row one's to protect).
+- Open from the confirmation review (tasks 19e-19g): a `refs/replace` ref in the clone can hide a revert, so run
+  `--evidence` in a clone without `refs/replace/*`; a commit with an unparseable date crashes it (exit 1); after an idle
+  gap of a full window, the oldest backdated commits in the window can drop out with their reverts.
+
 ## [0.7.0] - 2026-11-22
 
 Slice 2 of staged autonomy: every change gets a risk tier and one readiness verdict, and reviews follow a contract.
