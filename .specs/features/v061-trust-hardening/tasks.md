@@ -14,7 +14,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [ ] 10 Readable reason for an undecodable profile (v060 23c) (#12) — [REQ-V061-02]
 - [ ] 11 Approver identity out of reach of the PR's jobs (v060 23d) (#13) — [REQ-V061-03]
 - [ ] 12 Approve and merge the checked sha only (v060 23e) (#14) — [REQ-V061-03]
-- [ ] 13 Refuse a symref to a `.../HEAD` ref; full ids at the repo's hash length only (final review D1, D2) (#15) — [REQ-V061-04]
+- [x] 13 Refuse a symref to a `.../HEAD` ref; full ids at the repo's hash length only (final review D1, D2) (#15) — [REQ-V061-04]
 - [ ] 14 A refused `origin/HEAD` fallback says why; v060's evidence amendment states the symref rule (D3, D4) (#16) — [REQ-V061-04]
 - [ ] 15 Refuse a ref with a case-folded twin or an unlisted symref target (a pushed `MAIN` shadows `origin/main` on APFS) (#17) — [REQ-V061-04]
 - [ ] 16 Gate G1-G4, deep review, CHANGELOG, release (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04]

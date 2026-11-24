@@ -367,6 +367,8 @@ def branch_ref(path, name):
         return None, name + " is ambiguous (" + ", ".join(hits) + ")"
     if hits and not (ok(hits[0]) and (not found[hits[0]] or ok(found[hits[0]]))):
         return None, name + " is " + ("a tag" if hits[0].startswith("refs/tags/") else "not a branch or remote-tracking ref") + " (" + hits[0] + ")"
+    if hits and found[hits[0]].endswith("/HEAD"):  # a symref to another HEAD ref is no remote's default branch
+        return None, name + " points at " + found[hits[0]] + ", another HEAD ref"
     # a pushed branch named HEAD lands as a plain refs/remotes/<remote>/HEAD: only a symref is the remote's default branch
     if hits and hits[0].startswith("refs/remotes/") and hits[0].endswith("/HEAD") and not found[hits[0]]:
         return None, name + " is not a symbolic ref (" + hits[0] + ": a branch named HEAD?)"

@@ -787,6 +787,12 @@ out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$ou
 rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e C1: a branch named HEAD gave auto-merge (exit $rc): $out"
 # C2: a short sha as a range end goes through git's ref lookup (a loose tag can shadow it on a case-insensitive disk): full ids only
 rc=0; out=$(cl --range "$(git -C "$C" rev-parse --short "$MB")...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e C2: a short sha range end was read (exit $rc): $out"
+# D1: a symref to another .../HEAD ref (itself a plain pushed branch) is not a remote's default branch
+SIDE=$(git -C "$C" rev-parse refs/remotes/origin/HEAD); gitq -C "$C" update-ref refs/remotes/up2/HEAD "$SIDE"; gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/up2/HEAD
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence:" || fail "13e D1: origin/HEAD symref to another HEAD ref gave auto-merge (exit $rc): $out"
+# D2: a 64-hex end in a SHA-1 repo reads as a ref, not as a full id
+A64=$(printf 'a%.0s' $(seq 1 64)); gitq -C "$C" update-ref "refs/heads/$A64" "$SIDE"
+rc=0; out=$(cl --range "$A64...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e D2: a 64-hex end resolved in a SHA-1 repo (exit $rc): $out"
 
 # N2: under --auto-merge every warning is a no: no human is there to read it
 xmk n2 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1

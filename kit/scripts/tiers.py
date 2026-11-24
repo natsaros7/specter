@@ -293,13 +293,17 @@ def end_commit(root, end):
     would resolve a tag `origin/main` before the remote, and a short sha goes through the same ref lookup (a loose tag
     `C282714` shadows `c282714` on a case-insensitive disk), moving the base or the head."""
     name = end
-    if end != "HEAD" and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", end):
+    full = re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", end)
+    if end != "HEAD" and not full:
         name, why = spec_lint.branch_ref(root, end)
         if why:
             raise ValueError("--range end " + why)
         if not name:
             raise ValueError("--range end " + end + " is not a branch, a remote-tracking ref, HEAD or a full commit id")
-    return git(root, "rev-parse", "--verify", "-q", (name or end) + "^{commit}")
+    sha = git(root, "rev-parse", "--verify", "-q", (name or end) + "^{commit}")
+    if full and sha and sha != end:  # a 64-hex ref in a SHA-1 repo, or a tag id that peels
+        raise ValueError("--range end " + end + " is not a full commit id of this repository")
+    return sha
 
 
 def classify(root, rel, rng, specs=None, where=None):
