@@ -2,7 +2,7 @@
 
 Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in brackets.
 
-- [ ] 1 `--evidence` thresholds from the profile at the `merged_ref` tip, and print its commit (v060 19a) (#3) — [REQ-V061-01]
+- [x] 1 `--evidence` thresholds from the profile at the `merged_ref` tip, and print its commit (v060 19a) (#3) — [REQ-V061-01]
 - [ ] 2 `section()` skips fenced code and HTML comments (v060 19b) (#4) — [REQ-V061-01]
 - [ ] 3 Docs: evidence assumes squash or merge commits (v060 19c) (#5) — [REQ-V061-01]
 - [ ] 4 Count a commit only under its tier's current row; the rest on a `relabelled` line (v060 19d) (#6) — [REQ-V061-01]

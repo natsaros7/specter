@@ -705,6 +705,8 @@ out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: spot" && echo "$ou
 rc=0; out=$(xrd gpt-5-1 '' --json) || rc=$?; printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]["human"]=="spot" and d["tier"]["human_why"].startswith("evidence: hold (merged 2 < min 20)"), d' || fail "13e B2: ready.py took the working-tree threshold: $out"
 gitq -C "$R" add -A; gitq -C "$R" commit -m "lower the bar"
 out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: required" || fail "13e B2: a committed threshold edit is not guarded: $out"
+# v061 task 1: --evidence reads thresholds at the merged_ref tip, never the working tree, and prints that commit
+out=$(xl --evidence); echo "$out" | grep -q "routine: hold (merged 2 < min 20)" && echo "$out" | grep -qF -- "- profile: $AP at $(git -C "$R" rev-parse --short trunk), unchanged;" || fail "13e v061-1: --evidence took the working-tree threshold or omitted the tip commit: $out"
 
 # B3: merged_ref null and no origin/HEAD resolves to HEAD, the PR head: its own commits must not count
 xmk b3 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3
@@ -810,7 +812,9 @@ el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "
 AP="$D/.specs/steering/autonomy.md"; n=0
 TD='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 EVH='\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |\n|---|---|---|---|---|---|\n'
-ev() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TD" "$1" > "$AP"; }
+ev() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TD" "$1" > "$AP"
+  # --evidence reads the profile at the tip, so a changed, already tracked profile is committed (it is a guarded path: critical)
+  gitq -C "$D" diff --quiet -- "$AP" || { gitq -C "$D" add "$AP"; gitq -C "$D" commit -q -m "profile edit"; }; }
 mk() { d=$1; shift; n=$((n+1)); echo $n > "$D/$d/f$n"; gitq -C "$D" add "$d"; gitq -C "$D" commit -q "$@"; }
 sha() { git -C "$D" rev-parse HEAD; }
 printf '{"merged_ref": "HEAD"}' > "$D/.specs/spec-kit.json"
@@ -842,7 +846,7 @@ out=$(el) && echo "$out" | grep -q "domain: hold (merged 6 < min 100)" || fail "
 # demote: a breached tier names its profile row and one step stricter; eligible and hold print nothing; the profile is untouched
 mkdir -p "$D/src/security"; mk src/security -m k1; K1=$(sha | cut -c1-7); mk src/security -m k2 -m "Fixes: $K1"
 ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | 90 | 1 | - | 10 | - |\n"; cp "$AP" "$TMP/ap.copy"
-AR=.specs/steering/autonomy.md; out=$(el); echo "$out" | grep -q "critical: breach (escaped 50.0% > 10%)" || fail "13c demote: critical fixture is not in breach: $out"
+AR=.specs/steering/autonomy.md; out=$(el); echo "$out" | grep -q "critical: breach (escaped 20.0% > 10%)" || fail "13c demote: critical fixture is not in breach: $out"
 echo "$out" | grep -qxF "  demote: $AR:6 Human none → spot (a human edit; tiers.py changes nothing)" || fail "13c demote: none → spot: $out"
 echo "$out" | grep -qxF "  demote: $AR:7 Human spot → required (a human edit; tiers.py changes nothing)" || fail "13c demote: spot → required: $out"
 echo "$out" | grep -qxF "  demote: $AR:8 Human required: already required" || fail "13c demote: required: $out"
@@ -859,7 +863,7 @@ assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}${EV1}"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["merged"]==5 and t["domain"]["merged"]==6, t' || fail "13c evidence: working-tree table relabelled history: $js"
 TD='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
-bad() { ev "$2"; rc=0; out=$(el) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md:[0-9]*: $3" || fail "13c evidence: $1 (exit $rc, want 2 and '$3'): $out"; }
+bad() { ev "$2"; rc=0; out=$(el) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: $3" || fail "13c evidence: $1 (exit $rc, want 2 and '$3'): $out"; }
 bad "bad header" '\n## Evidence\n| Tier | Days |\n|---|---|\n| routine | 90 |\n' "header must be"
 bad "bad window" "${EVH}| routine | abc | 3 | 10 | 20 | - |\n" "Window"
 bad "zero window" "${EVH}| routine | 0 | 3 | 10 | 20 | - |\n" "Window"

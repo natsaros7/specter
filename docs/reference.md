@@ -167,7 +167,8 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   is `none` is labelled `spot`, and the `### Risk tier` block says `- guardrails: <m> of <n> undeclared, none → spot`.
   `tiers.py --check` lists each row as declared or undeclared. Specter records the declaration; it probes nothing.
 - **Evidence (0.8.0).** A `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
-  table. `tiers.py --evidence` reads first-parent commits on `merged_ref` inside each tier's window, labels each with
+  table. `tiers.py --evidence` reads its thresholds from the profile at the `merged_ref` tip, never the working tree, and prints
+  that commit; it reads first-parent commits on `merged_ref` inside each tier's window, labels each with
   the profile as of its parent, and counts per tier: merged, reverted (a later commit whose change set has
   `This reverts commit <sha>` naming one of this commit's), escaped (the same with a `Fixes: <sha>` trailer) and
   human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; see
@@ -176,8 +177,8 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
   `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
   max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
-  Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the working-tree
-  profile (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
+  Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the profile
+  at the `merged_ref` tip (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
   (`{file, line, from, to}`, or null off breach). It edits nothing: demoting or raising a tier is a human edit of the
   profile, a guarded path.
 - **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the

@@ -37,7 +37,7 @@ merged_ref …`), and so it does when that history holds any commit of the chang
 A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
---evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
+--evidence prints, per tier of the Tiers table at the merged_ref tip (never the working tree; it prints that commit), `eligible`, `hold (<why>)` or `breach (<metric>)` from the
 `## Evidence` table `| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |`
 (a Max of `-` is not checked; a row that keeps a <placeholder> is `hold (thresholds not set)`). It reads the first-parent
 commits on merged_ref (as the label's staged mode finds it) inside each tier's window, by position: from the tip down to
@@ -446,19 +446,8 @@ def findings(body):
 
 
 def evidence(root, rel, specs, profile, as_json, text=None):
-    """Print the Evidence report for the working-tree profile (or `text`, the profile as of the label's base); return the
-    exit code. Never writes anything."""
-    try:
-        text = profile.read_text() if text is None else text
-        tiers = parse_tiers(text)
-        names = [r[0] for r in tiers or []]
-        ev = parse_evidence(text, names)
-    except OSError:
-        return refuse("no " + str(profile) + ": nothing to count")
-    except ValueError as err:
-        return refuse(str(profile) + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
-    if tiers is None:
-        return refuse("no Tiers section in " + str(profile) + ": nothing to count")
+    """Print the Evidence report for the profile at the merged_ref tip (or `text`, the profile as of the label's base);
+    return the exit code. Never reads the working tree, never writes anything."""
     try:
         ref, why = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
     except ValueError as err:
@@ -468,6 +457,23 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     head = git(root, "rev-parse", "--verify", "-q", ref + "^{commit}") if ref else None
     if not head:
         return refuse("no merged_ref, refs/remotes/origin/HEAD or HEAD resolves in " + str(root))
+    src = str(profile)  # the label passes the base's text; otherwise the thresholds are the merged_ref tip's, never the working tree
+    if text is None:
+        src = rel + " at " + head[:7]
+        try:
+            text = profile_at(root, head, rel)
+        except ValueError as err:
+            return refuse(str(err))
+        if text is None:
+            return refuse("no " + rel + " at " + ref + " " + head[:7] + ": nothing to count")
+    try:
+        tiers = parse_tiers(text)
+        names = [r[0] for r in tiers or []]
+        ev = parse_evidence(text, names)
+    except ValueError as err:
+        return refuse(src + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+    if tiers is None:
+        return refuse("no Tiers section in " + src + ": nothing to count")
     now = time.time()
     longest = max([r[0] for r in (ev or {}).values() if r] or [90])
     # commits below the depth, and their reverts, are missing; only an explicit "false" counts as full (git < 2.15 echoes the flag)
@@ -554,7 +560,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     print("### Evidence")
     print("- history: " + ref + " at " + head[:7] + ", first-parent, " + ("shallow clone, not read" if shallow else str(inwin) + " commit(s) in the longest window"))
     if ev is None:
-        print("- no Evidence section in " + str(profile))
+        print("- no Evidence section in " + src)
     for name, m in out.items():
         pc = lambda k, d="merged": str(m[k]) + (" of %d" % m[d] if d != "merged" else "") + (" (%.1f%%)" % (m[k] * 100.0 / m[d]) if m[d] else "")
         print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
@@ -565,7 +571,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
                   + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
-    print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
+    print("- profile: " + src + ", unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
     return 0
 
