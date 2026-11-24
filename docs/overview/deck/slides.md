@@ -16,7 +16,7 @@ Specs that don't go stale. A spec-first workflow for any AI coding agent.
 
 <div class="pt-6 opacity-70">
 
-Release 0.8.0 shipped · 0.9.0 in progress · Python 3.8+, stdlib only, no service
+Release 0.9.0 shipped · 0.10.0 in progress · Python 3.8+, stdlib only, no service
 
 </div>
 
@@ -96,7 +96,7 @@ Run on the acme-shop example at release 0.8.0.
 
 ---
 
-# The trust layer (0.8.0)
+# The trust layer (diagram drawn at 0.8.0)
 
 <img src="/diagrams/trust-layer.svg" class="mx-auto" style="width: 900px; margin-top: 6px" />
 
@@ -203,13 +203,13 @@ Demo history: ten commits with `Human-Findings:` trailers and one `git revert`. 
 
 <img src="/diagrams/roadmap.svg" class="mx-auto" style="height: 400px; margin-top: 6px" />
 
-<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.8.0. Planned: 0.9.0. Candidates: v070. Stage 5 is out of scope.</div>
+<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.9.0. In progress: 0.10.0. Candidates: v070. Stage 4 is built but off; stage 5 is later, a separate layer after stage 4 runs live.</div>
 
 ---
 
-# What 0.9.0 adds (planned, not shipped)
+# What 0.9.0 added (shipped; `none` is off)
 
-Slice 4 of the staged-autonomy feature. Tasks 21 to 23 are open on the `feat/0.9.0` branch.
+Slice 4 of the staged-autonomy feature. The `none` setting is built but stays off until it is verified on a live host; today every change still gets a human check.
 
 | Piece | What it does |
 |---|---|
@@ -218,6 +218,17 @@ Slice 4 of the staged-autonomy feature. Tasks 21 to 23 are open on the `feat/0.9
 | Fix-round cap | two fix rounds per task, then the human gets both outputs; `ready.py` checks `rounds:` |
 | Demotion on breach | `--evidence` prints the profile line to tighten; a human edits it |
 | `pipeline.md` | triage, implement, review, merge: what each hands on, when the human enters |
+
+---
+
+# What 0.10.0 is doing (in progress)
+
+v061 trust hardening: every deep review of the trust layer found a way to reach `none` without a human, so this release closes the known paths and makes them reportable.
+
+- ref and evidence fixes (a pushed `MAIN` could shadow `origin/main` on a case-insensitive disk)
+- `SECURITY.md`: report a bypass privately
+- README rewrite along its research, with a mechanical check (`tests/readme_check.py`)
+- a faster, deterministic selftest
 
 ---
 
@@ -235,9 +246,9 @@ Slice 4 of the staged-autonomy feature. Tasks 21 to 23 are open on the `feat/0.9
 </div>
 <div>
 
-### Out of scope
+### Not in the kit
 
-- Kiro's stage 5, a coordinating agent
+- Kiro's stage 5, a coordinating agent: later, a separate layer after stage 4 runs live
 - a queue, scheduler, orchestrator or merge bot in the kit
 - classifying a change by content: tiers go by path
 - live platform APIs; specter stays offline

@@ -124,7 +124,7 @@ factory slices are tested on. Its README covers the build (JDK 21) and the sandb
 `install.sh`, commit, then hand an agent one of the seed tasks. Specter's optional gate G5 (`sh tests/acme-build.sh`)
 builds it.
 
-## Autonomy profile (0.6.0)
+## Autonomy profile
 
 `.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
 Sections: Knowledge, Tiers, Chores, Guardrails (0.8.0), Evidence (0.8.0). Without the file, the lint and the playbooks
@@ -225,3 +225,17 @@ cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: re
 
 The installed version is in `.specs/kit/VERSION`. The `spec-kit.json` the installer creates records the first-install version in `kit_version`; it is never rewritten afterwards, and an existing config is never touched. Changes are listed in [`CHANGELOG.md`](../CHANGELOG.md).
 Self-test, run locally: `tests/selftest.sh`.
+
+## Questions moved from the README
+
+**Which model should run setup?** Your strongest: setup reads the whole codebase and writes the Drift Register, where a
+shallow read costs most. In the maintainer's trial on one app, a fast model produced a correct but shallow map; no data
+from that trial is kept, so treat it as an impression. Day-to-day tasks are fine on a mid-tier model
+([`kit/docs/model-routing.md`](../kit/docs/model-routing.md)).
+
+**Does it need Claude?** No. Everything is markdown and stdlib Python.
+
+**Can I stop it nagging?** Set `"spec_sync": "off"` in `.specs/spec-kit.json`, or `"block"` to make the hook refuse
+commits.
+
+**What does it cost?** Nothing to run: no service, no CI to pay for. Your agent's usage is billed by its vendor.

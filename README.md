@@ -2,34 +2,35 @@
 
 <h1 align="center">specter</h1>
 
-<p align="center"><b>Specs that don't go stale.</b> A spec-first workflow for <i>any</i> AI coding agent.</p>
+<p align="center"><b>A spec-first workflow for AI coding agents on existing codebases, with a lint that fails when a citation is wrong.</b></p>
 
 <p align="center">
-  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
-  <a href="CHANGELOG.md"><img alt="version" src="https://img.shields.io/github/v/release/natsaros7/specter"></a>
-  <img alt="Python 3.8+ stdlib only" src="https://img.shields.io/badge/python-3.8%2B%20stdlib%20only-informational">
-  <img alt="agents" src="https://img.shields.io/badge/works%20with-Codex%20·%20Claude%20Code%20·%20Cursor%20·%20Copilot%20·%20Gemini-555">
+  <a href="LICENSE"><img alt="license: MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+  <a href="CHANGELOG.md"><img alt="latest tag" src="https://img.shields.io/github/v/tag/natsaros7/specter"></a>
 </p>
 
 AI agents write specs that sound right and cite code that doesn't exist. Specter makes them cite `path:line` for every
-claim, and a plain Python lint fails the build when a citation points at a missing file or a line that isn't there.
-It is built for codebases that already exist: setup reads your code, writes as-built docs, and logs what doesn't
-match in a dated Drift Register instead of hiding it.
+claim, and a stdlib Python lint fails the build when a citation names a missing file or a line that isn't there. It is
+for codebases that already run: setup reads your code, writes as-built docs, and logs what doesn't match in a dated
+Drift Register. Since 0.7 it also labels each change by risk and says when a human must look.
 
 <p align="center"><img src="docs/assets/lint-demo.svg" alt="The lint checks three citations an agent wrote: one is valid, one points past the end of the file, one names a file that doesn't exist. Exit code 1." width="100%"></p>
 
 ## Try it in 2 minutes, no install
 
+You need `git` and Python 3.8+. Nothing is installed and nothing leaves your machine.
+
 ```bash
 git clone https://github.com/natsaros7/specter.git ~/tools/specter && cd ~/tools/specter
-python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs    # structure and REQ traceability
-python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites    # citations resolve: passes
-python3 kit/scripts/spec_lint.py --specs examples/cite-demo/.specs --cites    # fails on purpose, exit 1
-python3 kit/scripts/spec_report.py --specs examples/acme-shop/.specs --out /tmp/report.html && open /tmp/report.html
+python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs                 # exit 0: structure and REQ traceability
+python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites         # exit 0: every citation resolves
+python3 kit/scripts/spec_lint.py --specs examples/cite-demo/.specs --cites         # exit 1, on purpose: broken citations
+python3 kit/scripts/spec_report.py --specs examples/acme-shop/.specs --out /tmp/report.html
+python3 -m webbrowser file:///tmp/report.html                                      # any OS with a browser
 ```
 
-[`examples/acme-shop/.specs/`](examples/acme-shop/.specs/README.md) is a full spec tree for a fictional shop. The
-citations resolve against its real code. [`examples/cite-demo/`](examples/cite-demo/) is a tiny fixture whose citations break, so you can see a failure. The report looks like this:
+[`examples/acme-shop/.specs/`](examples/acme-shop/.specs/README.md) is a full spec tree for a fictional shop; its
+citations resolve against real code. [`examples/cite-demo/`](examples/cite-demo/) is a fixture whose citations break.
 
 <p align="center"><img src="docs/assets/report.png" alt="spec report: features with progress, open drift with age, lint and citation counts" width="80%"></p>
 
@@ -42,25 +43,15 @@ Follow ~/tools/specter/GO.md for this project.
 ```
 
 The agent looks at the project, says what it would set up, and asks before changing anything. It then asks a few
-questions (`ok` accepts every default) and writes the specs. Expect about 20 minutes, mostly the agent reading code.
-Commit `.specs/` afterwards; teammates get it with the repo and never need specter itself.
+questions (`ok` accepts every default) and writes the specs; most of the time goes to the agent reading code. Commit
+`.specs/`; teammates get it with the repo and never need specter itself.
 
 <p align="center"><img src="docs/assets/go-flow.svg" alt="Paste one line; the agent looks, proposes, installs on your yes, interviews you, and generates the specs" width="100%"></p>
 
-Without AI: `~/tools/specter/install.sh ~/code/my-project` (add `--dry-run` to see every path first).
+Without AI: `~/tools/specter/install.sh ~/code/my-project` (add `--dry-run` to see every path first). Your project
+already has specs? See [the reference](docs/reference.md#adding-specter-to-a-project-that-already-has-specs).
 
-## How it compares
-
-| | [Spec Kit](https://github.com/github/spec-kit) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Kiro](https://kiro.dev) | **specter** |
-|---|---|---|---|---|
-| Form | CLI (`uv`, Python 3.11+) | CLI (npm, brew…) | IDE | Markdown + stdlib Python scripts, copied into `.specs/` |
-| Starts from | A new feature idea | A change proposal | A prompt in the IDE | Your existing code: setup writes as-built docs first |
-| Specter adds | | | | Lint-checked `path:line` citations, a Drift Register, `UNKNOWN` instead of guesses, a pre-commit hook that warns when code changes without its spec |
-
-If you start a greenfield project and want a big community, Spec Kit or OpenSpec are the safer pick. Specter is for
-a system that already runs, where the docs have drifted and you want the agent's claims checked.
-
-## Every change, the same loop
+## What it does on every change
 
 <p align="center"><img src="docs/assets/daily-loop.svg" alt="Spec, task, gate, review, sync loop" width="100%"></p>
 
@@ -73,10 +64,48 @@ Say these to your agent. With the skill installed, `/spec-first …` (Claude Cod
 | **"Sync specs, <feature> landed"** | Marks it done, folds the change into the as-built `domains/` docs, updates traceability and drift |
 | **"Refresh the specs"** | Re-reads the latest code and logs new drift |
 
-Small changes (one file, no contract change) skip the spec and go straight to code. The rules behind all this are in
-[`PHILOSOPHY.md`](PHILOSOPHY.md), and [`kit/docs/spec-driven.md`](kit/docs/spec-driven.md) explains the method on one
-page. To run spec health on a schedule (cron, launchd or CI), see [`kit/docs/chores.md`](kit/docs/chores.md). For the stages from triage to merge and when a human enters, see
-[`kit/docs/pipeline.md`](kit/docs/pipeline.md).
+Small changes (one file, no contract change) skip the spec and go straight to code.
+
+### The trust layer
+
+Alongside the loop, three things run offline against your own profile, `.specs/steering/autonomy.md`:
+
+1. **A risk label per change**: `tiers.py` gives each file the lowest tier whose glob matches, and the change its strictest file.
+2. **A rule for when a human must look**: `ready.py` reads the PR text (gates, review, verification) and says `ready` or not. The tier sets the human check: `required`, `spot` or `none`.
+3. **Autonomy earned from merged history**: `tiers.py --evidence` counts merged, reverted, escaped and human-caught changes per tier and says `eligible`, `hold` or `breach`. It edits nothing.
+
+<p align="center"><img src="docs/overview/workflow.svg" alt="Spec-first workflow: GO, install, setup interview, then spec, implement, gates, review, human check, sync" width="100%"></p>
+<p align="center"><img src="docs/overview/trust-layer.svg" alt="Trust layer: tiers and guardrails give a label; gates, review and verification feed a readiness verdict; evidence flows back from merged history" width="100%"></p>
+
+Real output from the acme-shop example, captured at 0.8.0 (the raw text sits beside each image; the recipe is in
+[`docs/overview/`](docs/overview/README.md)):
+
+<p align="center"><img src="docs/overview/screenshots/02-tiers-staged.png" alt="tiers.py labels a staged pom.xml change critical" width="80%"><br><a href="docs/overview/screenshots/02-tiers-staged.txt">raw text</a></p>
+<p align="center"><img src="docs/overview/screenshots/05-ready.png" alt="ready.py reads a PR text and prints a readiness verdict" width="80%"><br><a href="docs/overview/screenshots/05-ready.txt">raw text</a></p>
+<p align="center"><img src="docs/overview/screenshots/06-evidence.png" alt="tiers.py --evidence: routine eligible, domain breach, critical hold" width="80%"><br><a href="docs/overview/screenshots/06-evidence.txt">raw text</a></p>
+
+## Decisions
+
+- Markdown and stdlib Python only: no service, no lock-in, nothing to pay for.
+- Citations are checked by a lint, not by trust in the agent.
+- Risk is read from paths and from the base commit, never from the change under review, so a change cannot rewrite its own rules.
+- No orchestrator or merge bot in the kit; the platform merges.
+- `human: none` is earned from merged history, per tier, and a human edits the profile to grant it.
+
+The full list is in [the reference](docs/reference.md#decisions-names-deploy-impact-gates); the method in
+[`PHILOSOPHY.md`](PHILOSOPHY.md).
+
+## How it compares
+
+| | [Spec Kit](https://github.com/github/spec-kit) | [OpenSpec](https://github.com/Fission-AI/OpenSpec) | [Kiro](https://kiro.dev) | **specter** |
+|---|---|---|---|---|
+| Form | CLI (`uv`, Python 3.11+) | CLI (npm, brew…) | IDE | Markdown + stdlib Python scripts, copied into `.specs/` |
+| Starts from | A new feature idea | A change proposal | A prompt in the IDE | Your existing code: setup writes as-built docs first |
+| Specter adds | | | | Lint-checked `path:line` citations, a Drift Register, `UNKNOWN` instead of guesses, risk labels and a readiness verdict, a pre-commit hook that warns when code changes without its spec |
+
+Forms as read on 2026-11-25 ([notes](docs/research/2026-11-25-readme.md)). Pick Spec Kit or OpenSpec for a greenfield
+project or a large community, Kiro if you want the IDE. Specter fits a system that already runs, where the docs have
+drifted and you want the agent's claims checked.
 
 ## Supported agents
 
@@ -92,46 +121,41 @@ The installer wires the agents your project already uses (`.claude/`, `.codex/`,
 | Antigravity (`agy`) | `AGENTS.md` | `.agents/skills/spec-first/` | best-effort |
 | Anything else | `AGENTS.md` | — | Paste "Follow `.specs/kit/playbooks/…`" |
 
-## Adding specter to a project that already has specs
+## Limits: when not to use specter
 
-Run `./install.sh ~/code/my-project --dry-run`, then without `--dry-run`. When `.specs/` already holds specs and no
-kit, the installer adopts them: it adds `.specs/kit/` and the agent marker blocks, changes none of your specs, and
-installs no git hook unless you pass `--hook`. Then set `tracker_pattern` and `merged_ref` in `.specs/spec-kit.json`.
-Details in [the reference](docs/reference.md#adding-specter-to-a-project-that-already-has-specs).
+- **`human: none` is built but off.** No repository runs it; it stays off until it is verified on a live host. Today
+  every change still gets a human check. Each of ten review rounds in [`docs/reviews/`](docs/reviews/) found a way to
+  reach `none` without a human; those were fixed, and the reports are public.
+- **The GitLab recipe is an untested sketch**, and the GitHub one has not run live
+  ([`kit/docs/review-loop.md`](kit/docs/review-loop.md)).
+- **Stage 5 is not in the kit.** There is no coordinating agent, queue, scheduler or merge bot, and no plan to add one
+  before stage 4 runs live ([roadmap](docs/overview/README.md)).
+- **The trust layer is not a security boundary.** It guards the profile (read at the base commit) and the evidence
+  (read from merged history). It does not stop an agent with push rights, a repo that disables the hook, or tiers
+  you set wrong.
+- **Four of the six listed agents are best-effort** (table above). The installer wires them, but only Codex and
+  Claude Code are checked.
+- **Data:** specter sends nothing anywhere. Your agent reads your repo as it always does.
 
-## Autonomy profile
+## Security
 
-Add `.specs/steering/autonomy.md` to tell agents where your project keeps its knowledge and which checks to run on a
-schedule. A `lessons.md` next to it collects corrections so a repeated one becomes a rule. Its Tiers table labels
-each change by risk (`tiers.py`, `ready.py`); Guardrails records what your platform enforces, and Evidence lets
-`tiers.py --evidence` say from merged history which tier has earned more autonomy. Details in
-[the reference](docs/reference.md#autonomy-profile-060).
+Report a bypass of the human check privately: see [`SECURITY.md`](SECURITY.md). The installer writes `.specs/kit/`,
+marker blocks in agent files and, only with `--hook`, a pre-commit hook. `install.sh <project> --dry-run` lists every
+path first and `--uninstall` removes what it wrote.
 
-## Reference
+## Docs
 
-[`docs/reference.md`](docs/reference.md) covers the spec tree layout, the planner/generator/reviewer roles and model
-routing, every script, all `spec-kit.json` keys, decisions and denylist, upgrade and uninstall. Changes are in
-[`CHANGELOG.md`](CHANGELOG.md).
-
-## FAQ
-
-**Which model should run setup?** Your strongest. On the same app, a frontier model found twice the verified
-citations and real code hazards for the Drift Register; a fast model produced a correct but shallow map. Day-to-day
-tasks are fine on a mid-tier model.
-
-**Does it need Claude?** No. Everything is markdown and stdlib Python.
-
-**Does anything leave my machine?** Specter sends nothing anywhere. Your agent reads your repo as it always does.
-
-**Can I stop it nagging?** Set `"spec_sync": "off"` in `.specs/spec-kit.json`, or `"block"` to make the hook refuse
-commits.
-
-**What does it cost?** Nothing. No service, no CI to pay for.
+[`docs/reference.md`](docs/reference.md) has the spec tree, roles, every script, all `spec-kit.json` keys, the autonomy
+profile, upgrade and uninstall, and short answers (model choice, cost, silencing the hook). The method is in
+[`kit/docs/spec-driven.md`](kit/docs/spec-driven.md), the stages from triage to merge in
+[`kit/docs/pipeline.md`](kit/docs/pipeline.md), scheduled spec health in [`kit/docs/chores.md`](kit/docs/chores.md),
+diagrams and the deck in [`docs/overview/`](docs/overview/README.md), dated research in
+[`docs/research/`](docs/research/README.md), changes in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contributing
 
 Issues and PRs are welcome. Every change passes the gates in [`AGENTS.md`](AGENTS.md#working-on-specter-itself);
-`sh tests/selftest.sh` runs them offline.
+`sh tests/selftest.sh` runs them offline. Specter is built with specter: its own specs are in [`.specs/`](.specs/).
 
 ## License and credits
 

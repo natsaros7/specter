@@ -1,6 +1,6 @@
 # Visual overview
 
-Diagrams, screenshots from real runs, and a slide deck for specter. Release 0.8.0 is shipped. 0.9.0 is in progress and drawn as planned.
+Diagrams, screenshots from real runs, and a slide deck for specter. Releases 0.6.0 to 0.9.0 are shipped; 0.10.0 (v061 trust hardening) is in progress. Stage 4 is built but off: the `none` human setting stays off until it is verified live.
 
 ## Diagrams
 
@@ -8,13 +8,13 @@ Diagrams, screenshots from real runs, and a slide deck for specter. Release 0.8.
 
 `workflow.svg`: the one-time setup and the loop every change follows.
 
-![Trust layer at 0.8.0: tiers and guardrails give a label, gates, review and verification feed a readiness verdict, evidence flows back from merged history](trust-layer.svg)
+![Trust layer (drawn at 0.8.0): tiers and guardrails give a label, gates, review and verification feed a readiness verdict, evidence flows back from merged history](trust-layer.svg)
 
-`trust-layer.svg`: how a change is judged today, and how merged history reports which tier earned more autonomy.
+`trust-layer.svg`: how a change is judged, and how merged history reports which tier earned more autonomy. Drawn at 0.8.0; it does not yet show the 0.9.0 human values `required`, `spot` and `none`.
 
-![Kiro stage ladder with specter's releases: 0.6.0 to 0.8.0 shipped, 0.9.0 planned, v070 candidates, stage 5 out of scope](roadmap.svg)
+![Kiro stage ladder with specter's releases: 0.6.0 to 0.9.0 shipped, 0.10.0 in progress, stage 4 built but off, v070 candidates, stage 5 later](roadmap.svg)
 
-`roadmap.svg`: shipped, planned and candidate work against the Kiro five-stage ladder.
+`roadmap.svg`: shipped, in-progress and candidate work against the Kiro five-stage ladder. Stage 5 is a later, separate layer, to start after stage 4 runs live.
 
 ## Screenshots
 
@@ -40,7 +40,7 @@ Sandbox changes you should know about, since the screenshots depend on them:
 
 ## Deck
 
-[`deck/slides.md`](deck/slides.md) is a Slidev source (14 slides). The exported [`deck/specter-overview.pdf`](deck/specter-overview.pdf) is included.
+[`deck/slides.md`](deck/slides.md) is a Slidev source (15 slides). [`deck/specter-overview.html`](deck/specter-overview.html) is the hand-built deck. The exported [`deck/specter-overview.pdf`](deck/specter-overview.pdf) is **stale** (it shows 0.8.0 and 0.9.0 as planned); the release re-exports it, which needs npm and network.
 
 ```bash
 cd docs/overview/deck && npm install
