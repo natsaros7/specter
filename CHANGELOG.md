@@ -5,6 +5,21 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-21
+
+First slice of staged autonomy, set per repository. Without `steering/autonomy.md`, the lint and playbooks behave as in 0.5.0; the report always gains the In flight card.
+
+### Added
+- `kit/templates/steering/autonomy.md` with a Knowledge table (a `Read` column: `start` rows are read first) and a Chores table, and `kit/templates/steering/lessons.md` for one dated line per correction.
+- Chores run with `gates.py --file .specs/steering/autonomy.md`; `kit/docs/chores.md` has cron, launchd and CI schedule recipes.
+- `spec_report.py`: an In flight card from worktrees and unmerged branches.
+- Setup question Q10 for Knowledge and Chores. Example `autonomy.md` and `lessons.md` in acme-shop.
+- Selftest cases 13 and 13a.
+
+### Changed
+- `AGENT_RULES.md`: read the `start` rows, write lessons. `sync.md`: a lesson seen twice becomes a check (Gates row, lint rule or test) first, prose only when it can't be checked.
+- `spec_lint.py`: the `merged_ref` lookup is a shared helper; output is unchanged.
+
 ## [0.5.0] - 2026-11-06
 
 Settled decisions recorded once and cited by id, every cited id checked, names kept out of shared specs, deploy impact

@@ -59,7 +59,7 @@ libraries too thin to deserve a domain.
 
 ## Phase 3: Interview (gaps only)
 
-Ask only what Phases 1–2 left at low or medium confidence, or what the code can't answer. Typically 5–9 questions in
+Ask only what Phases 1–2 left at low or medium confidence, or what the code can't answer. Typically 5–10 questions in
 1–2 rounds. **Must-ask** questions are always asked unless the evidence is conclusive. **Ask-if-unclear** questions
 are skipped when you have a confident default, which you then record as `assumed` in the interview log.
 
@@ -74,6 +74,7 @@ are skipped when you have a confident default, which you then record as `assumed
 | Q7 | ask-if-unclear | Git hook when code changes without a spec update: warn or block? Code paths = `<detected globs>`? | `spec_sync`, `code_globs` |
 | Q8 | ask-if-unclear | Anything already known to be wrong or stale (docs vs reality)? | Seeds the Drift Register |
 | Q9 | must-ask | How does CI/CD consume this repository: a pinned artifact or image, or the default branch directly? Which jobs? | Whether a merge reaches a job before any release; the `Deploy impact` rule in spec-rules §7. Don't assume pinned: a job that clones the default branch runs every merge on its next run |
+| Q10 | ask-if-unclear | Set up an autonomy profile now? Knowledge: `<found ADR folder, arch tests>`; chores: spec health. [not now] | Whether `steering/autonomy.md` and `steering/lessons.md` exist. "Not now" writes neither and everything stays with the human |
 
 Record each answer in the profile's **Interview log** as you get it, and Q9's also as a **Facts** row
 (`CI/CD consumes: <pinned artifact or image | default branch>, <jobs>`). Set `phase: 3`.
@@ -104,7 +105,11 @@ From `.specs/kit/templates/`:
    authority (Q3). Settled decisions the interview turned up go in `steering/decisions.md` (from the template);
    otherwise the first settled decision creates it.
 7. `steering/code-standards.md`: link to the project's existing standards and CI gate. Don't restate them.
-8. Update `.specs/spec-kit.json`: `upstream_req_pattern` (Q1), `spec_threshold_loc` (Q6), `spec_sync` and `code_globs` (Q7).
+8. `steering/autonomy.md` and `steering/lessons.md`: **only if Q10 was yes, and never in adopt mode.** Copy both
+   templates. In `autonomy.md` keep only Knowledge and Chores (slice 1). Fill every placeholder from what Phase 1 found
+   (ADR folder, architecture tests, the chore schedule and scheduler the user named), or delete the row. Never leave a
+   `<…>`.
+9. Update `.specs/spec-kit.json`: `upstream_req_pattern` (Q1), `spec_threshold_loc` (Q6), `spec_sync` and `code_globs` (Q7).
 
 ## Phase 6: Verify and report
 

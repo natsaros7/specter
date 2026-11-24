@@ -339,6 +339,13 @@ def repos(root):
                    if not worktree(p) and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
 
 
+def merged_ref(path, config):
+    """merged_ref if set, else origin/HEAD, then HEAD: the first that resolves in the repo at path, else None.
+    Raises OSError or subprocess.TimeoutExpired when git is missing or hangs."""
+    return next((r for r in ([config["merged_ref"]] if config["merged_ref"] else ["origin/HEAD", "HEAD"])
+                 if subprocess.run(["git", "-C", str(path), "rev-parse", "--verify", "--quiet", r], capture_output=True, timeout=60).returncode == 0), None)
+
+
 def merged_commits(root, child_repos, config):
     """{repo label: [commit message, ...]}, one git log per repo, ignoring commits that touch only .specs/.
     Ref: merged_ref if set (a repo without it is skipped), else origin/HEAD, then HEAD. None when git is missing or times out."""
@@ -349,8 +356,7 @@ def merged_commits(root, child_repos, config):
         git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace",
                                         timeout=60)
         try:
-            ref = next((r for r in ([config["merged_ref"]] if config["merged_ref"] else ["origin/HEAD", "HEAD"])
-                        if git("rev-parse", "--verify", "--quiet", r).returncode == 0), None)
+            ref = merged_ref(path, config)
             log = git("log", ref, "--format=%x00%s%n%b", "--", ".", ":(exclude).specs") if ref else None
         except (OSError, subprocess.TimeoutExpired):
             return None
