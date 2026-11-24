@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Specter overview</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root {
+  --ink: #172033;
+  --soft: #4A5568;
+  --paper: #F7F6F2;
+  --paper2: #ECEAE3;
+  --accent: #B8452A;
+  --line: #D5D2C8;
+  --night: #141B2B;
+  --night-soft: #C9D2E3;
+}
+body { font-family: 'IBM Plex Sans', Arial, sans-serif; color: var(--ink); }
+section { padding: 128px; background: var(--paper); counter-increment: page; display: flex; flex-direction: column; gap: 36px; }
+section.alt { background: var(--paper2); }
+section.dark { background: var(--night); color: var(--paper); }
+h1 { font-size: 112px; font-weight: 700; line-height: 1.05; margin: 0; }
+h2 { font-size: 64px; font-weight: 700; line-height: 1.1; margin: 0; color: var(--ink); }
+h3 { font-size: 32px; font-weight: 600; margin: 0; color: var(--ink); }
+p { font-size: 30px; line-height: 1.45; margin: 0; color: var(--soft); }
+li { font-size: 30px; line-height: 1.45; color: var(--soft); margin: 0 0 10px 0; }
+ul { margin: 0; padding-left: 36px; }
+.eyebrow { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 24px; letter-spacing: 3px; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+.mono { font-family: 'JetBrains Mono', 'Courier New', monospace; }
+.lead { font-size: 40px; line-height: 1.35; color: var(--ink); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 72px; }
+.side { display: grid; grid-template-columns: 560px 1fr; gap: 64px; align-items: start; }
+.stack { display: flex; flex-direction: column; gap: 20px; }
+.card { background: #FFFFFF; border: 2px solid var(--line); border-radius: 16px; padding: 32px 36px; display: flex; flex-direction: column; gap: 14px; }
+.alt .card { background: var(--paper); }
+.figure { background: #FFFFFF; border: 2px solid var(--line); border-radius: 16px; padding: 16px; }
+.shot { border-radius: 12px; background: #1B1F27; }
+.note { font-size: 24px; color: var(--soft); }
+.foot { position: absolute; left: 128px; bottom: 64px; width: 1664px; font-size: 24px; color: var(--soft); font-family: 'JetBrains Mono', 'Courier New', monospace; }
+.dark .foot { color: var(--night-soft); }
+.dark p { color: var(--night-soft); }
+.dark h1, .dark h2 { color: var(--paper); }
+.dark .eyebrow { color: #F0A07E; }
+.big { font-size: 120px; font-weight: 700; line-height: 1; color: var(--paper); margin: 0; }
+.pill { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 24px; padding: 8px 18px; border-radius: 999px; background: var(--paper2); color: var(--ink); display: inline-block; }
+.status { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 24px; font-weight: 600; color: var(--accent); }
+.code { background: var(--night); color: var(--paper); border-radius: 16px; padding: 32px 40px; display: flex; flex-direction: column; gap: 10px; }
+.code p { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 26px; color: var(--paper); line-height: 1.5; }
+.code .cm { color: #9AA6BD; }
+table { font-size: 28px; color: var(--ink); width: 100%; }
+@keyframes rise { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: translateY(0); } }
+.in { animation: rise 520ms ease-out both; animation-delay: calc(var(--i, 0) * 120ms); }
+
+html { background: #2B2F38; }
+body { margin: 0; padding: 32px 0; }
+section { width: 1920px; height: 1080px; box-sizing: border-box; position: relative; margin: 0 auto 32px; zoom: 0.62; overflow: hidden; }
+section > aside { display: none; }
+table { border-collapse: collapse; } th, td { text-align: left; padding: 14px 18px; border-bottom: 2px solid var(--line); vertical-align: top; }
+th { font-weight: 600; }
+</style></head>
+<body>
+<section id="cover" class="dark" style="justify-content:center;">
+<p class="eyebrow in" style="--i:0">Specter · overview · November 2026</p>
+<h1 class="in" style="--i:1">Specs that don’t go stale</h1>
+<p class="lead in" style="--i:2; color:#C9D2E3; width:1400px;">A spec-first workflow any AI coding agent can follow, and a trust layer that decides how much of each change a human still has to read.</p>
+<p class="foot">Release 0.8.0 shipped · 0.9.0 in progress · Python 3.8+, stdlib only, no service</p>
+<aside>Specter is a kit you copy into a repository. It keeps specs honest with lint and citations, and since 0.6 it adds a staged path toward agent autonomy: every change gets a risk tier, a readiness verdict, and after merge, evidence.</aside>
+</section>
+
+<section id="problem">
+<p class="eyebrow">The problem</p>
+<h2>Agents write fast; nobody can tell which changes to trust</h2>
+<div class="two">
+<div class="card in" style="--i:0">
+<h3>Without a spec discipline</h3>
+<ul>
+<li>A spec sounds right and cites code that does not exist</li>
+<li>The spec drifts from the code and nobody notices</li>
+<li>A human reads every change, with no hint where to look hardest</li>
+</ul>
+</div>
+<div class="card in" style="--i:1">
+<h3>With specter</h3>
+<ul>
+<li>Every claim carries <b>path:line</b>; a lint fails when a citation points at nothing</li>
+<li>Drift goes into a dated Drift Register instead of hiding</li>
+<li>Each change gets a risk label, a readiness verdict and, after merge, evidence</li>
+</ul>
+</div>
+</div>
+<aside>A mistake is cheapest to catch in one line of a requirement and dearest in code review. Scripts judge structure; the model judges content.</aside>
+</section>
+
+<section id="workflow" class="alt">
+<h2>The spec-first workflow</h2>
+<div class="figure" style="display:flex; justify-content:center;">
+<img src="../workflow.svg" alt="Workflow: once per project GO.md, install.sh, setup interview; every change runs spec, implement, gates, review, human check, sync and close-out, with retry loops back to implement on a red gate or a blocker" style="width:1600px; height:625px; object-fit:contain;">
+</div>
+<aside>Setup reads the existing code and writes as-built docs first. Then every change runs the same loop: spec, one task per worker, the project’s own gates, a fresh-context review of the frozen diff, the human check, and sync.</aside>
+</section>
+
+<section id="kit">
+<h2>What is in the kit</h2>
+<p><b>install.sh</b> copies one folder into the project, <b>.specs/kit/</b>; teammates get it with the repo.</p>
+<table>
+<tr><th style="width:28%">Part</th><th>What it holds</th></tr>
+<tr><td>AGENT_RULES.md, playbooks/</td><td>setup, new-feature, next-task, sync, refresh</td></tr>
+<tr><td>roles/</td><td>planner (deep), generator (standard), reviewer (fresh context)</td></tr>
+<tr><td>templates/</td><td>requirements, design, tasks, steering files, the autonomy profile</td></tr>
+<tr><td>scripts/</td><td>spec_lint, spec_report, spec_sync_check, gates, tiers, ready</td></tr>
+<tr><td>docs/</td><td>spec-driven method, review loop, model routing, chores</td></tr>
+<tr><td>adapters/</td><td>Claude Code skill and agents, Cursor rule, AGENTS.md block</td></tr>
+</table>
+<aside>Everything is plain files and stdlib Python. No service, no network.</aside>
+</section>
+
+<section id="report" class="alt">
+<h2>Spec health on one page</h2>
+<div class="side">
+<div class="stack">
+<p><b>spec_report.py</b> writes <b>.specs/report.html</b>:</p>
+<ul>
+<li>feature progress from tasks.md</li>
+<li>open drift, with its age</li>
+<li>lint and citation counts</li>
+<li><b>In flight</b>: worktrees and unmerged branches</li>
+</ul>
+<p class="note">Real page, acme-shop example at release 0.8.0.</p>
+</div>
+<img class="shot" src="../screenshots/07-spec-report.png" alt="Screenshot of the spec report for acme-shop: feature cards, an In flight table, the Drift register and coverage" style="width:760px; height:700px; object-fit:contain;">
+</div>
+<aside>The In flight card answers which sessions are working on what, without a dashboard service.</aside>
+</section>
+
+<section id="trust">
+<h2>The trust layer at 0.8.0</h2>
+<div class="figure" style="display:flex; justify-content:center; padding:12px;">
+<img src="../trust-layer.svg" alt="Trust layer: the Tiers and Guardrails tables at the base commit feed the tiers.py label; gates.py, the review contract and verification lines feed the ready.py verdict; the human check follows; after merge tiers.py --evidence feeds back eligible, hold or breach" style="width:1300px; height:676px; object-fit:contain;">
+</div>
+<aside>Rules are read at the base commit, so a change cannot edit its own review rules. The verdict runs no command; it checks what the PR declares against the base. After merge, evidence reports per tier how changes fared.</aside>
+</section>
+
+<section id="tiers" class="alt">
+<h2>Tiers: where to look hardest</h2>
+<div class="side" style="grid-template-columns:600px 1fr;">
+<div class="stack">
+<p>The Tiers table in <b>autonomy.md</b> maps paths to routine, domain and critical.</p>
+<ul>
+<li>each file takes the lowest row it matches</li>
+<li>the change takes its strictest file</li>
+<li>guarded paths (profile, kit, agent files) always take the last row</li>
+<li>an undeclared guardrail turns <b>none</b> into <b>spot</b></li>
+</ul>
+</div>
+<div class="stack">
+<img class="shot" src="../screenshots/02-tiers-staged.png" alt="tiers.py on a staged pom.xml change: tier critical, reviewer deep, human required" style="width:960px; height:352px; object-fit:contain;">
+<img class="shot" src="../screenshots/03-tiers-range.png" alt="tiers.py on a range: tier domain, reviewer standard, human spot" style="width:960px; height:314px; object-fit:contain;">
+</div>
+</div>
+<aside>Top: a staged build-file change is critical. Bottom: a range touching service code is domain. Both outputs are real runs at 0.8.0, which still printed “labels only”.</aside>
+</section>
+
+<section id="gates">
+<h2>Gates and the readiness verdict</h2>
+<div class="two">
+<div class="stack">
+<p class="eyebrow">gates.py</p>
+<img class="shot" src="../screenshots/04-gates.png" alt="gates.py output: a Gates block listing each gate as pass and a verdict ready, 2 passed" style="width:796px; height:302px; object-fit:contain;">
+<p>Runs the project’s own Gates table and prints the block for the PR. A row that did not run is a failure, never invisible.</p>
+</div>
+<div class="stack">
+<p class="eyebrow">ready.py</p>
+<img class="shot" src="../screenshots/05-ready.png" alt="ready.py output: gates 2 of 2 pass, tier domain, verdict ready, verification line ok" style="width:796px; height:190px; object-fit:contain;">
+<p>Reads the PR text: the Gates block against the base’s table, the Review block, the Verification lines. It runs no command.</p>
+</div>
+</div>
+<aside>One verdict over every lane. Exit 1 means not ready.</aside>
+</section>
+
+<section id="review" class="alt">
+<h2>Review contract and guardrails</h2>
+<div class="two">
+<div class="card">
+<p class="eyebrow">Review contract</p>
+<ul>
+<li>a fresh context, working from the <b>base</b> commit’s rules</li>
+<li>a reviewer in the implementer’s model family is a warning</li>
+<li>a blocker needs location, evidence, trigger and consequence; anything less is a follow-up</li>
+<li>a Verification line must point at an artifact that exists</li>
+</ul>
+</div>
+<div class="card">
+<p class="eyebrow">Guardrails</p>
+<ul>
+<li>eight platform rows: protected branch, required checks, review on critical paths, agent credentials that can’t merge, host permissions, immutable history, read-only untrusted-text jobs, chores from a clean clone</li>
+<li>a row counts when it names what enforces it and a date</li>
+<li>specter records the declaration; it probes nothing</li>
+</ul>
+</div>
+</div>
+<aside>The guardrails are the platform’s job. Specter only refuses to grant autonomy while any row is undeclared.</aside>
+</section>
+
+<section id="evidence">
+<h2>Evidence: which tier earned more autonomy</h2>
+<img class="shot" src="../screenshots/06-evidence.png" alt="tiers.py --evidence output: routine eligible, merged 3, reverted 0; domain breach, reverted 25 percent over 2 percent; critical hold, no Evidence row" style="width:1664px; height:418px; object-fit:contain;">
+<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:32px;">
+<div class="card"><h3>Counts per tier</h3><p>merged, reverted, escaped (a later <b>Fixes:</b>), human-caught (<b>Human-Findings:</b>)</p></div>
+<div class="card"><h3>Fails closed</h3><p>too few merges, a missing trailer or a shallow clone is a hold, never a pass</p></div>
+<div class="card"><h3>Edits nothing</h3><p>promotion and demotion stay a human edit of the profile</p></div>
+</div>
+<aside>Demo history: ten commits with Human-Findings trailers and one git revert. Thresholds were set small so the demo shows both eligible and breach.</aside>
+</section>
+
+<section id="ladder" class="alt">
+<h2>Where it stands on the ladder</h2>
+<div class="figure" style="display:flex; justify-content:center; padding:12px;">
+<img src="../roadmap.svg" alt="Kiro five-stage ladder: stage 3 shipped across 0.6.0 to 0.8.0, stage 4 planned in 0.9.0, v070 candidates, stage 5 out of scope" style="width:1263px; height:680px; object-fit:contain;">
+</div>
+<aside>The ladder is Kiro’s, classified by concurrent sessions. Specter sits at a solid stage 3 and is building the policy half of stage 4. Stage 5, a coordinating agent, stays out of the kit.</aside>
+</section>
+
+<section id="next">
+<p class="eyebrow">0.9.0 · in progress</p>
+<h2>What 0.9.0 adds</h2>
+<table>
+<tr><th style="width:26%">Piece</th><th style="width:56%">What it does</th><th>Status</th></tr>
+<tr><td>Human check by tier</td><td>required as today; spot approves on the verdict, gates and tests; none only on the lowest tier, guardrails declared, evidence eligible</td><td>landed on the branch</td></tr>
+<tr><td>Platform recipe</td><td>required checks, auto-merge on green, CODEOWNERS, a merge queue; the kit merges nothing</td><td>landed on the branch</td></tr>
+<tr><td>Fix-round cap</td><td>two fix rounds per task, then the human gets both outputs; ready.py checks rounds:</td><td>planned</td></tr>
+<tr><td>Demotion on breach</td><td>--evidence prints the profile line to tighten; a human edits it</td><td>planned</td></tr>
+<tr><td>pipeline.md</td><td>triage, implement, review, merge: what each stage hands on and when the human enters</td><td>planned</td></tr>
+</table>
+<aside>None of 0.9.0 is released yet. The first two rows are committed on feat/0.9.0 with green gates.</aside>
+</section>
+
+<section id="later" class="alt">
+<h2>What might come after, and what stays out</h2>
+<div class="two">
+<div class="card">
+<p class="eyebrow">Candidates · not decided</p>
+<ul>
+<li><b>E6</b> verification gates proposed by stack: property, contract and architecture tests</li>
+<li><b>E9</b> a Drift Register entry naming an anti-pattern gets a lint rule first, then cleanup tasks</li>
+<li><b>E10</b> task export to a tracker (GitHub, GitLab, Jira, Linear) through a small offline adapter</li>
+</ul>
+</div>
+<div class="card">
+<p class="eyebrow">Out of scope</p>
+<ul>
+<li>a coordinating agent (Kiro’s stage 5)</li>
+<li>a queue, scheduler, orchestrator or merge bot in the kit</li>
+<li>classifying a change by content: tiers go by path</li>
+<li>live platform APIs: specter stays offline</li>
+</ul>
+</div>
+</div>
+<aside>The orchestrator is adopted from the host (GitHub Actions, gh-aw and similar), not built into the kit.</aside>
+</section>
+
+<section id="gap" class="dark">
+<p class="eyebrow">The honest gap</p>
+<h2>The tooling is nearly there; the trust is not earned yet</h2>
+<div class="two">
+<div class="stack">
+<p class="big">~75%</p>
+<p>of what stage 4 needs from the kit, once 0.9.0 ships (the lead’s estimate, not a measurement)</p>
+</div>
+<div class="stack">
+<p class="big">0</p>
+<p>tiers with enough merged history to be eligible. A routine tier needs about 20 real merges carrying Human-Findings trailers.</p>
+</div>
+</div>
+<p class="foot">Next: run the acme seed tasks in a hosted sandbox with a real merge queue and trailers on every merge.</p>
+<aside>Evidence is calendar time, not code. Guardrails are declarations until a real hosted repository makes them true.</aside>
+</section>
+
+<section id="try">
+<h2>Try it</h2>
+<div class="code">
+<p>git clone https://github.com/natsaros7/specter.git ~/tools/specter</p>
+<p>python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites <span class="cm"># passes</span></p>
+<p>python3 kit/scripts/spec_lint.py --specs examples/cite-demo/.specs --cites <span class="cm"># fails on purpose</span></p>
+</div>
+<p class="lead">In your project, open your agent and paste:</p>
+<div class="code"><p>Follow ~/tools/specter/GO.md for this project.</p></div>
+<p>It looks first, proposes, installs on your yes, then interviews you (about 20 minutes). Without AI: <b>install.sh ~/code/my-project --dry-run</b>.</p>
+<aside>Everything lives in the repository; uninstall is install.sh --uninstall.</aside>
+</section>
+
+</body></html>
