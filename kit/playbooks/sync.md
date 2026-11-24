@@ -38,3 +38,5 @@ fixed later and caught by a human. Write them as the last lines of the commit me
 | `Human-Findings: <n>` | the merge (or squash) commit, written at the human check, `0` when none | the human found n problems the gates and the reviewer missed |
 
 A revert needs no trailer: `git revert` writes `This reverts commit <sha>.`, which counts as reverted: the sha may be the merge commit or any commit it merged.
+
+Evidence counts first-parent commits, so it assumes squash or merge commits. A rebase merge or fast-forward puts each PR commit on the chain: Min merged is reached faster, and one revert is diluted over the PR's commits.

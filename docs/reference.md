@@ -180,7 +180,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the profile
   at the `merged_ref` tip (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
   (`{file, line, from, to}`, or null off breach). It edits nothing: demoting or raising a tier is a human edit of the
-  profile, a guarded path.
+  profile, a guarded path. Evidence counts first-parent commits, so it assumes squash or merge commits. A rebase merge or fast-forward puts each PR commit on the chain: Min merged is reached faster, and one revert is diluted over the PR's commits.
 - **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the
   `### Gates` block and the tests, with the flagged files read in full; `none` is no human before merge, and the merge
   is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
