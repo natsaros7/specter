@@ -256,9 +256,15 @@ def hit(path, globs):
 
 
 def profile_at(root, base, rel):
-    """The profile's text as of commit `base`, or None when it does not exist there (never the working tree)."""
-    run = subprocess.run(["git", "-C", str(root), "show", base + ":./" + rel], capture_output=True, text=True)
-    return run.stdout if run.returncode == 0 else None
+    """The profile's text as of commit `base`, or None when it does not exist there (never the working tree).
+    Raises ValueError(message) when the bytes are not UTF-8."""
+    run = subprocess.run(["git", "-C", str(root), "show", base + ":./" + rel], capture_output=True)
+    if run.returncode:
+        return None
+    try:
+        return run.stdout.decode("utf-8")
+    except UnicodeDecodeError:
+        raise ValueError(rel + " at " + base[:7] + ": not UTF-8")
 
 
 USAGE = "usage: tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --evidence [--json] | --help"
@@ -647,7 +653,9 @@ def main(argv):
             return evidence(specs.parent, rel, specs, profile, as_json)
         return label(specs.parent, rel, rng, as_json, specs, profile)
     try:
-        text = profile.read_text()
+        text = profile.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return refuse(str(profile) + ": not UTF-8")
     except OSError:
         print("tiers: no " + str(profile) + ": not configured, every change takes the human tier")
         return 0

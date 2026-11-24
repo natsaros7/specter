@@ -287,7 +287,10 @@ def main(argv):
         return refuse(str(err))
     base = change["base"]
     head = change["head"]  # resolved by tiers.end_commit: a tag or ambiguous name never stands in for the head
-    rules = tiers.profile_at(root, base, rel) if base else None
+    try:
+        rules = tiers.profile_at(root, base, rel) if base else None
+    except ValueError as err:
+        return refuse(str(err))
     try:
         rows = gates.gate_rows(rules) if rules else None
     except ValueError as err:
@@ -300,8 +303,8 @@ def main(argv):
     # command) changes what ran. Equal rows or not ready.
     # shortcut: equal commands do not mean equal scripts: a PR that edits a script a gate calls still passes; setup
     # puts gate scripts in the last tier; upgrade by comparing the files a command names.
-    hrules = tiers.profile_at(root, head if rng else "", rel)
     try:
+        hrules = tiers.profile_at(root, head if rng else "", rel)
         hrows = gates.gate_rows(hrules) if hrules else None
     except ValueError:
         hrows = None

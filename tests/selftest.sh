@@ -1003,6 +1003,10 @@ export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e15 -b main; mr docs -m age
 for i in $(seq 20); do mr docs -m "old$i"; done; unset GIT_COMMITTER_DATE
 gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4; do mr docs -m "c$i"; done
 want "13e15 the window adds the named commit, not the commits between" "routine: breach (reverted 16.7% > 10%)"
+# a profile that is not UTF-8 gets a readable reason, from the label's reader and from --check, never a traceback
+nr t13e17 -b main; mr docs -m d0; printf '\377\376' >> "$R/.specs/steering/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm bin
+rc=0; out=$(er) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF "not UTF-8" || fail "13e17 evidence: not-UTF-8 profile exits $rc, want 2 and 'not UTF-8': $out"
+rc=0; out=$(python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" --check 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md: not UTF-8" || fail "13e17 --check: not-UTF-8 profile exits $rc, want 2 and 'autonomy.md: not UTF-8': $out"
 
 fi; if sect 11b "ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"; then
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
