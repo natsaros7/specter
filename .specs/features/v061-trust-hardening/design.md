@@ -2,7 +2,7 @@
 
 Security-sensitive: every task changes what can earn `human: none` or `auto-merge: yes`. Review on the deep tier.
 Stdlib only, Python 3.8+, offline, no new dependency. Each task names its source row in `docs/reviews/`; the row has
-the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28), red first: add the selftest row, run `sh tests/selftest.sh`,
+the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28; task 22 is #29), red first: add the selftest row, run `sh tests/selftest.sh`,
 see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 
 | Requirement | Source rows |
@@ -14,6 +14,7 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 | [REQ-V061-05] | Nikos, 2026-11-24: specter should use its own trust layer (dogfooding) |
 | [REQ-V061-06] | Nikos, 2026-11-24: the README rewritten along Story, How, Output, Worth |
 | [REQ-V061-07] | Nikos, 2026-11-24: the issues are public, so future bypasses go to private advisories |
+| [REQ-V061-08] | Nikos, 2026-11-24: five parallel selftests drained the laptop; make it faster and deterministic |
 
 ## Rules for every worker
 
@@ -341,6 +342,29 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
 - **Nikos:** enable private vulnerability reporting in the repo settings. The lead can do it with
   `gh api -X PUT repos/<owner>/<repo>/private-vulnerability-reporting`, with his OK.
 - **Check:** G1 to G4. The link from the README lands with task 20.
+
+## [REQ-V061-08] The selftest is fast and deterministic
+
+### Task 22: a faster, deterministic selftest (#29)
+
+- **Runs alone**, between batches. It touches the whole of `tests/selftest.sh`, which every other task edits.
+- **Measure first.** Print the elapsed seconds after each `echo "<n>. …"` section header, and record the top five
+  sections in the commit body. Optimize only those.
+- **Likely wins, confirmed by the timings:**
+  - Build each repeated fixture repo once and `cp -R` it, instead of `git init` plus commits every time.
+  - Share installer runs where a section only reads the result.
+- **`SELFTEST_ONLY`:** a space-separated list of section ids. Sections it doesn't name are skipped, after the shared
+  setup at the top. A section that depends on an earlier one names it, so the dependency runs as well.
+- **Determinism:**
+  - Replace `date +%s%N` fixture content with a counter.
+  - Export `TZ=UTC` and `LC_ALL=C`.
+  - Add `GIT_CONFIG_GLOBAL=/dev/null` beside the existing `HOME` and `GIT_CONFIG_NOSYSTEM`.
+  - Leave the evidence "now" as the real clock. A test-only clock override in `tiers.py` would be a knob that moves
+    evidence windows, so `shortcut:` record the midnight edge instead.
+- **No weakened assertion:** every `fail` line keeps its condition.
+- **Proof:** check out the parents of tasks 1, 2, 9 and 13 in turn (`git revert --no-commit` of each fix into a
+  scratch worktree). The new selftest must fail on each one at the same row.
+- **Check:** G1 to G4, and the before and after wall time on the same idle machine.
 
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 

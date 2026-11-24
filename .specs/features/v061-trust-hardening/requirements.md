@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
 Status: In progress (started 2026-11-24)
-Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21. Branch `feat/0.10.0`. Size M.
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22. Branch `feat/0.10.0`. Size M.
 
 ## Why
 
@@ -83,6 +83,15 @@ they were filed. This feature collects them; v060 is closed.
 - Before Human `none` is verified live, a review finding that reaches `none` or `auto-merge: yes` without a human
   SHALL be filed as a draft advisory and published only after its fix ships. Findings that are already public stay
   where they are.
+
+### [REQ-V061-08] The selftest is fast and deterministic
+
+- `tests/selftest.sh` SHALL print each section's elapsed time, and SHALL run only the named sections when
+  `SELFTEST_ONLY` is set.
+- It SHALL give the same result at any time of day and on any locale or time zone. Fixture content SHALL NOT depend
+  on the clock's resolution.
+- A faster selftest SHALL catch every regression the old one caught: re-breaking each fix landed in v061 SHALL still
+  fail it.
 
 ## Out of scope
 
