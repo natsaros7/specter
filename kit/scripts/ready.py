@@ -116,11 +116,12 @@ def check_gates(text, labels, head, ranged, staged=False):
 
 
 def family(model):
-    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. A miss
+    # shortcut: fixed vendor and bare-name lists; unlisted regions or vendors and new bare names are missed. A miss
     # leaves Human none unbarred; replace with a profile table when a repo mixes providers behind one family name.
-    """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
-    m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
-    return m.split("-")[0]
+    """First `-_.:@` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`, `anthropic:`) is dropped."""
+    m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)[.:])?", "", model.lower().rsplit("/", 1)[-1])
+    t = re.split(r"[-_.:@]", m)[0]
+    return {"opus": "claude", "sonnet": "claude", "haiku": "claude", "fable": "claude", "o1": "gpt", "o3": "gpt", "o4": "gpt", "codex": "gpt"}.get(t, t)
 
 
 def check_review(text, base, want="standard"):
@@ -138,9 +139,13 @@ def check_review(text, base, want="standard"):
     if n != 1:
         r["problems"].append("needs exactly one ### Review block, found " + str(n))
         return r
+    seen = set()
     for line in lines:
         m = re.fullmatch(r"- (implementer|reviewer|rules): *(\S*)(?: *\((\w+)\))?.*", line)
         if m:
+            if m.group(1) in seen:
+                r["problems"].append("review " + m.group(1) + " repeated: one line per Review block")
+            seen.add(m.group(1))
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None

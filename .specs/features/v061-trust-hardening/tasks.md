@@ -10,7 +10,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [ ] 6 Unparseable commit date: exit 2 with its sha (v060 19f) (#8) — [REQ-V061-01]
 - [ ] 7 `GIT_NO_REPLACE_OBJECTS=1` on every git call in `tiers.py`, with a selftest row (v060 19g) (#9) — [REQ-V061-01]
 - [ ] 8 Nobody writes `Human-Findings:` on an auto-merge: ignore a `0` on a `none` commit, no trailer hold on a `none` tier (v060 23a) (#10) — [REQ-V061-02]
-- [ ] 9 Model family variants; a repeated `implementer:`/`reviewer:` line is not ready (v060 23b) (#11) — [REQ-V061-02]
+- [x] 9 Model family variants; a repeated `implementer:`/`reviewer:` line is not ready (v060 23b) (#11) — [REQ-V061-02]
 - [ ] 10 Readable reason for an undecodable profile (v060 23c) (#12) — [REQ-V061-02]
 - [ ] 11 Approver identity out of reach of the PR's jobs (v060 23d) (#13) — [REQ-V061-03]
 - [ ] 12 Approve and merge the checked sha only (v060 23e) (#14) — [REQ-V061-03]

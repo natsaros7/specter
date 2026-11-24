@@ -996,6 +996,11 @@ nr "no review block" "$(blk "$OK" "$RH" 'ready (1 passed)' | sed '/^### Review/,
 nr "missing reviewer id" "$(printf '%s' "$RO" | sed 's/^- reviewer: .*/- reviewer: /')" "reviewer"
 nr "rules not the base" "$(printf '%s' "$RO" | sed "s/^- rules: .*/- rules: $RH/")" "rules"
 out=$(printf '%s' "$RO" | sed 's/gpt-5-1/claude-opus-5-5/' | rd) && echo "$out" | grep -q "warning: .*family" || fail "11c: same family is a warning only: $out"
+for rf in claude_opus_5_5 opus-5-5 anthropic:claude-opus; do
+  out=$(printf '%s' "$RO" | sed "s/gpt-5-1/$rf/" | rd) && echo "$out" | grep -q "warning: .*family" || fail "11c: $rf is the implementer's family: $out"
+done
+nr "repeated implementer line" "$(printf '%s' "$RO" | sed 's/^- implementer: .*/&\n&/')" "review implementer repeated: one line per Review block"
+nr "repeated rules line" "$(printf '%s' "$RO" | sed 's/^- rules: .*/&\n&/')" "review rules repeated"
 BL='| blocker | src/a.c:42 | "if (t > 0)" | total 0 | ships free | >= 0 |'
 nr "open blocker" "$(rv "$BL")" "blocker at src/a.c:42"
 out=$(rv '| blocker | src/a.c:42 | | total 0 | ships free | x |' | rd) && echo "$out" | grep -q "advisory (no evidence)" || fail "11c: blocker without evidence is advisory: $out"
