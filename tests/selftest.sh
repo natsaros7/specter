@@ -947,6 +947,12 @@ B=$(git -C "$R" hash-object --literally -t commit -w "$TMP/baddate"); gitq -C "$
 rc=0; out=$(er) || rc=$?
 [ "$rc" = 2 ] && echo "$out" | grep -qF "tiers: commit $(echo "$B" | cut -c1-7) has an unreadable committer date" || fail "13e evidence: an unparseable commit date exits $rc, want 2 naming $B: $out"
 
+# refs/replace can swap a commit body: the revert below is replaced by a clean twin, and the breach must still show
+ER='| routine | 90 | 1 | 10 | - | -  |\n| domain | 90 | 1 | - | - | - |\n'
+nr "t13e14"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; gitq -C "$R" revert --no-edit "$A1"; RV=$(git -C "$R" rev-parse HEAD); mr docs -m a3
+CL=$(git -C "$R" -c user.name=t -c user.email=t@t commit-tree "$RV^{tree}" -p "$RV^" -m clean); gitq -C "$R" replace "$RV" "$CL"
+want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
+
 echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
 printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"

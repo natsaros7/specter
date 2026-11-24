@@ -57,6 +57,7 @@ import fnmatch
 import contextlib
 import io
 import json
+import os
 import posixpath
 import re
 import subprocess
@@ -69,6 +70,9 @@ sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 import spec_lint  # noqa: E402
+
+# refs/replace can swap any commit body or the profile blob, turning a breach into eligible; children (git) inherit this
+os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 
 HEAD = ["Tier", "Paths", "Reviewer", "Human"]
 GHEAD = ["Guardrail", "Enforced by", "Verified"]
