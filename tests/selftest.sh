@@ -4,21 +4,39 @@ set -eu
 KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-mkdir -p "$TMP/home"; export HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1  # the developer's real ~/.claude/agents must not change outcomes
+mkdir -p "$TMP/home"; export HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null  # the developer's real ~/.claude/agents must not change outcomes
+export TZ=UTC LC_ALL=C  # same result on any locale or time zone (sort order of the file lists below is C order)
+# shortcut: evidence windows read the real clock (tiers.py has no test clock, by design); a run that straddles midnight UTC could move a day-granular window, add a clock override only if it ever flakes
+# shortcut: ~8800 process launches per run (7243 git), mostly inside tiers.py/ready.py; slow on hosts that scan every exec — run --docker; copy prebuilt fixtures if a host run is ever required
 fail() { echo "FAIL: $*"; exit 1; }
 gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/dev/null; }
 
-echo "1. example specs lint clean"
+# SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
+# A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14"
+ONLY=" ${SELFTEST_ONLY:-} "
+for _ in 1 2 3 4 5 6; do for d in $DEPS; do
+  case "$ONLY" in *" ${d%%:*} "*) case "$ONLY" in *" ${d#*:} "*) ;; *) ONLY="$ONLY${d#*:} ";; esac;; esac
+done; done
+UQ=0  # fixture content counter: unique per call, no clock
+t_id=; t_at=$(date +%s)
+sect() { # id title: 0 if the section runs; prints the previous section's seconds
+  [ "$ONLY" = "  " ] || case "$ONLY" in *" $1 "*) ;; *) return 1;; esac
+  now=$(date +%s); [ -z "$t_id" ] || echo "   [$t_id: $((now - t_at))s]"; t_id=$1; t_at=$now; echo "$1. $2"
+}
+sect_end() { [ -z "$t_id" ] || echo "   [$t_id: $(( $(date +%s) - t_at ))s]"; }
+
+if sect 1 "example specs lint clean"; then
 python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/acme-shop/.specs" >/dev/null || fail "example lint"
 python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/acme-shop/.specs" --cites >/dev/null || fail "acme citations"
 
-echo "1b. cite-demo: two citations fail on purpose, exit 1"
+fi; if sect 1b "cite-demo: two citations fail on purpose, exit 1"; then
 out=$(python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/cite-demo/.specs" --cites) && fail "cite-demo passed"
 echo "$out" | grep -q "OrderService.java:142.* past end of file (39 lines)" || fail "cite-demo past-end: $out"
 echo "$out" | grep -q "RateLimiter.java:12.* no such file" || fail "cite-demo no-such-file: $out"
 echo "$out" | grep -q "2 FAIL of 3 citation(s)" || fail "cite-demo count: $out"
 
-echo "2. single repo: install, re-install, compare"
+fi; if sect 2 "single repo: install, re-install, compare"; then
 P="$TMP/single"; mkdir -p "$P/src" "$P/.cursor"; gitq -C "$P" init
 printf '# Mine\nkeep me\n' > "$P/CLAUDE.md"
 "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
@@ -35,36 +53,36 @@ grep -qx "report.html" "$P/.specs/.gitignore" && [ "$(grep -c report.html "$P/.s
 mkdir -p "$P/.claude/agents"; echo "mine" > "$P/.claude/agents/planner.md"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
 grep -q "^mine$" "$P/.claude/agents/planner.md" || fail "user agent overwritten"; rm "$P/.claude/agents/planner.md"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
 
-echo "3. hook warns on code without spec change"
+fi; if sect 3 "hook warns on code without spec change"; then
 echo "x" > "$P/src/a.java"; gitq -C "$P" add src/a.java
 out=$(cd "$P" && python3 .specs/kit/scripts/spec_sync_check.py); echo "$out" | grep -q "spec-sync WARN" || fail "no warning: $out"
 gitq -C "$P" commit -m "code only"
 
-echo "4. lint in a fresh install: setup-incomplete warning, exit 0"
+fi; if sect 4 "lint in a fresh install: setup-incomplete warning, exit 0"; then
 out=$(python3 "$P/.specs/kit/scripts/spec_lint.py"); echo "$out" | grep -q "setup incomplete" || fail "no setup warning"
 
-echo "5. multi-repo workspace: no hook, spec_sync off"
+fi; if sect 5 "multi-repo workspace: no hook, spec_sync off"; then
 W="$TMP/ws"; mkdir -p "$W/svc-a" "$W/svc-b"; gitq -C "$W/svc-a" init; gitq -C "$W/svc-b" init
 out=$("$KIT/install.sh" "$W"); echo "$out" | grep -q "multi-repo workspace" || fail "workspace not detected"
 grep -q '"spec_sync": "off"' "$W/.specs/spec-kit.json" || fail "spec_sync not off"
 
-echo "5b. agent override: codex only gets no Claude files"
+fi; if sect 5b "agent override: codex only gets no Claude files"; then
 C="$TMP/codex"; mkdir -p "$C"; gitq -C "$C" init
 "$KIT/install.sh" "$C" --agents=codex >/dev/null
 [ -e "$C/.agents/skills/spec-first/SKILL.md" ] && [ ! -e "$C/CLAUDE.md" ] && [ ! -e "$C/.claude" ] || fail "codex-only install"
 grep -q "{{KIT_HOME}}" "$C/.agents/skills/spec-first/SKILL.md" && fail "KIT_HOME not substituted" || true
 
-echo "5c. no agent files in the project: nothing agent-specific wired, profile seeded"
+fi; if sect 5c "no agent files in the project: nothing agent-specific wired, profile seeded"; then
 N="$TMP/plain"; mkdir -p "$N"; gitq -C "$N" init
 "$KIT/install.sh" "$N" >/dev/null
 [ ! -e "$N/CLAUDE.md" ] && [ ! -e "$N/.claude" ] && [ ! -e "$N/.agents" ] || fail "machine-only detection wired agents"
 grep -q "status: setup-incomplete" "$N/.specs/steering/project-profile.md" || fail "profile not seeded"
 
-echo "5d. antigravity detected from project files"
+fi; if sect 5d "antigravity detected from project files"; then
 A="$TMP/agy"; mkdir -p "$A/.agents/rules"; gitq -C "$A" init
 "$KIT/install.sh" "$A" --detect | grep -q "agents: antigravity" || fail "antigravity not detected"
 
-echo "5e. citations: a range is valid if any cited line has content; a blank single line fails"
+fi; if sect 5e "citations: a range is valid if any cited line has content; a blank single line fails"; then
 R="$TMP/cite"; mkdir -p "$R/.specs/domains/x"; gitq -C "$R" init
 printf 'a\n\nb\n' > "$R/f.txt"; gitq -C "$R" add f.txt
 printf '`f.txt:2-3`\n' > "$R/.specs/domains/x/design.md"
@@ -72,7 +90,7 @@ python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null |
 printf '`f.txt:2`\n' > "$R/.specs/domains/x/design.md"
 ! python3 "$KIT/kit/scripts/spec_lint.py" --specs "$R/.specs" --cites >/dev/null || fail "blank single line accepted"
 
-echo "5f. citations: prefix, alias, multi-range, #L, nested repo, ignore globs"
+fi; if sect 5f "citations: prefix, alias, multi-range, #L, nested repo, ignore globs"; then
 L() { python3 "$KIT/kit/scripts/spec_lint.py" "$@"; }
 V="$TMP/v020"; mkdir -p "$V/.specs/domains/x" "$V/tools/svc/core" "$V/tools/sim" "$V/mirror/core"; gitq -C "$V" init
 gitq -C "$V/tools/svc" init; gitq -C "$V/tools/sim" init
@@ -94,7 +112,7 @@ printf '{"cite_ignore_globs": ["*m.txt"]}\n' > "$V/.specs/spec-kit.json"
 cites '`m.txt:1`' | grep -q "ambiguous" || fail "(e) tie-break dropped every candidate"
 rm "$V/.specs/spec-kit.json"
 
-echo "5f2. elided paths keep their head"
+fi; if sect 5f2 "elided paths keep their head"; then
 E="$TMP/elide"; mkdir -p "$E/.specs/domains/x" "$E/svc-a/x" "$E/svc-b/x"; gitq -C "$E" init
 echo c > "$E/svc-a/x/conf.yml"; echo c > "$E/svc-b/x/conf.yml"; gitq -C "$E" add .
 printf '`svc-a/.../conf.yml:1`\n' > "$E/.specs/domains/x/design.md"
@@ -102,7 +120,7 @@ L --specs "$E/.specs" --cites >/dev/null || fail "head-elided path did not resol
 printf '`.../conf.yml:1`\n' > "$E/.specs/domains/x/design.md"
 L --specs "$E/.specs" --cites | grep -q ambiguous || fail "headless elision not ambiguous"
 
-echo "5g. drift aging: old open row warns, resolved and null do not; exit code unchanged"
+fi; if sect 5g "drift aging: old open row warns, resolved and null do not; exit code unchanged"; then
 G="$TMP/drift"; mkdir -p "$G/.specs"; gitq -C "$G" init
 printf '| # | Sev | Drift | Logged |\n|---|---|---|---|\n| D1 | x | old | 2020-01-01 |\n| D2 | x | gone **RESOLVED** | 2020-01-01 |\n| D3 | x | undated | |\n| D4 | x | fresh | %s |\n' "$(date +%Y-%m-%d)" > "$G/.specs/drift.md"
 out=$(L --specs "$G/.specs") || fail "drift aging changed the exit code"
@@ -120,13 +138,13 @@ grep -q ">U1<" "$G/r0.html" && grep -q ">U2<" "$G/r0.html" && ! grep -q ">U3<" "
 rm "$G/.specs/nolog.md"
 printf '{"drift_max_age_days": null}\n' > "$G/.specs/spec-kit.json"
 
-echo "5h. --json parses in both modes, exit codes match"
+fi; if sect 5h "--json parses in both modes, exit codes match"; then
 L --specs "$G/.specs" --json | python3 -c 'import json,sys; json.load(sys.stdin)' || fail "json default"
 cites '`core/a.txt:99`' > /dev/null && fail "cites should fail" || true
 L --specs "$V/.specs" --cites --json | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["problems"]' || fail "json cites"
 rc=0; L --specs "$V/.specs" --cites --json >/dev/null || rc=$?; [ "$rc" = 1 ] || fail "json cites exit code"
 
-echo "5i. report: written, no script, escapes spec text"
+fi; if sect 5i "report: written, no script, escapes spec text"; then
 mkdir -p "$G/.specs/features/f-one"
 printf '# F\n[REQ-F-01] <b>bold</b>\n' > "$G/.specs/features/f-one/requirements.md"
 printf 'REQ-F-01\n' > "$G/.specs/features/f-one/design.md"
@@ -138,14 +156,14 @@ grep -q "<script" "$G/r.html" && fail "report has a script" || true
 grep -q "<b>9</b>" "$G/r.html" && fail "report did not escape spec text" || true
 grep -q "D&lt;b&gt;9" "$G/r.html" || fail "escaped drift id missing"
 
-echo "5j. prefix scope via suffix pool, hidden folder in a nested repo, elision fallback"
+fi; if sect 5j "prefix scope via suffix pool, hidden folder in a nested repo, elision fallback"; then
 mkdir -p "$V/tools/svc/sub" "$V/tools/svc/.github"; seq 1 5 > "$V/tools/svc/sub/b.txt"; seq 1 5 > "$V/tools/svc/.github/ci.yml"; gitq -C "$V/tools/svc" add .
 cites '`svc:b.txt:2` `.github/ci.yml:1` `my-repo/.../b.txt:1`' >/dev/null || fail "suffix pool, .github or elision fallback"
 cites '`sim:b.txt:2`' | grep -q "no such file" || fail "prefix scope leaked into another repo"
 mkdir -p "$V/.venv/pkg"; gitq -C "$V/.venv/pkg" init; seq 1 3 > "$V/.venv/pkg/v.txt"; gitq -C "$V/.venv/pkg" add .
 cites '`v.txt:1`' | grep -q "no such file" || fail "hidden folder was indexed"
 
-echo "5k. ragged drift rows, prose does not set status, hostile names, missing specs dir"
+fi; if sect 5k "ragged drift rows, prose does not set status, hostile names, missing specs dir"; then
 K="$TMP/ragged"; mkdir -p "$K/.specs/features/f-two"
 printf '| # | Sev | Drift |\n|---|---|---|\n| D1 | hi |\n| D2 |\n' > "$K/.specs/drift.md"
 out=$(L --specs "$K/.specs" 2>&1 || true); echo "$out" | grep -q "^spec-lint:" && ! echo "$out" | grep -q Traceback || fail "ragged table crashed lint"
@@ -160,7 +178,7 @@ grep -q 'h%22%3E%3Ci%3Ex' "$K/r.html" && grep -q 'h&quot;&gt;&lt;i&gt;x' "$K/r.h
 rc=0; python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$K/nope" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && [ ! -e "$K/nope" ] || fail "missing specs dir: want exit 2 and nothing created"
 
-echo "5l. status checks, merged-work detection, linked worktrees and submodules, report badge"
+fi; if sect 5l "status checks, merged-work detection, linked worktrees and submodules, report badge"; then
 M="$TMP/merged"; mkdir -p "$M/.specs/features/abc-7-x" "$M/.specs/features/abc-70-y" "$M/pkg"; gitq -C "$M" init
 F="$M/.specs/features/abc-7-x"; F2="$M/.specs/features/abc-70-y"
 cfg() { printf '{"tracker_pattern": "ABC-[0-9]+"%s}\n' "$1" > "$M/.specs/spec-kit.json"; }
@@ -220,7 +238,7 @@ echo l > "$M/libx/l.txt"; gitq -C "$M/libx" add l.txt
 printf '`libx:l.txt:1`\n' > "$M/.specs/domains.md"
 L --specs "$M/.specs" --cites >/dev/null || fail "submodule-style repo not indexed"
 
-echo "6. uninstall keeps user content"
+fi; if sect 6 "uninstall keeps user content"; then
 printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claude,codex,cursor >/dev/null
 [ "$(grep -c report.html "$P/.specs/.gitignore")" = 1 ] && grep -qx mine "$P/.specs/.gitignore" || fail "re-install changed .gitignore"
 "$KIT/install.sh" "$P" --uninstall >/dev/null
@@ -229,7 +247,7 @@ printf 'mine\n' >> "$P/.specs/.gitignore"; "$KIT/install.sh" "$P" --agents=claud
 grep -qx mine "$P/.specs/.gitignore" && ! grep -q report.html "$P/.specs/.gitignore" || fail ".gitignore after uninstall"
 grep -q "keep me" "$P/CLAUDE.md" && ! grep -q "specter" "$P/CLAUDE.md" || fail "CLAUDE.md not restored"
 
-echo "7. adopt: existing .specs untouched, dry run writes nothing, user-level agent kept, foreign kit refused, history demoted"
+fi; if sect 7 "adopt: existing .specs untouched, dry run writes nothing, user-level agent kept, foreign kit refused, history demoted"; then
 X="$TMP/adopt"; mkdir -p "$X/.specs/features/a-1" "$X/.specs/steering" "$X/.claude"; gitq -C "$X" init
 printf '# Mine\n\nStatus: Proposed\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
 printf '# Rules\nmine\n' > "$X/.specs/steering/spec-rules.md"; printf '# Specs\n' > "$X/.specs/README.md"
@@ -248,7 +266,7 @@ echo "$out" | grep -q "mode: adopt" || fail "adopt not announced"
 head -c 19 "$X/AGENTS.md" | grep -q "no trailing newline" && grep -q "specter:begin" "$X/AGENTS.md" || fail "AGENTS.md not append-only"
 grep -q "^status: active" "$X/.specs/steering/project-profile.md" && grep -q "^adopted: " "$X/.specs/steering/project-profile.md" || fail "adopt profile"
 [ ! -e "$X/.claude/agents/planner.md" ] && [ -e "$X/.claude/agents/reviewer.md" ] || fail "user-level agent shadowed or reviewer missing"
-[ "$(cd "$X" && find .specs -type f -not -path '.specs/kit/*' | sort | tr '\n' ' ')" = ".specs/.gitignore .specs/features/a-1/requirements.md .specs/README.md .specs/spec-kit.json .specs/steering/project-profile.md .specs/steering/spec-rules.md " ] || fail "unexpected files under .specs"
+[ "$(cd "$X" && find .specs -type f -not -path '.specs/kit/*' | sort | tr '\n' ' ')" = ".specs/.gitignore .specs/README.md .specs/features/a-1/requirements.md .specs/spec-kit.json .specs/steering/project-profile.md .specs/steering/spec-rules.md " ] || fail "unexpected files under .specs"
 rc=0; python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs" >/dev/null || rc=$?; [ "$rc" = 1 ] || fail "incomplete live feature should FAIL"
 printf '# Mine\n\nStatus: Done 2026-01-01 (x)\n\n[REQ-A-01] x\n' > "$X/.specs/features/a-1/requirements.md"
 out=$(python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs") || fail "history FAIL not demoted: $out"
@@ -262,7 +280,7 @@ rc=0; "$KIT/install.sh" "$X" --uninstall --dry-run >/dev/null || rc=$?; [ "$rc" 
 H="$TMP/fresh-force"; mkdir -p "$H/.specs/steering"; gitq -C "$H" init
 "$KIT/install.sh" "$H" --fresh >/dev/null; grep -q "status: setup-incomplete" "$H/.specs/steering/project-profile.md" || fail "--fresh did not force fresh"
 
-echo "8. review round: links under Done, config and .gitignore kept, hook, ownership, byte-exact uninstall"
+fi; if sect 8 "review round: links under Done, config and .gitignore kept, hook, ownership, byte-exact uninstall"; then
 printf '# Mine\n\nStatus: Done 2026-01-01 (x)\n\n[REQ-A-01] x [gone](nope.md)\n' > "$X/.specs/features/a-1/requirements.md"
 rc=0; out=$(python3 "$X/.specs/kit/scripts/spec_lint.py" --specs "$X/.specs") || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "FAIL broken link" || fail "broken link under a Done feature must still FAIL"
@@ -307,7 +325,7 @@ H3="$TMP/fresh2"; mkdir -p "$H3/.specs/steering"; "$KIT/install.sh" "$H3" --fres
 Y2="$TMP/p2"; mkdir -p "$Y2/.specs/steering"; gitq -C "$Y2" init
 "$KIT/install.sh" "$Y2" --from-go | grep -q "Setup interview skipped" || fail "--from-go in adopt mode"
 
-echo "9. rollback safety: edited config kept, version bump keeps config, byte-exact empty files, empty dirs, config types"
+fi; if sect 9 "rollback safety: edited config kept, version bump keeps config, byte-exact empty files, empty dirs, config types"; then
 N2="$TMP/seed-clean"; mkdir -p "$N2"; gitq -C "$N2" init; "$KIT/install.sh" "$N2" --agents=claude >/dev/null
 "$KIT/install.sh" "$N2" --uninstall >/dev/null
 [ ! -e "$N2/.specs/spec-kit.json" ] && [ ! -e "$N2/.specs/steering/project-profile.md" ] && [ ! -e "$N2/AGENTS.md" ] && [ ! -e "$N2/CLAUDE.md" ] && [ ! -e "$N2/.specs/.gitignore" ] || fail "uninstall left files it created"
@@ -333,14 +351,14 @@ for body in 'null' '[1]' '"str"' '{"code_globs": null}' '{"spec_sync": 5}' '{"co
   gitq -C "$S2" commit -m "c" 2>/dev/null || fail "hook blocked a commit on config $body"
 done
 
-echo "10. multi-line tasks: a REQ on a continuation line or a nested sub-item links the task"
+fi; if sect 10 "multi-line tasks: a REQ on a continuation line or a nested sub-item links the task"; then
 T10="$TMP/t10/.specs/features/m-1"; mkdir -p "$T10"
 printf '# m\n\n- [REQ-M-01] a\n' > "$T10/requirements.md"; printf 'REQ-M-01\n' > "$T10/design.md"
 printf '%b\n' '- [ ] 1 wrapped task' '  continues here — [REQ-M-01]' '- [ ] 2 parent' '  - [ ] 2a child — [REQ-M-01]' '- [ ] 3 bare task' '' '  not part of task 3 [REQ-M-01]' '- [ ] 4 issue ref' '  #12 follow-up [REQ-M-01]' '\t- [ ] 5 tabbed' '\t\tcontinued [REQ-M-01]' > "$T10/tasks.md"
 out=$(L --specs "$TMP/t10/.specs")
 echo "$out" | grep -q "1 task(s) without a REQ link, e.g. '- \[ \] 3 bare task'" || fail "multi-line tasks: $out"
 
-echo "11. decisions log, cited ids, denylist, gates.py, 0.4.1-shaped project"
+fi; if sect 11 "decisions log, cited ids, denylist, gates.py, 0.4.1-shaped project"; then
 S="$TMP/t11/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"
 printf '# d\n\nStatus: In progress\n\n### [REQ-DL-01] a\n\nLands D-1.\n\n### [REQ-DL-02] b\n\nNo back-link.\n' > "$S/features/d-1/requirements.md"
 printf 'REQ-DL-01 REQ-DL-02\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-DL-01] [REQ-DL-02]\n' > "$S/features/d-1/tasks.md"
@@ -395,7 +413,7 @@ rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "templa
 printf '# no table\n' > "$GR"; rc=0; out=$(gates 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "no Gates table" || fail "missing table: rc=$rc $out"
 rm "$GR"; rc=0; gates >/dev/null 2>&1 || rc=$?; [ "$rc" = 2 ] || fail "missing spec-rules.md: rc=$rc"
 
-echo "12. review round: other-format decisions.md, D- id bounds, strict config, REQ WARN shape, sub-headings, hash-term, gates.py args"
+fi; if sect 12 "review round: other-format decisions.md, D- id bounds, strict config, REQ WARN shape, sub-headings, hash-term, gates.py args"; then
 S="$TMP/t12/.specs"; mkdir -p "$S/features/d-1" "$S/steering" "$S/system"; DEC="$S/steering/decisions.md"
 printf '# d\n\nStatus: In progress\n\n### [REQ-D-01] a\n\n#### Acceptance\n\nLands D-1.\n' > "$S/features/d-1/requirements.md"
 printf 'REQ-D-01\n' > "$S/features/d-1/design.md"; printf -- '- [ ] 1 a [REQ-D-01]\n' > "$S/features/d-1/tasks.md"
@@ -448,7 +466,7 @@ I="$TMP/t12i"; mkdir -p "$I"; gitq -C "$I" init; "$KIT/install.sh" "$I" >/dev/nu
 printf '| # | Gate | Command |\n|---|---|---|\n| G1 | where | `pwd -P` |\n' > "$I/.specs/steering/spec-rules.md"
 out=$(python3 "$I/.specs/kit/scripts/gates.py" 2>/dev/null) || fail "installed gates.py"; echo "$out" | grep -q "^- G1 where: pass ($(cd "$I" && pwd -P))$" || fail "installed gates.py root: $out"
 
-echo "13. in flight: a worktree branch lists its feature, no git shows one line"
+fi; if sect 13 "in flight: a worktree branch lists its feature, no git shows one line"; then
 W="$TMP/t13"; mkdir -p "$W/.specs/features/base"; gitq -C "$W" init
 printf '# base\n' > "$W/.specs/features/base/requirements.md"; gitq -C "$W" add .; gitq -C "$W" commit -m base
 gitq -C "$W" worktree add -b feat-x "$TMP/t13-wt"; mkdir -p "$TMP/t13-wt/.specs/features/xfeat"
@@ -487,7 +505,7 @@ N="$TMP/t13-norepo"; mkdir -p "$N"; cp -R "$W/.specs" "$N/.specs"
 python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$N/.specs" --out "$N/r.html" >/dev/null || fail "13: report outside a repo"
 grep -q "no git data" "$N/r.html" && grep -q "<h2>Features</h2>" "$N/r.html" || fail "13: no 'no git data' line outside a repo"
 
-echo "13a. autonomy profile: bad Knowledge link fails the lint; Chores run past a Tiers table; placeholder exits 2; absent profile unchanged"
+fi; if sect 13a "autonomy profile: bad Knowledge link fails the lint; Chores run past a Tiers table; placeholder exits 2; absent profile unchanged"; then
 A="$TMP/t13a"; mkdir -p "$A"; gitq -C "$A" init; "$KIT/install.sh" "$A" >/dev/null
 lint13() { python3 "$A/.specs/kit/scripts/spec_lint.py" --specs "$A/.specs" 2>&1; }
 rc0=0; lint13 >/dev/null || rc0=$?; [ "$rc0" = 0 ] || fail "13a: a project without autonomy.md does not lint clean: rc=$rc0"
@@ -498,7 +516,7 @@ printf '# Autonomy\n\n## Tiers\n| Tier | Paths |\n|---|---|\n| routine | docs |\
 printf '# Autonomy\n\n## Chores\n| # | Gate | Command |\n|---|---|---|\n| C1 | todo | `<command>` |\n' > "$A/.specs/steering/autonomy.md"
 rc=0; (cd "$A" && python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md >/dev/null 2>&1) || rc=$?; [ "$rc" = 2 ] || fail "13a: placeholder chore exits $rc, want 2"
 
-echo "13b. tiers.py --check: valid table passes; bad rows exit 2 with file:line; a guarded path in a lower row exits 1; profile read at the base"
+fi; if sect 13b "tiers.py --check: valid table passes; bad rows exit 2 with file:line; a guarded path in a lower row exits 1; profile read at the base"; then
 B="$TMP/t13b"; mkdir -p "$B"; gitq -C "$B" init; "$KIT/install.sh" "$B" >/dev/null
 tprof() { printf '# Autonomy\n\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Decisions | [adrs](../../docs/adr/) | start |\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n' "$1" > "$B/.specs/steering/autonomy.md"; }
 tchk() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --check 2>&1; }
@@ -535,7 +553,7 @@ assert tiers.hit(unicodedata.normalize("NFD", "docs/d\u00e9cisions.md"), k), "an
 for a in install.AGENTS.values():
     assert any(x.startswith(a[3].split("/")[0] + "/") for x in g), ("agent dir not guarded", a[3])
 PY
-echo "13b. tiers.py label: staged and --range, strictest file wins, guarded path takes the last row, base table rules, --json, usage errors"
+fi; if sect 13b2 "tiers.py label: staged and --range, strictest file wins, guarded path takes the last row, base table rules, --json, usage errors"; then
 tl() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" "$@" 2>&1; }
 mkdir -p "$B/tests" "$B/src/security" "$B/docs"; echo a > "$B/tests/a.txt"; echo a > "$B/docs/d.md"; echo a > "$B/src/s.txt"
 tprof "$GOOD"; printf '{"merged_ref": "trunk"}' > "$B/.specs/spec-kit.json"; gitq -C "$B" add -A; gitq -C "$B" commit -m base2; BASE=$(git -C "$B" rev-parse HEAD); gitq -C "$B" branch trunk
@@ -562,7 +580,7 @@ out=$(tl) && echo "$out" | grep -q "at ${BASE%"${BASE#???????}"}" && echo "$out"
 out=$(tl) && echo "$out" | grep -q "files: 4" || fail "13b: staged mode dropped committed-and-staged branch changes: $out"
 printf '{bad' > "$B/.specs/spec-kit.json"; gitq -C "$B" commit -qam bad; rc=0; tl >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: bad committed spec-kit.json exits $rc, want 2"
 gitq -C "$B" reset -q --hard HEAD~1
-echo "13b. tiers.py guards: case-folded, nested, quoted paths, subfolder .specs"
+fi; if sect 13b3 "tiers.py guards: case-folded, nested, quoted paths, subfolder .specs"; then
 G="$TMP/t13b-g"; mkdir -p "$G"; gitq -C "$G" init; "$KIT/install.sh" "$G" >/dev/null
 printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `*/security/*` | deep | required |\n' > "$G/.specs/steering/autonomy.md"
 printf '{"merged_ref": "main"}' > "$G/.specs/spec-kit.json"; echo r > "$G/readme"; gitq -C "$G" add -A; gitq -C "$G" commit -m g
@@ -604,14 +622,14 @@ for a in "--range" "--range nodots" "--check --range a..b" "--json --check" "--r
 done
 rc=0; tl --range nosuch..HEAD >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13b: unresolvable range exits $rc, want 2"
 
-echo "13c. tiers.py guardrails: undeclared rows turn Human none into spot; declared rows keep it; --check lists rows; bad header exits 2"
+fi; if sect 13c "tiers.py guardrails: undeclared rows turn Human none into spot; declared rows keep it; --check lists rows; bad header exits 2"; then
 C="$TMP/t13c"; mkdir -p "$C/docs" "$C/src"; gitq -C "$C" init; "$KIT/install.sh" "$C" >/dev/null
 TIERS='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 printf '{"merged_ref": "trunk"}' > "$C/.specs/spec-kit.json"; echo a > "$C/docs/d.md"; echo a > "$C/src/s.txt"
 cl() { python3 "$C/.specs/kit/scripts/tiers.py" --specs "$C/.specs" "$@" 2>&1; }
 # cset <Guardrails section or empty>: commit the profile as the base, then stage a docs change
 cset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n%b' "$TIERS" "$1" > "$C/.specs/steering/autonomy.md"
-  gitq -C "$C" add -A; gitq -C "$C" commit -m p; gitq -C "$C" branch -f trunk; date +%s%N > "$C/docs/d.md"; gitq -C "$C" add -A; }
+  gitq -C "$C" add -A; gitq -C "$C" commit -m p; gitq -C "$C" branch -f trunk; echo "$((UQ=UQ+1))" > "$C/docs/d.md"; gitq -C "$C" add -A; }
 GH='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n'
 cset ''; out=$(cl)
 echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: no Guardrails section did not downgrade none: $out"
@@ -649,15 +667,15 @@ cset "\n"'~~~\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\
 # Knowledge keeps reading raw lines: a link inside a comment stays guarded
 cset "\n## Knowledge\n"'<!-- [x](../../docs/d.md) -->\n'; out=$(cl)
 echo "$out" | grep -q "tier: critical" || fail "13c: a commented Knowledge link left docs/d.md unguarded: $out"
-echo "13c2. human none by tier: only the lowest row, guardrails declared and evidence eligible keep it; labels_only false; ready.py same family bars it"
+fi; if sect 13c2 "human none by tier: only the lowest row, guardrails declared and evidence eligible keep it; labels_only false; ready.py same family bars it"; then
 F="$TMP/t13f"; mkdir -p "$F/docs" "$F/src"; gitq -C "$F" init; "$KIT/install.sh" "$F" >/dev/null
 printf '{"merged_ref": "trunk"}' > "$F/.specs/spec-kit.json"; echo a > "$F/src/s.txt"
 fl() { python3 "$F/.specs/kit/scripts/tiers.py" --specs "$F/.specs" "$@" 2>&1; }
 # fset <tiers> <min merged>: commit a profile with declared guardrails and a routine Evidence row, two routine commits, then stage a docs change
 fset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |\n|---|---|---|---|---|---|\n| routine | 30 | %s | - | - | - |\n' "$1" "$2" > "$F/.specs/steering/autonomy.md"
   printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$F/.specs/steering/spec-rules.md"
-  gitq -C "$F" add -A; gitq -C "$F" commit -m "p$2$n"; for i in 1 2; do date +%s%N > "$F/docs/m$i"; gitq -C "$F" add -A; gitq -C "$F" commit -m "m$i"; done
-  gitq -C "$F" branch -f trunk; date +%s%N > "$F/docs/d.md"; gitq -C "$F" add -A; }
+  gitq -C "$F" add -A; gitq -C "$F" commit -m "p$2$n"; for i in 1 2; do echo "$((UQ=UQ+1))" > "$F/docs/m$i"; gitq -C "$F" add -A; gitq -C "$F" commit -m "m$i"; done
+  gitq -C "$F" branch -f trunk; echo "$((UQ=UQ+1))" > "$F/docs/d.md"; gitq -C "$F" add -A; }
 T1='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 n=1; fset "$T1" 2; out=$(fl)
 echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && ! echo "$out" | grep -q "none → spot" && echo "$out" | grep -q "^- autonomy: human none.*auto-merge" || fail "13c2: lowest tier, declared, eligible lost none: $out"
@@ -667,7 +685,7 @@ echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "none → spot (evi
 js=$(fl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["reasons"] and d["reasons"][0].startswith("evidence: hold"), d' || fail "13c2: --json hold: $js"
 n=3; fset "$T1" 2; sed -i.bak 's/^| Tier | Window (days) | Min merged/| Tier | Window | Min merged/' "$F/.specs/steering/autonomy.md"; rm -f "$F/.specs/steering/autonomy.md.bak"
 # the bad header must be in the base's profile (the label reads the base, never the working tree): commit it, move trunk, stage a change
-gitq -C "$F" add -A; gitq -C "$F" commit -m badhdr; gitq -C "$F" branch -f trunk; date +%s%N > "$F/docs/e.md"; gitq -C "$F" add -A
+gitq -C "$F" add -A; gitq -C "$F" commit -m badhdr; gitq -C "$F" branch -f trunk; echo "$((UQ=UQ+1))" > "$F/docs/e.md"; gitq -C "$F" add -A
 rc=0; out=$(fl) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "none → spot (evidence: " || fail "13c2: a refusing evidence run did not fail closed to spot (exit $rc): $out"
 n=4; fset '| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | none |\n| critical | `*/security/*` | deep | required |' 2; echo b > "$F/src/s.txt"; gitq -C "$F" add -A; out=$(fl)
 echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "none → spot (not the lowest tier)" || fail "13c2: none on a non-lowest row kept none: $out"
@@ -680,7 +698,7 @@ js=$(fr claude-opus-5-5 --json); printf '%s' "$js" | python3 -c 'import json,sys
 # ready.py agrees with the label: evidence on hold bars none whatever the reviewer's family
 n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
-echo "13d. fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"
+fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3
 ') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^- verdict: not ready" && echo "$out" | grep -q "not ready: fix-round cap" || fail "13c2: rounds 3 was not capped (exit $rc): $out"
@@ -694,7 +712,7 @@ rc=0; out=$(fk '- rounds: 3
 ') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds.*repeated" || fail "13c2: a repeated rounds line overrode the cap (exit $rc): $out"
 js=$(fk '- rounds: 1
 ' --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["review"]["rounds"]==1, d' || fail "13c2: --json review.rounds: $js"
-echo "13e. label and ready.py trust only the base: thresholds read at the base, no merged_ref fails closed, --auto-merge is the one exit code for none, a profile outside .specs/steering is guarded, rounds line variants, refs are branches or remotes only (no tag, no ambiguous name, no history holding the change), every warning bars auto-merge"
+fi; if sect 13e "label and ready.py trust only the base: thresholds read at the base, no merged_ref fails closed, --auto-merge is the one exit code for none, a profile outside .specs/steering is guarded, rounds line variants, refs are branches or remotes only (no tag, no ambiguous name, no history holding the change), every warning bars auto-merge"; then
 X="$TMP/t13e"; mkdir -p "$X"
 xprof() { mkdir -p "$(dirname "$1")"; printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |\n|---|---|---|---|---|---|\n| routine | 30 | %s | - | - | - |\n' "$2" > "$1"; }
 # xmk <name> <spec-kit.json> <min merged> <profile path from the repo root> <merges on main>: the profile commit, then that many docs merges, trunk at the tip
@@ -702,8 +720,8 @@ xmk() { R="$X/$1"; rm -rf "$R"; mkdir -p "$R/.specs/steering" "$R/.specs/kit" "$
   printf '%s' "$2" > "$R/.specs/spec-kit.json"; xprof "$R/$4" "$3"; echo s > "$R/src/s.txt"
   printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$R/.specs/steering/spec-rules.md"
   gitq -C "$R" add -A; gitq -C "$R" commit -m profile
-  for i in $(seq 1 "${5:-0}"); do date +%s%N > "$R/docs/m$i"; gitq -C "$R" add -A; gitq -C "$R" commit -m "m$i"; done; gitq -C "$R" branch -f trunk; }
-xdoc() { date +%s%N > "$R/docs/new$1"; gitq -C "$R" add -A; gitq -C "$R" commit -m "new$1"; }
+  for i in $(seq 1 "${5:-0}"); do echo "$((UQ=UQ+1))" > "$R/docs/m$i"; gitq -C "$R" add -A; gitq -C "$R" commit -m "m$i"; done; gitq -C "$R" branch -f trunk; }
+xdoc() { mkdir -p "$R/docs"; echo "$((UQ=UQ+1))" > "$R/docs/new$1"; gitq -C "$R" add -A; gitq -C "$R" commit -m "new$1"; }
 xl() { python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" "$@" 2>&1; }
 # xrd <reviewer> <extra Review lines> [ready.py flags]: the PR text for trunk...HEAD, checked with ready.py
 xrd() { rv=$1; ex=$2; shift 2; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n%s' "$(git -C "$R" rev-parse --short HEAD)" "$rv" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD "$@" 2>&1; }
@@ -831,7 +849,7 @@ rc=0; out=$(xrd gpt-5-1 '
 ' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False and d["warnings"], d' || fail "13e N2: --json auto_merge with a warning (exit $rc): $out"
 rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (row 'G9 Extra' is not in the base" || fail "13e N2: an unknown Gates row under --auto-merge merged (exit $rc): $out"
-echo "13c. evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"
+fi; if sect 13c3 "evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"; then
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
 el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }
 AP="$D/.specs/steering/autonomy.md"; n=0
@@ -965,7 +983,7 @@ nr "t13e14"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; git
 CL=$(git -C "$R" -c user.name=t -c user.email=t@t commit-tree "$RV^{tree}" -p "$RV^" -m clean); gitq -C "$R" replace "$RV" "$CL"
 want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
 
-echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
+fi; if sect 11b "ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"; then
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
 printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"
 echo a > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m base; RB=$(git -C "$R" rev-parse HEAD)
@@ -1012,7 +1030,7 @@ done
 rc=0; python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range nosuch..HEAD </dev/null >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "11b: unresolvable range exits $rc, want 2"
 printf '{bad' > "$R/.specs/spec-kit.json"; rc=0; blk "$OK" "$RH" 'ready (2 passed)' | rd >/dev/null || rc=$?; rm "$R/.specs/spec-kit.json"; [ "$rc" = 2 ] || fail "11b: --range with a bad spec-kit.json exits $rc, want 2"
 
-echo "11c. ready.py: ### Review block: model ids, families, rules at the base, blocker form, --json review"
+fi; if sect 11c "ready.py: ### Review block: model ids, families, rules at the base, blocker form, --json review"; then
 rv() { blk "$OK" "$RH" "ready (1 passed)" | sed '/^### Review/,$d'; RV "$1"; }
 RO=$(rv '| advisory | a.txt:1 | | | | follow-up: tasks.md task 9 |'); out=$(printf '%s' "$RO" | rd) && echo "$out" | grep -q "verdict: ready" || fail "11c: valid review: $out"
 nr "no review block" "$(blk "$OK" "$RH" 'ready (1 passed)' | sed '/^### Review/,$d')" "Review"
@@ -1032,7 +1050,7 @@ nr "blocker with a list location" "$(rv '| blocker | src/a.c:1,7 | "q" | t | c |
 out=$(rv '| blocker | | "q" | t | c | x |' | rd) && echo "$out" | grep -q "advisory (no location)" || fail "11c: blocker without a location is advisory: $out"
 js=$(rv "$BL" | rd --json) || true; printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); r=d["review"]; assert d["verdict"]=="not ready" and r["implementer"]=="claude-sonnet-5-5" and r["reviewer"]=="gpt-5-1" and r["same_family"] is False and len(r["blockers"])==1 and r["advisories"]==[] and r["problems"], d' || fail "11c: --json review shape: $js"
 
-echo "11d. ready.py: ### Verification lines: REQ defined, path at the head, URL declared not fetched, --json verification"
+fi; if sect 11d "ready.py: ### Verification lines: REQ defined, path at the head, URL declared not fetched, --json verification"; then
 mkdir -p "$R/.specs/features/f" "$R/docs"; printf '### [REQ-F-01] x\n' > "$R/.specs/features/f/requirements.md"; echo png > "$R/docs/a.png"; ln -s /etc/hosts "$R/docs/link.png"
 gitq -C "$R" add -A; gitq -C "$R" commit -m art; RH=$(git -C "$R" rev-parse --short HEAD)
 vb() { blk "$OK" "$RH" "ready (2 passed)" | sed '/^### Review/,$d'; RV '| advisory | a.txt:1 | | | | f |'; printf '\n### Verification\n%b\n' "$1"; }
@@ -1048,7 +1066,7 @@ for t in docs docs/ .; do nr "directory target $t" "$(vb "- [REQ-F-01] $t: x")" 
 js=$(vb '- [REQ-F-01] docs/a.png: s' | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verification"]=={"lines":[{"req":"REQ-F-01","target":"docs/a.png","status":"ok"}],"problems":[]}, d' || fail "11d: --json verification shape: $js"
 js=$(blk "$OK" "$RH" "ready (2 passed)" | rd --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["verdict"]=="ready" and d["verification"]["lines"]==[], d' || fail "11d: no block is ready: $js"
 
-echo "11e. ready.py: head gate commands, staged base and stale block, blocker forms, tiers, ids, hidden blocks, no __pycache__"
+fi; if sect 11e "ready.py: head gate commands, staged base and stale block, blocker forms, tiers, ids, hidden blocks, no __pycache__"; then
 rv() { blk "$OK" "$RH" "ready (1 passed)" | sed '/^### Review/,$d'; RV "$1"; }
 for loc in 'src/a.c:42–45' 'src/a.c:42-45' 'src/a.c:42:7' '`src/a.c:42`' 'src/a.c#L42' 'src/a.c#L42-L45'; do
   nr "blocker location $loc" "$(rv "| blocker | $loc | \"q\" | t | c | x |")" "open blocker"
@@ -1083,7 +1101,7 @@ python3 "$S2/.specs/kit/scripts/spec_lint.py" --specs "$S2/.specs" >/dev/null 2>
 python3 "$S2/.specs/kit/scripts/tiers.py" --specs "$S2/.specs" >/dev/null 2>&1 || true
 [ -z "$(find "$S2/.specs/kit/scripts" "$R/.specs/kit/scripts" -name __pycache__)" ] || fail "11e: a kit script left a __pycache__ in the installed kit"
 
-echo "14. end to end: the acme Tiers table in an installed repo labels real paths, and ready.py gives the verdict"
+fi; if sect 14 "end to end: the acme Tiers table in an installed repo labels real paths, and ready.py gives the verdict"; then
 E="$TMP/t14"; mkdir -p "$E"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null
 cp "$KIT/examples/acme-shop/.specs/steering/autonomy.md" "$E/.specs/steering/autonomy.md"
 python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check >/dev/null || fail "14: acme Tiers table fails --check"
@@ -1100,7 +1118,7 @@ pr() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1
 out=$(pr "$EH" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" 2>&1) && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "tier: critical" || fail "14: ready verdict: $out"
 rc=0; pr "$EB" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range "$EB..HEAD" >/dev/null 2>&1 || rc=$?; [ "$rc" = 1 ] || fail "14: stale commit exits $rc, want 1"
 
-echo "14b. the eight guardrail rows: template undeclared, acme declared; an undeclared row seven turns none into spot"
+fi; if sect 14b "the eight guardrail rows: template undeclared, acme declared; an undeclared row seven turns none into spot"; then
 python3 -I - "$KIT/kit/scripts" "$KIT/kit/templates/steering/autonomy.md" "$E/.specs/steering/autonomy.md" <<'PY2' || fail "14b: guardrail rows"
 import sys; sys.dont_write_bytecode = True; sys.path.insert(0, sys.argv[1])
 import tiers
@@ -1123,4 +1141,5 @@ mkdir -p "$E/docs"; echo x >> "$E/docs/x.md"; gitq -C "$E" add -A; gitq -C "$E" 
 out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range "$E7..HEAD" 2>&1) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 8 undeclared, none → spot" || fail "14b: undeclared row seven did not downgrade none: $out"
 out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1) && echo "$out" | grep -q "autonomy.md:[0-9]*: undeclared (placeholder in Enforced by)" || fail "14b: --check did not list row seven: $out"
 
+fi; sect_end
 echo "selftest: OK"

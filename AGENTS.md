@@ -24,6 +24,7 @@ offer GO.
 | `examples/acme-shop/` | A worked example: a Java 21 / Spring Boot 4 shop and its full `.specs/` tree |
 | `examples/cite-demo/` | A tiny fixture whose citations fail on purpose (README demo) |
 | `tests/selftest.sh` | Lints the examples and dry-runs the installer |
+| `tests/gates.sh` | Runs G1 to G4, `--docker` inside a container (use it where scanners slow the host), `--only G3` for one |
 | `tests/acme-build.sh` | Optional G5: builds acme-shop with JDK 21 |
 | `.specs/` | Specter's own development specs, written with specter |
 
@@ -35,7 +36,7 @@ network or JDK, and the selftest works in a `mktemp` dir and leaves the tree unt
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh` |
+| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh` |
 | G2 | Example specs lint and citations | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
 | G4 | Specter's own specs | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites` |
