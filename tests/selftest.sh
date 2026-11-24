@@ -705,13 +705,29 @@ mk src -m s5 -m "Human-Findings: 0"
 out=$(el) && echo "$out" | grep -q "domain: eligible" || fail "13c evidence: domain not eligible: $out"
 js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]
 assert d["ref"]=="HEAD" and d["unprofiled"]==3, d
-assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0}, t["routine"]
-assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2}, t["domain"]
+assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0,"demote":{"file":".specs/steering/autonomy.md","line":6,"from":"none","to":"spot"}}, t["routine"]
+assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2,"demote":None}, t["domain"]
 assert t["critical"]["verdict"]=="hold" and t["critical"]["why"]=="thresholds not set", t["critical"]' || fail "13c evidence: --json: $js"
 mk src -m s6 -m "Human-Findings: 2"
 out=$(el) && echo "$out" | grep -q "domain: breach (human-caught 33.3% > 10%)" || fail "13c evidence: human-caught breach: $out"
 ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n"
 out=$(el) && echo "$out" | grep -q "domain: hold (merged 6 < min 100)" || fail "13c evidence: min merged: $out"
+# demote: a breached tier names its profile row and one step stricter; eligible and hold print nothing; the profile is untouched
+mkdir -p "$D/src/security"; mk src/security -m k1; K1=$(sha | cut -c1-7); mk src/security -m k2 -m "Fixes: $K1"
+ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | 90 | 1 | - | 10 | - |\n"; cp "$AP" "$TMP/ap.copy"
+AR=.specs/steering/autonomy.md; out=$(el); echo "$out" | grep -q "critical: breach (escaped 50.0% > 10%)" || fail "13c demote: critical fixture is not in breach: $out"
+echo "$out" | grep -qxF "  demote: $AR:6 Human none → spot (a human edit; tiers.py changes nothing)" || fail "13c demote: none → spot: $out"
+echo "$out" | grep -qxF "  demote: $AR:7 Human spot → required (a human edit; tiers.py changes nothing)" || fail "13c demote: spot → required: $out"
+echo "$out" | grep -qxF "  demote: $AR:8 Human required: already required" || fail "13c demote: required: $out"
+cmp -s "$AP" "$TMP/ap.copy" || fail "13c demote: the profile changed"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]
+assert t["routine"]["demote"]=={"file":".specs/steering/autonomy.md","line":6,"from":"none","to":"spot"}, t["routine"]
+assert t["domain"]["demote"]=={"file":".specs/steering/autonomy.md","line":7,"from":"spot","to":"required"}, t["domain"]
+assert t["critical"]["demote"]=={"file":".specs/steering/autonomy.md","line":8,"from":"required","to":None}, t["critical"]' || fail "13c demote: --json: $js"
+ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n| critical | 90 | 1 | - | 100 | - |\n"
+out=$(el); echo "$out" | grep -q "domain: hold" && echo "$out" | grep -q "critical: eligible" && [ "$(echo "$out" | grep -c '^  demote:')" = 1 ] || fail "13c demote: eligible or hold got a demote line: $out"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]
+assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["routine"]["demote"] is not None, t' || fail "13c demote: --json null off breach: $js"
 # the parent's table labels, not the working tree: docs no longer match routine, the counts do not move
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}${EV1}"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["merged"]==5 and t["domain"]["merged"]==6, t' || fail "13c evidence: working-tree table relabelled history: $js"

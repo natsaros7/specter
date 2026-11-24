@@ -11,6 +11,8 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 - Fix-round cap: at most 2 fix rounds per task (worker retry, then the planner), then the task goes to the human with
   both outputs. The `### Review` block carries `rounds: <n>`; `ready.py` says `not ready` above 2 or for a malformed
   value, warns when the line is missing, and `--json` has `review.rounds`.
+- `tiers.py --evidence` prints `demote: <file>:<line> Human <cur> → <one step stricter>` under a tier in `breach`
+  (`required` says already required) and `--json` has `demote` per tier. The profile is still a human edit.
 
 ### Changed
 - `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier

@@ -68,7 +68,7 @@ python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progr
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
 python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
-python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric); edits nothing
+python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric, plus the demote: line); edits nothing
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -171,7 +171,10 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
   `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
   max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
-  It edits nothing: raising a tier is a human edit of the profile, a guarded path.
+  Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the working-tree
+  profile (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
+  (`{file, line, from, to}`, or null off breach). It edits nothing: demoting or raising a tier is a human edit of the
+  profile, a guarded path.
 - **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the
   `### Gates` block and the tests, with the flagged files read in full; `none` is no human before merge, and the merge
   is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every

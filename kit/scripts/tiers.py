@@ -42,6 +42,8 @@ counts per tier: merged; reverted (a later commit whose change set, F^1..F, has 
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
 human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
 share of the merges that carry one. With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold. It never edits the profile.
+Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter> (a human edit; tiers.py changes nothing)` for that tier's
+row (none → spot, spot → required; `required` says already required); --json: per tier `demote` {file, line, from, to} or null.
 Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `file:line` for a bad row.
 """
 import datetime
@@ -492,6 +494,12 @@ def evidence(root, rel, specs, profile, as_json):
         m["why"] = next(("%s %.1f%% > %g%%" % (k.replace("_", "-"), pct[k], cap) for k, cap in zip(pct, caps)
                          if cap is not None and pct[k] > cap), None)
         m["verdict"] = "breach" if m["why"] else "eligible"
+    rows = {r[0]: r for r in tiers}  # Evidence rows name Tiers rows of the same profile (parse_evidence)
+    for name, m in out.items():  # the demotion is a report: the human edits the row, tiers.py never does
+        r, m["demote"] = rows[name], None
+        if m["verdict"] == "breach":
+            m["demote"] = {"file": rel, "line": r[4], "from": r[3],
+                           "to": None if r[3] == "required" else HUMAN[HUMAN.index(r[3]) + 1]}
     if as_json:
         print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
         return 0
@@ -504,6 +512,10 @@ def evidence(root, rel, specs, profile, as_json):
         print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
             " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught", "with_trailer"), m["window_days"])
             if m["window_days"] else ""))
+        d = m["demote"]
+        if d is not None:
+            print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
+                  + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
