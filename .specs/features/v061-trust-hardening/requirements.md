@@ -24,18 +24,20 @@ they were filed. This feature collects them; v060 is closed.
 
 - `tiers.py --evidence` SHALL read its thresholds from the profile at the `merged_ref` tip and print that commit
   (v060 19a).
-- `section()` SHALL skip fenced code and HTML comments for the Tiers, Guardrails and Evidence sections (v060 19b).
+- `section()` SHALL skip fenced code and HTML comments for the Tiers, Guardrails and Evidence sections; Knowledge keeps
+  reading them, so a link there stays guarded (v060 19b).
 - The docs SHALL say evidence assumes squash or merge commits; a rebase merge counts each commit (v060 19c).
-- A tier row whose name or globs changed inside the window SHALL be flagged, and a renamed tier's commits counted
-  (v060 19d).
+- A commit SHALL count for a tier only when its parent's row has the same name and Paths globs as the row read now;
+  the others SHALL be counted on a `relabelled` line, so a renamed or widened tier re-earns its evidence (v060 19d).
 - The window SHALL extend down to any commit that a revert or `Fixes:` at or above the cut names (v060 19e).
 - A commit with an unparseable date SHALL be refused with exit 2 and its sha, not a traceback (v060 19f).
 - Every git call in `tiers.py` SHALL set `GIT_NO_REPLACE_OBJECTS=1` (v060 19g).
 
 ### [REQ-V061-02] Declarations read strictly
 
-- Who writes `Human-Findings:` on an auto-merge SHALL be decided, so a `none` tier neither switches itself off nor
-  carries an agent-written `0` (v060 23a).
+- Nobody SHALL write `Human-Findings:` on an auto-merge. On a commit labelled `none` at its parent, a `0` SHALL count as
+  no trailer (a caught value still counts), and a tier whose row says `none` SHALL not hold for missing trailers, so it
+  neither switches itself off nor counts an agent-written `0` (v060 23a).
 - Model families SHALL read `_`-joined ids and bare model names; a repeated `implementer:` or `reviewer:` line SHALL be
   not ready (v060 23b).
 - An undecodable profile SHALL give a readable `not UTF-8` reason (v060 23c).
@@ -52,8 +54,9 @@ they were filed. This feature collects them; v060 is closed.
 - A `--range` end SHALL be a full id only at the repository's own hash length (40 in a SHA-1 repo, 64 in SHA-256) (D2).
 - A refused `refs/remotes/origin/HEAD` fallback SHALL say why in the label and the lint, not "no merged_ref" (D3).
 - v060's evidence requirement (its 2026-11-24 amendment) SHALL state the symref condition, as the code and reference.md do (D4).
-- A branch name that differs from `main` only by case SHALL be checked on a case-insensitive runner, and refused if it
-  shadows the remote (final review, not checked).
+- A ref, or a symref's target, SHALL be refused when another listed ref differs from it only by case, or when the
+  target is not listed under its exact name: on a case-folding disk a pushed `MAIN` shadows `origin/main` (final
+  review, not checked; probed 2026-11-24, see design task 15).
 
 ## Out of scope
 
