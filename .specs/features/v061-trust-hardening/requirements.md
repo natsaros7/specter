@@ -63,7 +63,8 @@ they were filed. This feature collects them; v060 is closed.
 - Specter's repo SHALL have its own `.specs/steering/autonomy.md`. The trust-layer scripts (`tiers.py`, `ready.py`,
   `gates.py`, `spec_lint.py`), `install.sh` and `tests/` SHALL be on a tier whose Human is `required`. No tier SHALL be
   `none` until the recipe is verified live.
-- G1 to G4 SHALL run on every pull request in GitHub Actions, read-only (`contents: read`), with no secrets.
+- G1 to G4 SHALL run locally before every push, from one script that reports each gate's exit code. A GitHub
+  Actions run SHALL be added only with Nikos's OK, read-only (`contents: read`) and with no secrets.
 - The 0.10.0 release PR SHALL carry `### Gates`, `### Review` and `### Verification` blocks, and
   `ready.py --range <base>...<head>` SHALL say ready on it.
 

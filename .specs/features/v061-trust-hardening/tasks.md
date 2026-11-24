@@ -19,7 +19,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [ ] 15 Refuse a ref with a case-folded twin or an unlisted symref target (a pushed `MAIN` shadows `origin/main` on APFS) (#17) — [REQ-V061-04]
 - [ ] 16 Gate G1-G4, deep review, CHANGELOG, release, after 17, 18, 20, 21 and 22 (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04] [REQ-V061-05] [REQ-V061-06] [REQ-V061-07] [REQ-V061-08]
 - [ ] 17 Specter's own `.specs/steering/autonomy.md`: trust-layer files on a Human `required` tier (#24) — [REQ-V061-05]
-- [ ] 18 G1-G4 in GitHub Actions on every PR, read-only, with a README badge (#25) — [REQ-V061-05]
+- [ ] 18 G1-G4 locally before every push (`tests/gates.sh`, a pre-push hook); CI only with Nikos's OK (#25) — [REQ-V061-05]
 - [ ] 19 The 0.10.0 PR carries Gates, Review and Verification blocks; `ready.py` says ready (#26) — [REQ-V061-05]
 - [ ] 20 README rewritten as Story, How, Output, Worth; roadmap and deck refreshed (#27) — [REQ-V061-06]
 - [ ] 21 `SECURITY.md`: trust-layer bypasses go to private advisories (#28) — [REQ-V061-07]

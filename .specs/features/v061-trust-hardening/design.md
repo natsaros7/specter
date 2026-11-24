@@ -293,15 +293,24 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
 - **Check:** `tiers.py --check` exits 0, and `tiers.py --range origin/main...HEAD` labels this branch `trust`. Add one
   selftest row only if the profile surfaces a kit bug.
 
-### Task 18: gates in GitHub Actions (#25)
+### Task 18: gates run locally before every push; CI only with Nikos's OK (#25)
 
-- **Touches:** a new `.github/workflows/gates.yml`. `on: pull_request` and `push` to `main`. `permissions: contents:
-  read`. `actions/checkout` pinned to a full commit sha, with `persist-credentials: false`. One job on
-  `ubuntu-latest` that runs G1, G2, G3 and G4 as separate steps, with no secrets. G5 is left out: it needs a JDK and
-  the network, and stays optional as AGENTS.md says.
-- Add a README badge for the workflow, and the Guardrails row "Gates run on every PR" with its date.
-- **Check:** the workflow runs green on the 0.10.0 PR. A Linux run also proves the selftest does not depend on macOS.
-  Task 15's case-fold rows must pass there.
+- **Local first (Nikos, 2026-11-24).**
+  - A new `tests/gates.sh` runs G1 to G4 in order. It prints `G<n> rc=<rc>` per gate and exits non-zero on the first
+    failure, so nobody judges a gate through a pipe again.
+  - `.githooks/pre-push` calls it. It is enabled per clone with `git config core.hooksPath .githooks`, documented in
+    AGENTS.md "Working on specter itself".
+  - A push that skips the hook (`--no-verify`) is the developer's call. The hook is a habit, not a guardrail.
+- **The Guardrails row** reads "Gates run before every push (local hook)". It is dated, and its enforcement column
+  says plainly that it is local and can be skipped.
+- **CI comes later, only on Nikos's OK.** On a public repo, GitHub-hosted runners cost nothing and use no minutes, but
+  Nikos wants the work done locally first. If it is added later: `.github/workflows/gates.yml` with
+  `on: pull_request` to `main` only, `permissions: contents: read`, a pinned checkout sha,
+  `persist-credentials: false`, `concurrency` with `cancel-in-progress: true`, `ubuntu-latest`, and no secrets.
+  A Linux run would also prove that task 15's case-fold rows don't depend on macOS. Until then, run them once in a
+  local Linux container (`docker run --rm -v "$PWD":/s -w /s python:3.12 sh tests/gates.sh`).
+- **Check:** `sh tests/gates.sh` exits 0. A push with a broken G4 (a bad cite in a scratch commit) is refused by the
+  hook.
 
 ### Task 19: the release PR carries its own readiness verdict (#26)
 
@@ -375,8 +384,8 @@ After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a t
 
 ## Parallel lanes
 
-Tasks 17 to 20: 17, then 18, then 20; 19 last, on the release PR. They touch no file of lanes A to G except
-`README.md` (task 18's badge, task 20) and task 18's Guardrails row in task 17's profile.
+Tasks 17 to 22: 22 alone first, then 17, 18 and 21, then 20; 19 last, on the release PR. Task 18 adds `tests/gates.sh` and a
+Guardrails row in task 17's profile; task 20 owns `README.md`.
 
 
 Lanes run in parallel. Tasks inside a lane run in order, one merged before the next starts.
