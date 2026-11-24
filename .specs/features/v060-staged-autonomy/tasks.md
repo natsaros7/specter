@@ -3,17 +3,12 @@
 Deploy impact: none (specter has no CI/CD; a project gets each slice only when it re-runs `install.sh`, and nothing
 changes until it adds `steering/autonomy.md`)
 
-## ▶ Resume here (2026-11-22, end of session)
+## ▶ Closed (2026-11-24)
 
-Slice 2 is released as 0.7.0 on branch `feat/0.7.0` (pushed; stacked on `feat/0.6.5-acme-java` and `feat/0.6.0`;
-none merged to `main`, none tagged). Three security reviews in `docs/reviews/2026-11-22-slice2-*.md`; the last one
-says ship, with MINORs left for 0.7.1 (listed in `docs/reviews/2026-11-22-slice2-confirmation-review.md`; the cheap
-ones are already in).
-- Next: slice 3, tasks 16-19 (guardrails and evidence, release 0.8.0); task 16's decision is already recorded
-  (Decided 2026-11-22). Then slice 4, tasks 20-23 (pipeline, release 0.9.0), which closes the v060 milestone.
-- Work one task per dispatch, gates G1-G4 after each, a deep-tier security review before each release: slice 2
-  needed three review rounds, so plan for it. Trust-layer code (tiers.py, ready.py, gates.py) changes go red-first.
-- Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0 to `main` and tag, in that order.
+v060 is done: slice 4 is released as 0.9.0 on branch `feat/0.9.0` (pushed; stacked on `feat/0.8.0`, `feat/0.7.0`,
+`feat/0.6.5-acme-java` and `feat/0.6.0`; none merged to `main`, none tagged). Reviews per slice in `docs/reviews/`.
+- Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0, 0.8.0, 0.9.0 to `main` and tag, in that order.
+- Open follow-ups live in `.specs/features/v061-trust-hardening/` (the advisories of the slice 3 and 4 reviews).
 - Pinned (do not start): the platform layer for multi-repo systems, until the CRRD spec split closes. Its input is
   gaps G1-G13 in CRRD's `.specs/features/crrd-platform-split/design.md` § 8.4.
 
@@ -83,13 +78,13 @@ ones are already in).
 
 ### Follow-ups from the slice 3 review (advisories, `docs/reviews/2026-11-23-slice3-deep-review.md`)
 
-- [ ] 19a `--evidence` reads thresholds from the profile at the `merged_ref` tip, not the working tree, and prints its commit (advisory 6) — [REQ-V060-08]
-- [ ] 19b `section()` skips fenced code and HTML comments, for Tiers, Guardrails and Evidence (advisory 7) — [REQ-V060-07]
-- [ ] 19c Docs: evidence assumes squash or merge commits; a rebase merge counts each commit (advisory 9) — [REQ-V060-08]
-- [ ] 19d `--evidence` flags a tier row whose name or globs changed inside the window, and counts a renamed tier's commits (advisory 10) — [REQ-V060-08]
-- [ ] 19e `--evidence` extends the window down to any commit a revert or `Fixes:` above the cut names (confirmation C1: an idle gap before backdated agent commits hides their reverts) — [REQ-V060-08]
-- [ ] 19f `--evidence` refuses a commit with an unparseable date with exit 2 and its sha, not a traceback (confirmation C2) — [REQ-V060-08]
-- [ ] 19g Every git call in `tiers.py` sets `GIT_NO_REPLACE_OBJECTS=1`, with a selftest row (confirmation C3: a `refs/replace` ref turns a breach into eligible) — [REQ-V060-05] [REQ-V060-08]
+- [x] 19a Dropped: moved to v061-trust-hardening task 1. `--evidence` reads thresholds from the profile at the `merged_ref` tip, not the working tree, and prints its commit (advisory 6) — [REQ-V060-08]
+- [x] 19b Dropped: moved to v061-trust-hardening task 2. `section()` skips fenced code and HTML comments, for Tiers, Guardrails and Evidence (advisory 7) — [REQ-V060-07]
+- [x] 19c Dropped: moved to v061-trust-hardening task 3. Docs: evidence assumes squash or merge commits; a rebase merge counts each commit (advisory 9) — [REQ-V060-08]
+- [x] 19d Dropped: moved to v061-trust-hardening task 4. `--evidence` flags a tier row whose name or globs changed inside the window, and counts a renamed tier's commits (advisory 10) — [REQ-V060-08]
+- [x] 19e Dropped: moved to v061-trust-hardening task 5. `--evidence` extends the window down to any commit a revert or `Fixes:` above the cut names (confirmation C1: an idle gap before backdated agent commits hides their reverts) — [REQ-V060-08]
+- [x] 19f Dropped: moved to v061-trust-hardening task 6. `--evidence` refuses a commit with an unparseable date with exit 2 and its sha, not a traceback (confirmation C2) — [REQ-V060-08]
+- [x] 19g Dropped: moved to v061-trust-hardening task 7. Every git call in `tiers.py` sets `GIT_NO_REPLACE_OBJECTS=1`, with a selftest row (confirmation C3: a `refs/replace` ref turns a breach into eligible) — [REQ-V060-05] [REQ-V060-08]
 
 ## Slice 4: the pipeline (release 0.9.0)
 
@@ -107,11 +102,14 @@ ones are already in).
   - Evidence: `kit/docs/pipeline.md`: stage table (triage, implement, review, merge, evidence) with each hand-off, the REQ-V060-10 human entry points with the fix-round cap (worker retry, planner, then the human), the queue is the host's; linked from review-loop, reference and README. Every cited script, block and trailer checked to exist. G1-G4 green.
 - [x] 22a Selftest case 13d: fix-round cap, demotion line — [REQ-V060-11] [REQ-V060-15] [REQ-V060-16]
   - Evidence: case 13d holds the fix-round cap rows (rounds 3, 2, missing, `two`, repeated, `--json`), written red first with 21a; the demotion rows stay in 13c on its evidence fixture (none → spot, spot → required, already required, profile cmp, `--json`), written red first with 21b. The human-check rows are 13c2 (task 21).
-- [ ] 23 Gate G1-G4 green; docs; release 0.9.0; close the feature out — [REQ-V060-09] [REQ-V060-10] [REQ-V060-11]
+- [x] 23 Gate G1-G4 green; docs; release 0.9.0; close the feature out — [REQ-V060-09] [REQ-V060-10] [REQ-V060-11]
   [REQ-V060-15] [REQ-V060-16]
+  - Evidence: four deep reviews (`docs/reviews/2026-11-24-slice4-*.md`): round 1 (generator) closed B1-B3, A4, A6, A8; round 2 (planner) closed N1-N4; the confirmation review's blocker C1 (a branch named HEAD as `refs/remotes/origin/HEAD`) went to the maintainer at the cap, who chose a lead fix: C1, C2, C5, C6 red first, then green. Advisories moved to v061. G1-G4 green; VERSION 0.9.0.
 
 ### Follow-ups from the slice 4 review (advisories, `docs/reviews/2026-11-24-slice4-deep-review.md`)
 
-- [ ] 23a Under Human `none` no human writes `Human-Findings:`: decide who writes the trailer on an auto-merge, so the tier neither switches itself off nor carries an agent-written `0` (advisory 5) — [REQ-V060-08] [REQ-V060-09]
-- [ ] 23b Model family: read `_`-joined ids and bare model names (`claude_opus_5_5`, `opus-5-5`); a repeated `implementer:` or `reviewer:` line is not ready, as a repeated `rounds:` is (advisory 7) — [REQ-V060-13]
-- [ ] 23c An undecodable profile gives a readable `file: not UTF-8` reason, not `autonomy.md:u: t` (advisory 9) — [REQ-V060-05]
+- [x] 23a Dropped: moved to v061-trust-hardening task 8. Under Human `none` no human writes `Human-Findings:`: decide who writes the trailer on an auto-merge, so the tier neither switches itself off nor carries an agent-written `0` (advisory 5) — [REQ-V060-08] [REQ-V060-09]
+- [x] 23b Dropped: moved to v061-trust-hardening task 9. Model family: read `_`-joined ids and bare model names (`claude_opus_5_5`, `opus-5-5`); a repeated `implementer:` or `reviewer:` line is not ready, as a repeated `rounds:` is (advisory 7) — [REQ-V060-13]
+- [x] 23c Dropped: moved to v061-trust-hardening task 10. An undecodable profile gives a readable `file: not UTF-8` reason, not `autonomy.md:u: t` (advisory 9) — [REQ-V060-05]
+- [x] 23d Dropped: moved to v061-trust-hardening task 11. Step 5 recipe: the approver identity out of reach of the PR's own jobs (no `GITHUB_TOKEN` approver unless every other workflow is `contents: read`, `persist-credentials: false`, an App key in an environment limited to the default branch; on GitLab, the job in a trusted project's pipeline) (confirmation C3) — [REQ-V060-09]
+- [x] 23e Dropped: moved to v061-trust-hardening task 12. Step 5 recipe: approve and merge the checked sha only (`--match-head-commit`, the reviews API `commit_id`; GitLab `sha=`), one job per PR at a time (confirmation C4) — [REQ-V060-09]

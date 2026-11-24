@@ -1,6 +1,6 @@
 # v060 Staged autonomy, configured per repository — Requirements
 
-Status: In progress (slice 1 released in v0.6.0, slice 2 in v0.7.0; slices 3 and 4 remain)
+Status: Done 2026-11-24 (v0.9.0; slices in v0.6.0, v0.7.0, v0.8.0, v0.9.0; follow-ups in v061-trust-hardening)
 Tracker: none. Branch `feat/0.6.0` for slice 1; one branch and one release per slice after it. Size L.
 
 ## Why
