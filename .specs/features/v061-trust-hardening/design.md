@@ -2,7 +2,7 @@
 
 Security-sensitive: every task changes what can earn `human: none` or `auto-merge: yes`. Review on the deep tier.
 Stdlib only, Python 3.8+, offline, no new dependency. Each task names its source row in `docs/reviews/`; the row has
-the probe. One task per dispatch (task n is issue #n+2), red first: add the selftest row, run `sh tests/selftest.sh`,
+the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27), red first: add the selftest row, run `sh tests/selftest.sh`,
 see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 
 | Requirement | Source rows |
@@ -11,6 +11,8 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 | [REQ-V061-02] | slice 4 deep review advisories 5, 7, 9 |
 | [REQ-V061-03] | slice 4 confirmation review C3, C4 |
 | [REQ-V061-04] | slice 4 final review D1 to D4, and its "not checked" case-folded branch names (probed below, task 15) |
+| [REQ-V061-05] | Nikos, 2026-11-24: specter should use its own trust layer (dogfooding) |
+| [REQ-V061-06] | Nikos, 2026-11-24: the README rewritten along Story, How, Output, Worth |
 
 ## Rules for every worker
 
@@ -274,6 +276,58 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
   `shortcut: one listed spelling holding another branch's sha is invisible locally; the recipe's explicit refspec closes it, probe the server with ls-remote if a job must fetch the wildcard`.
 - **Depends on:** tasks 13 and 14 (same function, same rows). Its doc line goes after tasks 11 and 12 in step 5.
 
+## [REQ-V061-05] Specter runs its own trust layer
+
+### Task 17: specter's own autonomy profile (#24)
+
+- **Touches:** a new `.specs/steering/autonomy.md`, built from `kit/templates/steering/autonomy.md`. Nothing in `kit/`.
+- **Tiers**, strictest first. The first row that matches wins:
+  - `trust`: `kit/scripts/*`, `install.sh`, `tests/*`, `.github/*`, `.specs/steering/*`. Reviewer deep, Human required.
+  - `kit`: `kit/*`, `AGENTS.md`, `GO.md`. Reviewer standard, Human required.
+  - `docs`: `docs/*`, `README.md`, `CHANGELOG.md`, `examples/*`, `.specs/features/*`. Reviewer standard, Human spot.
+- **Guardrails:** only rows that are true today. Gates in CI arrive with task 18, so date that row then. Branch
+  protection is not set on `main`, so leave its row as a placeholder with a note.
+- **Evidence:** thresholds stay `<placeholder>` (hold), because no tier asks for `none`.
+- **Check:** `tiers.py --check` exits 0, and `tiers.py --range origin/main...HEAD` labels this branch `trust`. Add one
+  selftest row only if the profile surfaces a kit bug.
+
+### Task 18: gates in GitHub Actions (#25)
+
+- **Touches:** a new `.github/workflows/gates.yml`. `on: pull_request` and `push` to `main`. `permissions: contents:
+  read`. `actions/checkout` pinned to a full commit sha, with `persist-credentials: false`. One job on
+  `ubuntu-latest` that runs G1, G2, G3 and G4 as separate steps, with no secrets. G5 is left out: it needs a JDK and
+  the network, and stays optional as AGENTS.md says.
+- Add a README badge for the workflow, and the Guardrails row "Gates run on every PR" with its date.
+- **Check:** the workflow runs green on the 0.10.0 PR. A Linux run also proves the selftest does not depend on macOS.
+  Task 15's case-fold rows must pass there.
+
+### Task 19: the release PR carries its own readiness verdict (#26)
+
+- **Touches:** the 0.10.0 PR body only. It gets `### Gates` (G1 to G4 with rc), `### Review` (`implementer:`,
+  `reviewer:` with tier, `rules:`, `rounds:`) and `### Verification`.
+- **Check:** `ready.py --range <base sha>...<head sha> --pr <body file>` prints `verdict: ready` and `human: required`.
+  Paste the output into the PR as a comment. Runs after task 16's deep review, before the merge.
+
+## [REQ-V061-06] The README shows what specter does
+
+### Task 20: README along Story, How, Output, Worth (#27)
+
+- **Touches:** `README.md`. Also `docs/overview/roadmap.svg`, `deck/slides.md` and the HTML deck, which still say
+  0.9.0 is planned. Detail moves to `docs/reference.md`, nothing is deleted.
+- **Story:** keep the first paragraph, the citation problem. Add one paragraph: since 0.7, specter also labels each
+  change by risk and decides when a human must look.
+- **How:** `docs/overview/workflow.svg` and `trust-layer.svg`. A **Decisions** list: markdown and stdlib only (no
+  service, no lock-in); citations checked by a lint, not by trust; risk read from paths and the base commit, never
+  the change itself; no orchestrator or merge bot in the kit; `none` earned from merged history.
+- **Output:** the 2-minute demo stays first. Add the `tiers`, `ready` and `evidence` screenshots from
+  `docs/overview/screenshots/`.
+- **Worth:** only measured or checkable claims. The setup-model comparison moves up from the FAQ. The trust layer
+  took five deep reviews and each found a way to reach `none` without a human (link `docs/reviews/`). Tests: the
+  selftest, its row count, and the CI badge.
+- **Test reader:** a fresh-context reviewer sees only the rendered README and answers three questions: what it does,
+  for whom, how it is tested. Fix any gap. Then run a humanizer pass.
+- **Not here:** pinning repos on the GitHub profile is Nikos's call, outside this repo.
+
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
 After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a task touched `examples/acme-shop/` outside
@@ -282,6 +336,10 @@ After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a t
 "not run live" recipe limit kept, the task 5 and task 15 shortcuts added), and the version bump.
 
 ## Parallel lanes
+
+Tasks 17 to 20: 17, then 18, then 20; 19 last, on the release PR. They touch no file of lanes A to G except
+`README.md` (task 18's badge, task 20) and task 18's Guardrails row in task 17's profile.
+
 
 Lanes run in parallel. Tasks inside a lane run in order, one merged before the next starts.
 

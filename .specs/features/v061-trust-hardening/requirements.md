@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
 Status: In progress (started 2026-11-24)
-Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 (task n is issue n+2). Branch `feat/0.10.0`. Size M.
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20. Branch `feat/0.10.0`. Size M.
 
 ## Why
 
@@ -57,6 +57,24 @@ they were filed. This feature collects them; v060 is closed.
 - A ref, or a symref's target, SHALL be refused when another listed ref differs from it only by case, or when the
   target is not listed under its exact name: on a case-folding disk a pushed `MAIN` shadows `origin/main` (final
   review, not checked; probed 2026-11-24, see design task 15).
+
+### [REQ-V061-05] Specter runs its own trust layer
+
+- Specter's repo SHALL have its own `.specs/steering/autonomy.md`. The trust-layer scripts (`tiers.py`, `ready.py`,
+  `gates.py`, `spec_lint.py`), `install.sh` and `tests/` SHALL be on a tier whose Human is `required`. No tier SHALL be
+  `none` until the recipe is verified live.
+- G1 to G4 SHALL run on every pull request in GitHub Actions, read-only (`contents: read`), with no secrets.
+- The 0.10.0 release PR SHALL carry `### Gates`, `### Review` and `### Verification` blocks, and
+  `ready.py --range <base>...<head>` SHALL say ready on it.
+
+### [REQ-V061-06] The README shows what specter does
+
+- The README SHALL open with the problem and who has it (Story). It SHALL then show how specter works, with a diagram
+  and a short Decisions list (How), what it produces, with real screenshots and the 2-minute demo (Output), and what it
+  is worth, with measured results and what broke and changed (Worth).
+- Every claim in it SHALL be checkable in the repo. It SHALL say plainly that Human `none` is off until verified live.
+- A fresh-context reader who sees only the README SHALL be able to say what specter does, for whom, and how it is
+  tested.
 
 ## Out of scope
 
