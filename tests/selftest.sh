@@ -225,6 +225,9 @@ rc=0; out=$(PATH=/nonexistent "$(command -v python3)" "$KIT/kit/scripts/spec_lin
 [ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available or timed out" || fail "missing git: $out"
 gitq -C "$M" tag v1; cfg ', "merged_ref": "v1"'; rc=0; out=$(L --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped in .: merged_ref v1 is a tag" || fail "a refused merged_ref was skipped silently: $out"
+cfg ""; gitq -C "$M" update-ref refs/remotes/origin/HEAD HEAD
+[ "$(L --specs "$M/.specs" | grep -c "merged-work check skipped in .: refs/remotes/origin/HEAD is not a symbolic ref")" = 1 ] || fail "14: a plain origin/HEAD fallback was refused silently: $(L --specs "$M/.specs")"
+gitq -C "$M" update-ref -d refs/remotes/origin/HEAD
 printf '{"tracker_pattern": "ABC-["}\n' > "$M/.specs/spec-kit.json"
 rc=0; out=$(L --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && [ "$(echo "$out" | grep -c 'invalid tracker_pattern')" = 1 ] || fail "invalid tracker_pattern: $out"
@@ -816,13 +819,13 @@ out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "evidence: hold (mer
 xmk c1 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b side; xdoc 1; xdoc 2; xdoc 3
 gitq -C "$R" checkout -q main; gitq -C "$R" checkout -q -b pr; xdoc 4; gitq -C "$R" update-ref refs/heads/HEAD side; gitq -C "$R" branch -D side
 xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
-out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e C1: a branch named HEAD earned none: $out"
-rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e C1: a branch named HEAD gave auto-merge (exit $rc): $out"
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: refs/remotes/origin/HEAD is not a symbolic ref" || fail "13e C1: a branch named HEAD earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: refs/remotes/origin/HEAD is not a symbolic ref" || fail "13e C1: a branch named HEAD gave auto-merge (exit $rc): $out"
 # C2: a short sha as a range end goes through git's ref lookup (a loose tag can shadow it on a case-insensitive disk): full ids only
 rc=0; out=$(cl --range "$(git -C "$C" rev-parse --short "$MB")...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e C2: a short sha range end was read (exit $rc): $out"
 # D1: a symref to another .../HEAD ref (itself a plain pushed branch) is not a remote's default branch
 SIDE=$(git -C "$C" rev-parse refs/remotes/origin/HEAD); gitq -C "$C" update-ref refs/remotes/up2/HEAD "$SIDE"; gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/up2/HEAD
-rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence:" || fail "13e D1: origin/HEAD symref to another HEAD ref gave auto-merge (exit $rc): $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: .* points at" || fail "13e D1: origin/HEAD symref to another HEAD ref gave auto-merge (exit $rc): $out"
 # D2: a 64-hex end in a SHA-1 repo reads as a ref, not as a full id
 A64=$(printf 'a%.0s' $(seq 1 64)); gitq -C "$C" update-ref "refs/heads/$A64" "$SIDE"
 rc=0; out=$(cl --range "$A64...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e D2: a 64-hex end resolved in a SHA-1 repo (exit $rc): $out"

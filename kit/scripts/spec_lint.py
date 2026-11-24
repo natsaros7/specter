@@ -384,13 +384,15 @@ def branch_ref(path, name):
 
 def merged_ref(path, config):
     """(ref, why): merged_ref if set, else refs/remotes/origin/HEAD, then HEAD; the first that resolves in the repo at path,
-    as a full ref name (or HEAD), else None. why names a merged_ref refused as a tag or ambiguous (branch_ref), else None.
+    as a full ref name (or HEAD), else None. why names a merged_ref or the origin/HEAD fallback that branch_ref refused, else None.
     Raises OSError or subprocess.TimeoutExpired when git is missing or hangs."""
     want = config["merged_ref"]
     if want and want != "HEAD":
         ref, why = branch_ref(path, want)
         return ref, ("merged_ref " + why if why else None)
-    ref = None if want else branch_ref(path, "refs/remotes/origin/HEAD")[0]
+    ref, why = (None, None) if want else branch_ref(path, "refs/remotes/origin/HEAD")
+    if why:  # a refused fallback must not count HEAD, the change itself
+        return None, why
     head = ref or subprocess.run(["git", "-C", str(path), "rev-parse", "--verify", "--quiet", "HEAD"], capture_output=True, timeout=60).returncode == 0
     return (ref or ("HEAD" if head else None)), None
 
