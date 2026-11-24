@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
-Status: Proposed
-Tracker: none. Branch to be chosen when started. Size M.
+Status: In progress (started 2026-11-24)
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 (task n is issue n+2). Branch `feat/0.10.0`. Size M.
 
 ## Why
 
