@@ -4,6 +4,10 @@ You are inside **specter**, a spec-first workflow that any coding agent can foll
 
 ## Whatever the user's first message is ("go", "hi", "what is this?"), follow [`GO.md`](GO.md).
 
+Exception: "pick up and continue", "resume" or "continue" in this repo means work on specter itself. Read the pinned
+GitHub issue (`gh issue list --label v061` shows the plan issue) and the "▶ Resume here" block in the in-progress
+feature's `tasks.md`, then run the next batch. Don't start GO.
+
 It walks them through it: look at their project → propose → install on their yes → setup interview → done.
 If they only want to understand the kit first, summarise `README.md` and `PHILOSOPHY.md` in under 10 lines, then
 offer GO.

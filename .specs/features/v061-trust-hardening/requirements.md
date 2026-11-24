@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
 Status: In progress (started 2026-11-24)
-Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22, #30 for task 23. Branch `feat/0.10.0`. Size M.
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22, #30 for task 23, #32 for task 24. Branch `feat/0.10.0`. Size M.
 
 ## Why
 
@@ -105,6 +105,16 @@ they were filed. This feature collects them; v060 is closed.
   value is `spot`. The reviewer is still from a different model family, as v060 requires.
 - Each condition SHALL only take `none` away and never grant it. A breach prints which one failed, as `human: none →
   spot (<why>)`.
+
+### [REQ-V061-10] Specter learns from its own mistakes
+
+- Specter's repo SHALL keep its own `.specs/steering/lessons.md`. A lesson seen twice SHALL become a check (a gate,
+  a lint rule or a test) before it becomes a rule.
+- The kit SHALL carry a playbook for parallel agent dispatch: worktree base check, unique temp files, landing a
+  batch, one gate run on the tip, stopping leftover runs, and a cap on agents per batch.
+- The review loop SHALL end each batch or release with a retro that adds lessons.
+- A change to the rules themselves (`AGENTS.md`, kit rules and playbooks, steering) SHALL stay on a Human `required`
+  tier: an agent may propose, a human approves.
 
 ## Out of scope
 

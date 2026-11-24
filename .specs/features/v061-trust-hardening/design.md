@@ -2,7 +2,7 @@
 
 Security-sensitive: every task changes what can earn `human: none` or `auto-merge: yes`. Review on the deep tier.
 Stdlib only, Python 3.8+, offline, no new dependency. Each task names its source row in `docs/reviews/`; the row has
-the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28; task 22 is #29; task 23 is #30), red first: add the selftest row, run `sh tests/selftest.sh`,
+the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28; task 22 is #29; task 23 is #30; task 24 is #32), red first: add the selftest row, run `sh tests/selftest.sh`,
 see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 
 | Requirement | Source rows |
@@ -16,6 +16,7 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 | [REQ-V061-07] | Nikos, 2026-11-24: the issues are public, so future bypasses go to private advisories |
 | [REQ-V061-08] | Nikos, 2026-11-24: five parallel selftests drained the laptop; make it faster and deterministic |
 | [REQ-V061-09] | Nikos, 2026-11-24: no-human only for trivial changes, tests and easy fixes; the reviewer judges complexity on top |
+| [REQ-V061-10] | Nikos, 2026-11-24: self-review and self-heal the process too, and put it into the kit |
 
 ## Rules for every worker
 
@@ -404,6 +405,39 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
   - a change within the cap, adding tests only, with `complexity: trivial`, must stay `none`.
 - **Lane:** after task 8, on `tiers.py`'s `none` branch, and after task 9, on `check_review()`. It runs in a later
   batch.
+
+## [REQ-V061-10] Specter learns from its own mistakes
+
+### Task 24: lessons loop and the parallel-dispatch playbook (#32)
+
+- **Touches:**
+  - a new `.specs/steering/lessons.md`, from `kit/templates/steering/lessons.md`;
+  - a new `kit/playbooks/parallel.md`;
+  - one retro step in `kit/docs/review-loop.md`;
+  - the playbook list in `kit/rules` or AGENTS markers, wherever playbooks are listed today;
+  - `docs/reference.md`.
+- **Lessons:** seed `lessons.md` with the eight from 2026-11-24. Each line names the check that now catches it.
+  - a gate rc masked by `| tail` → `tests/gates.sh` (task 18);
+  - worktrees started on `main` → the playbook's base check;
+  - a stray `__pycache__` → `PYTHONDONTWRITEBYTECODE`;
+  - a shared `$TMPDIR` → `mktemp`;
+  - leftover selftests → the playbook's stop step;
+  - an unchecked cherry-pick rc → the playbook's landing step;
+  - a task line dropped in a conflict → a task-line count check;
+  - "continue" starting GO → the AGENTS.md exception.
+  - Also record the corporate-scanner cost: run the gates in Docker and launch fewer processes.
+- **Playbook:** about one page, agent-neutral. It covers:
+  - batches of at most 3 agents, grouped by the functions they touch;
+  - the worktree base check;
+  - unique temp files;
+  - red first, with the full selftest run once;
+  - landing with `cherry-pick` and checking its rc;
+  - G1 to G4 once on the tip;
+  - stopping leftover runs;
+  - closing issues and updating the Resume block.
+- **Safety:** the playbook and the lessons file sit on specter's own `trust` tier (task 17). An agent proposes a
+  rule change and a human approves it.
+- **Check:** G1 to G4. Run `spec_lint` on the new playbook if playbooks are linted.
 
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
