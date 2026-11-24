@@ -19,7 +19,7 @@ pass or fail everywhere else. This works with any vendor: map the tiers to whate
 | Setup / refresh (`setup.md`, `refresh.md`) | deep | `spec_lint.py` + the user approves the domain map |
 | Plan: feature spec (`new-feature.md`) | deep | `spec_lint.py <feature>` + the user approves |
 | Generate: one task (`next-task.md`) | standard | The project's gate (spec-rules §7) |
-| Review: diff after a green gate | standard, fresh context; **security paths → deep** | Findings resolved or rejected with a reason |
+| Review: diff after a green gate | fresh context; the tier `tiers.py` gives; no profile: **deep** if the diff touches security, else standard | Findings resolved or rejected with a reason |
 | Sync (`sync.md`) | standard | `spec_lint.py` + `spec_sync_check.py` |
 
 ## Rules

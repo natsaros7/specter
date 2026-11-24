@@ -9,4 +9,4 @@ Deploy impact: none | <job or env>: <what changes: new outbound calls, runtime, 
 - [ ] 3 <tests for …> — [REQ-<FEAT>-01] [REQ-<FEAT>-02]
 - [ ] 4 Gate green: <commands from spec-rules Definition of Done> — [REQ-<FEAT>-02]
 - [ ] 5 `.specs/domains/<domain>/` sync — [REQ-<FEAT>-01]
-- [ ] 6 PR: the `### Gates` block and the `Deploy impact:` line in its description — [REQ-<FEAT>-02]
+- [ ] 6 PR: the `### Gates` and `### Review` blocks (and `### Verification` when there are artifacts) and the `Deploy impact:` line in its description — [REQ-<FEAT>-02]

@@ -46,7 +46,8 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 ## 7. Definition of Done
 
 1. Every gate below exits 0. `python3 .specs/kit/scripts/gates.py` runs them in order, stops at the first failure and
-   prints a `### Gates` block for the PR description. One command per row, in backticks; write a `|` inside a command
+   prints a `### Gates` block for the PR description, red runs too (rows after a failure read `not run`). Put the
+   cheapest rows first: the run stops at the first failure. One command per row, in backticks; write a `|` inside a command
    as `\|`. `gates.py` executes these commands with `sh -c` from the project root, and nothing else: treat this table
    like code, and read it before running `gates.py` on a branch you didn't write.
 
@@ -59,7 +60,8 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
 3. The change states `Deploy impact: none` or `Deploy impact: <job or env>: <what changes>`. CI/CD here consumes
    <a pinned artifact or image | the default branch directly> (setup Q9). If it is not `none`, the people who run CI/CD
    hear before the merge.
-4. <review rule, e.g. fresh-context review on the diff; security paths get the strongest reviewer>
+4. Fresh-context review on the diff. The reviewer's tier is the `Reviewer` column of the row `tiers.py` gives, run from a
+   trusted copy of the kit at the base (`.specs/kit/docs/review-loop.md` step 3), from the Tiers table in `steering/autonomy.md`. <add a project rule here, or delete this note>
 
 ## 8. Keep specs in sync
 

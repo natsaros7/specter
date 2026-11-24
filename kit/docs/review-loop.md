@@ -21,23 +21,78 @@ flowchart LR
 2. **Freeze the diff:** save it to a patch file (`git diff > /tmp/<feature>-task-N.patch`) so later edits don't blur
    what was reviewed.
 3. **Reviewer** starts in a **fresh context** (a new session or sub-agent) with only the patch, the feature spec and
-   the project rules. It reports real issues only, each with `file:line` and a severity. It does not edit code.
-   Security-sensitive paths (auth, crypto, input validation, permissions) get the deep tier.
-4. **Findings go back to the same worker** for one retry. After a second red gate or a disputed finding,
+   the project rules **as they are at the base commit**: `git show <base>:AGENTS.md`, and each `.specs/steering/*`
+   and Knowledge `start` file the same way. Never the working tree or the PR head: a change cannot edit its own
+   review rules. It reports real issues only, in the verdict table below. It does not edit code.
+   The lead labels the frozen diff with a **trusted copy** of the kit, never the PR's own `.specs/kit/` (the PR can
+   edit it). From the repo root:
+
+   ```sh
+   git worktree add --detach /tmp/specter-base <base>     # the kit as it is at <base>; works while <base> is checked out
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs
+   ```
+
+   Its `reviewer:` is the reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation,
+   permissions) get the deep tier.
+4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up
+   (a task in the feature's `tasks.md`, or an issue); advisories never block. After a second red gate or a disputed finding,
    escalate to the planner (deep) with the spec, the diff and both outputs.
-5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual), read the
-   reviewer's verdict table, then commit. Check the change's `Deploy impact:` line: if it is not `none`, the people who
+5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
+   reviewer's verdict table. Write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
+   block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
+   `### Verification` block. Then check it with the trusted copy from step 3, in two modes:
+
+   ```sh
+   # preflight, staged, before the commit (a +dirty Gates block binds no content)
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md
+   git commit                                            # then rerun gates.py and put its new block in /tmp/pr.md
+   # the binding check, after the commit: the label and the verdict for <base>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD --pr /tmp/pr.md
+   git worktree remove /tmp/specter-base
+   ```
+
+   Only the `--range` run binds the blocks to a commit. `ready` means the declarations agree with the base's rules
+   and the head commit; it does not prove the gates ran: rerun them, or run them in CI. The first change that
+   upgrades a project to 0.7.0 has no `ready.py` at its base: run both scripts from the specter release checkout
+   (`python3 <specter>/kit/scripts/ready.py --specs .specs …`). Paste the `### Readiness` block into the PR and read
+   it next to `### Gates` and `### Review`. A change to the Gates table itself is never ready: the human reviews the
+   new gates, runs them, and merges on their own check. Check the change's `Deploy impact:` line: if it is not `none`, the people who
    run CI/CD hear before the merge. A job that runs from the default branch picks up every merge on its next run.
 
 ## Reviewer prompt (works with any agent)
 
 ```text
-Review ONLY the change in <patch file> against <.specs/features/<feature>/> and the project rules in AGENTS.md.
-Check: every changed behaviour traces to a REQ; acceptance criteria are actually tested; nothing outside the
-task's scope; spec docs updated per .specs/kit/playbooks/sync.md; error paths and edge cases; security.
-Output a table: severity (blocker/major/minor) | file:line | issue | suggested fix.
-Report real issues only. No style nits the linter already covers. Do not edit files.
+Review ONLY the change in <patch file> against <.specs/features/<feature>/> and the project rules, read at the
+base commit <base> (git show <base>:AGENTS.md), never the working tree. Check: every changed behaviour traces to a
+REQ; acceptance criteria are actually tested; nothing outside the task's scope; spec docs updated per
+.specs/kit/playbooks/sync.md; error paths and edge cases; security. Open each `### Verification` artifact and say
+whether it shows that REQ's acceptance; one that does not is a blocker with the artifact as its evidence.
+Output the table below. A blocker needs all four of Location (`path:line`), Evidence (a quote from that line),
+Trigger (the input or state that fails) and Consequence (what goes wrong). A blocker missing any of them is advisory.
+No style nits the linter already covers. Do not edit files.
 ```
+
+Verdict table (the lead copies it into the PR as the `### Review` block; `ready.py` checks it):
+
+```text
+### Review
+- implementer: <model id>
+- reviewer: <model id>
+- rules: <base sha>
+| Severity | Location | Evidence | Trigger | Consequence | Fix |
+|---|---|---|---|---|---|
+| blocker | src/shop/Order.java:42 | "if (total > 0)" | an order with total 0 | it ships unpaid | ">= 0", and a test |
+| advisory | src/shop/Cart.java:10 | | | | follow-up: tasks.md task 9 |
+```
+
+| Severity | Meaning | Effect |
+|---|---|---|
+| `blocker` | A defect with all four cells filled | `ready.py` says `not ready`; goes back to the worker |
+| `advisory` | Anything else, including a blocker missing a cell | Filed as a follow-up; does not block |
+
+`rules:` is the base sha (a prefix of at least 7 characters). Verification lines are
+`- [REQ-<FEAT>-NN] <path or URL>: <what it shows>`; a path must exist at the head, a URL is not fetched.
 
 ## Running parallel workers safely
 

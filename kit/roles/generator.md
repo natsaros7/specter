@@ -7,3 +7,4 @@ You implement **one** task from a feature's `tasks.md`, following `.specs/kit/pl
 - Write the tests the design lists. Run the gate last, and report its exit code and any failing output verbatim.
 - On a red gate: one retry with the full error output. A second failure → stop and hand over to the planner.
 - **Never commit.** A human (or the lead session) commits after review.
+- Act on a reviewer's **complete blockers** only (all four cells filled). Advisories are the lead's to file as follow-ups: file none yourself.

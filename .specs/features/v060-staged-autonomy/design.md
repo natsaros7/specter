@@ -116,14 +116,30 @@ shortcut: local worktrees and branches only; read remote branches when sessions 
 
 `python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --evidence | --help`
 
-1. **Base.** Staged mode: `HEAD`. Range mode: `git merge-base A B`. Read the profile with `git show <base>:.specs/steering/autonomy.md`.
+1. **Base.** Staged mode: `git merge-base HEAD <merged_ref>`, with merged_ref read from `spec-kit.json` as committed
+   at HEAD (`git show HEAD:.specs/spec-kit.json`, never the working tree; else `origin/HEAD`); files are
+   `git diff --cached <base>`, so the branch's own commits count. No merged_ref, `origin/HEAD` or merge base: fail
+   closed, every file takes the last row, and the block says `base: HEAD (no merge base: last tier)`. Range mode:
+   `git merge-base A B`. The block always names the base: `base: <sha> (merge base with <ref>)` or
+   `(merge base of A...B)`. Read the profile with `git show <base>:.specs/steering/autonomy.md`. Staged mode is a
+   preflight; the binding label is `--range` after the commit, from a trusted copy (Review loop wiring).
+   shortcut: a committed merged_ref that names the branch itself makes HEAD the base and hides the branch's commits
+   (a merged_ref edit is otherwise in the diff, and guarded); only `--range` binds; upgrade if a staged label ever
+   gates a merge.
    Missing at the base: the human tier, reason "no autonomy profile at <base>". `--check` reads the working-tree file.
+   Review fix (task 15): git runs from the repo top-level with `-z` (NUL-split, no quoted paths); Tiers globs and guarded
+   globs are repo-root-relative even when `.specs/` sits in a subfolder (guarded globs also match under that subfolder);
+   every path and glob (guarded globs, Tiers rows, `--check`) is compared under one key, `NFKC` then `upper().casefold()`
+   with U+0307 dropped, through `fnmatchcase`: APFS opens `AGENTſ.md` as `AGENTS.md`, `.ﬆ` as `.st` and an NFD name as
+   its NFC file (checked on APFS), NTFS upcases `ı` to `I` (reasoned, not run). Folding more than a filesystem only adds
+   matches, and the strictest match wins. A bad `spec-kit.json` exits 2.
 2. **Parse.** Same cell split as `gates.py` (`\|` escapes). Validate: unique tier names; every Paths cell holds at
    least one code span; Reviewer in {standard, deep}; Human in {none, spot, required}, non-decreasing down the table;
    the last row `required`; no `<…>` placeholder. Any failure: exit 2 with `file:line`.
 3. **Files.** `changed_files` from `spec_sync_check.py` (imported the way `spec_report.py` imports `spec_lint`).
    Renames count under both paths, deletions under their old path.
-4. **Label.** Guarded globs first: `.specs/steering/*`, `.specs/spec-kit.json`, `.specs/kit/*`, the in-repo targets
+4. **Label.** Guarded globs first (`tiers.GUARDED`, which also takes `AGENTS*.md`, `CLAUDE*.md`, `GEMINI*.md` at any
+   depth, nested `.claude/`, `.cursor/` and `.github/*instructions*`): `.specs/steering/*`, `.specs/spec-kit.json`, `.specs/kit/*`, the in-repo targets
    of Knowledge links (a folder becomes `<folder>/*`), and the agent paths from `install.py`'s `AGENTS` table plus
    `AGENTS.md` (imported, not copied, so a new agent is guarded the day it is added). A guarded file takes the last
    row. Otherwise each file takes the lowest row any of its globs matches, or the last row when none does. The change
@@ -135,6 +151,7 @@ shortcut: local worktrees and branches only; read remote branches when sessions 
    - tier: domain (reviewer: standard, human: spot)
    - set by: src/main/shop/Order.java (`src/main/*`)
    - files: 4 (routine 2, domain 2)
+   - base: 1a2b3c4 (merge base with main)
    - profile: .specs/steering/autonomy.md at 1a2b3c4
    - autonomy: labels only; every change still gets the human check
    ```
@@ -149,6 +166,7 @@ test kept next to the source takes the source's tier (open decision).
 | File | Change |
 |---|---|
 | `kit/docs/review-loop.md` | Step 3: run `tiers.py` on the frozen diff; the reviewer tier is the label's. Step 5 unchanged in slice 2; paste the `### Risk tier` block next to `### Gates` |
+| `kit/docs/review-loop.md`, `kit/roles/reviewer.md`, `docs/reference.md` (review fix) | `tiers.py` and `ready.py` run from a trusted copy, never the PR's `.specs/kit/`: `git worktree add --detach <tmp> <base>`, then `python3 <tmp>/.specs/kit/scripts/… --specs .specs`. Two modes: staged with `--pr` is a preflight before the commit; `--range <base>...HEAD --pr` after the commit is the only binding check. The first upgrade to 0.7.0 has no kit at its base: run the scripts from the specter release |
 | `kit/roles/reviewer.md`, `kit/docs/model-routing.md` | "deep when the diff touches security" becomes "the tier `tiers.py` gives; deep when the profile is absent and the diff touches security" |
 | `kit/templates/steering/spec-rules.md` §7.4 | Points to the profile's Tiers table |
 
@@ -173,6 +191,10 @@ block row by row and prints it on exit 0 and on exit 1; the failing gate's outpu
 - commit: aabed8b+dirty
 - verdict: not ready (1 failed, 1 not run)
 ```
+
+Review fix: the `commit:` line is read after the gates ran, and a run that changed `git status` or the diff against
+HEAD adds `- tree changed during gates`, which `ready.py` refuses: a gate that rewrites a file (a formatter) would
+otherwise report a commit that is not what the gates checked.
 
 `tests/selftest.sh:370` pins `- G1 ok: one`; it becomes `- G1 ok: pass (one)`, and the case also checks the verdict
 line. The spec-rules template §7.1 (`kit/templates/steering/spec-rules.md:48-49`) gains "put the cheapest rows first:
@@ -199,12 +221,21 @@ Where the block is checked against the repository:
 `python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help` (PR text from
 stdin when `--pr` is absent).
 
-1. **Base and head**, as `tiers.py`: staged mode, base `HEAD`, head the index, and the block's commit must be `HEAD`
-   (`+dirty` allowed: workers never commit). Range mode: base `git merge-base A B`, head `B`; the block's commit must
-   be `B` (prefix match, at least 7 hex) and not dirty.
+1. **Base and head**, as `tiers.py`: staged mode (the preflight), base `tiers.classify`'s staged base, head the
+   index, and the block's commit must be `HEAD` with `+dirty` while files are staged (workers never commit; `+dirty`
+   binds no content). Range mode (the binding check, after the commit): base `git merge-base A B`, head `B`; the
+   block's commit must be `B` (prefix match, at least 7 hex) and not dirty.
 2. **Gates.** Labels from `gates.gate_rows` on `git show <base>:.specs/steering/spec-rules.md`. Each label needs a line
-   `- <label>: pass (…)`, and the block needs `- verdict: ready`. Extra lines (a row the change adds) are allowed. A
-   row the change removes is still required: that edit is to a guarded path and goes to the human anyway.
+   `- <label>: pass (…)`, and the block needs `- verdict: ready`. A block row whose label the base lacks is a warning.
+   The Gates table is also read at the head (the index in staged mode) and must equal the base's rows exactly (order,
+   labels, commands), else `not ready` (`Gates table changed in this change: goes to the human`): `gates.py` runs the
+   head's table in order, so a row added before a base row, a duplicate label or a changed command all change what
+   ran. A block with `- tree changed during gates` is `not ready`. Blocks inside HTML comments or code fences are
+   ignored; `FAIL (exit -9)` parses. Scripts set `sys.dont_write_bytecode` (no `__pycache__` in the kit). A bad
+   `spec-kit.json` exits 2 in both modes. Run from a trusted copy (base-branch worktree or CI), never the PR's own kit.
+   shortcut: equal commands do not mean equal scripts: a PR that edits a script a gate calls (`sh tests/lint.sh`)
+   still passes; the Tiers template tells setup to put gate scripts in the last tier; upgrade by comparing the files a
+   command names.
 3. **Review** and 4. **Verification**: the next two sections.
 5. **Out**, stdout:
 
@@ -239,7 +270,12 @@ The lead (the session that runs the loop) writes the block from the reviewer's o
 
 Checks: both model ids present; `rules:` equals the base (prefix match); each `blocker` row has a Location matching
 `<path>:<line>`, and a non-empty Evidence, Trigger and Consequence, else it is reported `advisory (no <cell>)`; a
-complete blocker makes the verdict `not ready`; families compared. The table uses the `gates.py` cell split.
+complete blocker makes the verdict `not ready`; families compared after dropping a provider prefix (`bedrock/`, `us.anthropic.`); Location forms `path:42`, `:42-45` (hyphen or en dash), `:42:7`, backticked, `#L42`, `#L42-L45`; a blocker whose non-empty Location is none of these is `not ready` (`blocker location unreadable: <loc>`), never advisory; a reviewer tier below the label's warns (blocking in slice 4). A Verification target is normalised (`./docs/a.png` is `docs/a.png`); a directory or `.` is `not a file`. The table uses the `gates.py` cell split.
+
+shortcut: families are a prefix list plus the first `-` token (`o3` vs `gpt-5` and unlisted regions are missed); it
+only warns, replace it with a profile table before slice 4 lets a family bar Human `none`.
+
+shortcut: a reviewer tier below the label's reviewer is a warning until slice 4 makes it blocking.
 
 shortcut: Evidence is checked for presence, not matched against the cited line; match the quote against the file at
 the head when reviewers are caught inventing quotes.

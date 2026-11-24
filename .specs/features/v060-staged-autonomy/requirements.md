@@ -1,6 +1,6 @@
 # v060 Staged autonomy, configured per repository — Requirements
 
-Status: In progress (slice 1 released in v0.6.0; slices 2 to 4 remain)
+Status: In progress (slice 1 released in v0.6.0, slice 2 in v0.7.0; slices 3 and 4 remain)
 Tracker: none. Branch `feat/0.6.0` for slice 1; one branch and one release per slice after it. Size L.
 
 ## Why
@@ -30,15 +30,15 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
 - Nothing runs on a schedule: `kit/playbooks/refresh.md:3` says "run this periodically", and nothing does.
 - The one dashboard is spec health: `kit/scripts/spec_report.py` (before slice 1) shows features, drift, coverage and citations.
   It does not show which sessions are working on what, although parallel worktrees are the documented way to run
-  workers (`kit/docs/review-loop.md:42-46`).
-- Every change ends at a human: `kit/docs/review-loop.md:28` ("Human check: rerun the gate yourself … then commit").
+  workers (review-loop.md lines 42-46 at aabed8b).
+- Every change ends at a human: review-loop.md lines 28 at aabed8b ("Human check: rerun the gate yourself … then commit").
   The only routing by risk is prose: the reviewer goes deep "when the diff touches security" (`kit/roles/reviewer.md:3`),
   and the review rule in `kit/templates/steering/spec-rules.md:62` is a free-text placeholder.
 - There is no record of how changes fared after merge (reverts, follow-up fixes, what the human still caught), so no
   tier could earn autonomy on numbers. Searched `grep -rniE 'autonom|auto-merge|codeowners|audit' kit`: the only hit
   is "Work autonomously" in `kit/templates/feature/AGENT_PROMPT.md:2`.
 
-Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:25`, it already skips
+Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:33`, it already skips
 tables without Gate and Command columns), changed-file listing and fnmatch globs (`kit/scripts/spec_sync_check.py:18-27`),
 the relative-link check that already resolves paths outside `.specs/` (`kit/scripts/spec_lint.py:188-200`), the
 merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:234`) and
@@ -50,9 +50,9 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:
   (`kit/scripts/gates.py:103-106`); the `### Gates` block exists only when every row passed (`kit/scripts/gates.py:109`).
   The selftest pins today's block lines (`tests/selftest.sh:370`).
 - The reviewer reads "the project rules" with no commit named, so in practice the working tree, which the diff may
-  have edited (`kit/docs/review-loop.md:23-25`). Its findings are `blocker/major/minor` with no evidence required
-  (`kit/docs/review-loop.md:38`, `kit/roles/reviewer.md:14`), and every finding goes back to the worker
-  (`kit/docs/review-loop.md:26-27`).
+  have edited (review-loop.md lines 23-25 at aabed8b). Its findings are `blocker/major/minor` with no evidence required
+  (review-loop.md lines 38 at aabed8b, the 0.6 `kit/roles/reviewer.md` output line), and every finding goes back to the worker
+  (review-loop.md lines 26-27 at aabed8b).
 - Fix rounds are bounded only up to the deep tier: retry once, then escalate (`kit/docs/model-routing.md:28-29`).
   Nothing says what happens when the deep round fails too.
 - The clean-clone rule for scheduled chores exists as prose only (`kit/docs/chores.md:19-21`); the Guardrails table
@@ -126,7 +126,7 @@ Each slice ships and gives value on its own. A later slice never starts before t
   it matches, an unmatched file takes the last row, and the change takes its strictest file's tier.
 - Guarded paths SHALL always take the last row, whatever the table says: `.specs/steering/*`, `.specs/spec-kit.json`,
   `.specs/kit/*`, every in-repo path the Knowledge section names, and the agent files the installer writes.
-- The profile SHALL be read as of the change's base (the merge base for a range, `HEAD` for staged files), so a
+- The profile SHALL be read as of the change's base (the merge base for a range; for staged files the merge base with `merged_ref` as committed at `HEAD`, and the last tier for every file when there is none), so a
   change is judged by the rules it started under. No profile at the base means the human tier.
 - Output: a `### Risk tier` block for the PR (tier, Reviewer, Human, the file and glob that set it, the profile's
   commit) and `--json`. Exit 0 once labelled, 2 on a bad profile or argument. It SHALL never merge, approve or edit.
@@ -308,22 +308,25 @@ Blocked on the auto-merge decision.
   (slice 3), E3 and E7 (slice 4); E6, E9 and E10 go to v070. Lands on [REQ-V060-07], [REQ-V060-10], [REQ-V060-11]
   and [REQ-V060-12] to [REQ-V060-16].
 
+- 2026-11-22, maintainer ("please dive in": the lead's recommended calls, open to correction): the eight open
+  decisions are settled as follows.
+  - Strictest file wins: a test kept next to the source takes the source's tier; no exclusion syntax. Lands on
+    [REQ-V060-05].
+  - A model's family is the model id's first `-`-separated token (`claude`, `gpt`, `gemini`); no config. Lands on
+    [REQ-V060-13].
+  - A reviewer in the implementer's family is a WARN that bars Human `none` once [REQ-V060-09] lands; never
+    `not ready` on its own, so a single-vendor repository can still work. Lands on [REQ-V060-13].
+  - A declared artifact path missing at the head is `not ready`: a declared artifact that is not there is a false
+    claim. Lands on [REQ-V060-14].
+  - Evidence thresholds ship as placeholders, so no tier is eligible until the repository sets numbers; the template
+    suggests numbers in a comment. Lands on [REQ-V060-08].
+  - Auto-merge (Human `none`) is allowed only on the lowest tier, only when the repository opts in, its evidence
+    thresholds are met and every guardrail row passes; otherwise `none` behaves as `spot`. Lands on [REQ-V060-09].
+  - `spot` means approve on the readiness verdict, gates and tests; reading a sampled diff in full is not shipped.
+    Lands on [REQ-V060-09].
+  - The planner's escalation counts as fix round 2: worker retry, planner, then the human (Stripe caps at two CI
+    rounds; the model-routing rule already escalates this way). Lands on [REQ-V060-15].
+
 ## Open decisions
 
-- DECISION: Is auto-merge (Human `none`) ever allowed, and for which tier? Default until answered: no; `none` behaves
-  as `spot`. Blocks REQ-V060-09. — maintainer
-- DECISION: `spot` means approve on verdict, gates and tests (default), or read one sampled diff in N in full? — maintainer
-- DECISION: Evidence thresholds: ship placeholders, so no tier is ever eligible until the repo sets numbers (default),
-  or ship suggested numbers? — maintainer
-- DECISION: Strictest file wins, so a test kept next to the source takes the source's tier. Accept (default), or add
-  an exclusion syntax? — maintainer
-- DECISION: How is a model's family read? The model id's first `-`-separated token (`claude-…`, `gpt-…`,
-  `gemini-…`; default, no config), a Family → id-prefix table in the profile, or a free-text `family:` the lead
-  writes? Blocks REQ-V060-13. — maintainer
-- DECISION: A reviewer in the implementer's family: a WARN that bars Human `none` once REQ-V060-09 lands (default),
-  `not ready` on every tier, or no check? A single-vendor repository can never pass the second. Blocks REQ-V060-13.
-  — maintainer
-- DECISION: A declared artifact path missing at the head: FAIL, `not ready` (default: a declared artifact that is not
-  there is a false claim), or WARN? Blocks REQ-V060-14. — maintainer
-- DECISION: Does the planner's escalation count as fix round 2 (default: worker retry, planner, then the human), or
-  do two worker rounds come before the planner? Blocks REQ-V060-15. — maintainer
+None. Platform-wide (multi-repository) specs are pinned until the CRRD split proves the model (2026-11-22).

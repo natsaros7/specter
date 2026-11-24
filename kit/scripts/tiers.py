@@ -1,0 +1,305 @@
+#!/usr/bin/env python3
+"""Check the Tiers table of the autonomy profile. Python 3.8+, stdlib only.
+
+Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check [--specs DIR] [--file PATH] | --help
+       default DIR = the .specs/ this script is installed in; default PATH = DIR/steering/autonomy.md
+
+--check reads the working-tree profile and validates its `## Tiers` table: unique tier names, at least one `glob`
+code span per Paths cell, Reviewer standard|deep, Human none|spot|required and never decreasing down the table, the
+last row `required`, no <placeholder> left in. It also fails when a tier above the last lists a guarded path (the
+profile itself, the installed kit, Knowledge targets, agent files): guarded paths always take the last row.
+Exit 0: valid, or no profile / no Tiers section (not configured: the human tier applies, as in 0.5.0).
+Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or argument, with `file:line`.
+
+Without --check it labels a change and prints a `### Risk tier` block (--json: the same as JSON). The change is the
+staged files (base = merge-base of HEAD and merged_ref, read from spec-kit.json as committed at HEAD, so the branch's
+own commits count; no merged_ref, origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
+(base = merge-base A B, head B); the block names the base. The profile is read at the base, never the working tree.
+Paths and globs are repo-root-relative, even when .specs/ sits in a subfolder, and compared under one key (NFKC and a
+full case fold), the way APFS and NTFS open them. Each file takes the lowest row a glob matches (none: the last row;
+guarded: the last row) and the change takes its strictest file's tier. Renames count under both paths. Staged mode is
+a preflight; the binding label is --range after the commit, run from a trusted copy of the kit.
+Exit 0, or 2 on a bad argument, profile or spec-kit.json.
+No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
+"""
+import fnmatch
+import json
+import posixpath
+import re
+import subprocess
+import sys
+import unicodedata
+from pathlib import Path
+
+sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import gates  # noqa: E402
+import spec_lint  # noqa: E402
+
+HEAD = ["Tier", "Paths", "Reviewer", "Human"]
+REVIEWER = ("standard", "deep")
+HUMAN = ("none", "spot", "required")
+# The installer writes these; install.py is not copied into projects, so they are listed here.
+# Matched under key() (macOS and Windows checkouts fold case and Unicode) against repo-root-relative paths.
+# shortcut: kept by hand; selftest 13b fails when install.AGENTS gains a skills folder not covered, add it here then;
+# new agent-instruction file conventions outside install.AGENTS (rules files, MCP config) are added here too.
+# AGENTS*.md and CLAUDE*.md take AGENTS.override.md (Codex) and CLAUDE.local.md (Claude Code) at any depth.
+GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/README.md", "AGENTS*.md", "CLAUDE*.md",
+           "GEMINI*.md", "*/AGENTS*.md", "*/CLAUDE*.md", "*/GEMINI*.md", ".github/copilot-instructions.md",
+           ".github/instructions/*", ".github/prompts/*", ".github/agents/*", ".github/skills/*", "*/.github/*instructions*",
+           ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
+           ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
+           "docs/CODEOWNERS"]
+PLACEHOLDER = re.compile(r"<[^<>`]*>")
+
+
+def section(text, name):
+    """[(lineno, line)] under `## name` up to the next `## `, or None when the heading is absent."""
+    out, inside = None, False
+    for n, line in enumerate(text.splitlines(), 1):
+        if line.startswith("## "):
+            inside = line[3:].strip().lower() == name.lower()
+            out = [] if inside and out is None else out
+        elif inside:
+            out.append((n, line))
+    return out
+
+
+def parse_tiers(text):
+    """[(tier, globs, reviewer, human, lineno)] or None when there is no Tiers section.
+    Raises ValueError((lineno, message)) on the first bad row."""
+    lines = section(text, "Tiers")
+    if lines is None:
+        return None
+    rows, head = [], None
+    for n, line in lines:
+        if not line.lstrip().startswith("|"):
+            continue
+        cells = gates.split_row(line)
+        if head is None:
+            head = [c.lower() for c in cells]
+            if head != [h.lower() for h in HEAD]:
+                raise ValueError((n, "header must be | " + " | ".join(HEAD) + " |"))
+            continue
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if len(cells) != 4:
+            raise ValueError((n, "row needs 4 cells, found " + str(len(cells))))
+        tier, paths, reviewer, human = cells
+        if PLACEHOLDER.search(line):
+            raise ValueError((n, "tier '" + tier + "' still holds a template placeholder"))
+        spans = re.findall(r"`([^`]+)`", paths)
+        if not tier or not spans:
+            raise ValueError((n, "tier '" + tier + "' needs a name and at least one `glob` in Paths"))
+        if tier in [r[0] for r in rows]:
+            raise ValueError((n, "duplicate tier '" + tier + "'"))
+        if reviewer not in REVIEWER or human not in HUMAN:
+            raise ValueError((n, "Reviewer is standard|deep and Human is none|spot|required, found " + reviewer + "|" + human))
+        if rows and HUMAN.index(human) < HUMAN.index(rows[-1][3]):
+            raise ValueError((n, "Human goes down (" + rows[-1][3] + " then " + human + "); order rows from most to least autonomous"))
+        rows.append((tier, spans, reviewer, human, n))
+    if not rows:
+        raise ValueError((lines[0][0] - 1, "Tiers has no rows"))
+    if rows[-1][3] != "required":
+        raise ValueError((rows[-1][4], "the last tier must be Human required"))
+    return rows
+
+
+def guarded_globs(text, rel):
+    """GUARDED plus the in-repo link targets of the Knowledge table (a folder becomes folder/*). rel is the profile's
+    path from the repo root, which relative links resolve against."""
+    out = list(GUARDED)
+    for _, line in section(text, "Knowledge") or []:
+        for target in re.findall(r"\]\(([^)\s]+)\)", line):
+            target = target.split("#")[0]
+            path = posixpath.normpath(posixpath.join(posixpath.dirname(rel), target)) if target else ""
+            if not path or ":" in target or path.startswith(("..", "/")):
+                continue
+            out.append(path + "/*" if target.endswith("/") else path)
+    return out
+
+
+def key(s):
+    """The one key every path and glob is compared under: NFKC, then a full case fold that also takes what APFS and
+    NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I).
+    shortcut: the key folds more than APFS (NFKC) or a case-sensitive disk, so a file that matches no glob as spelled
+    (Docs/x on Linux) can take a lower row's tier; tighten when a project runs files by exact case-variant names."""
+    return unicodedata.normalize("NFKC", s).upper().casefold().replace("\u0307", "")
+
+
+def hit(path, globs):
+    """First glob matching path under key(): a path must not escape its row through a folding checkout."""
+    k = key(path)
+    return next((g for g in globs if fnmatch.fnmatchcase(path, g) or fnmatch.fnmatchcase(k, key(g))), None)
+
+
+def profile_at(root, base, rel):
+    """The profile's text as of commit `base`, or None when it does not exist there (never the working tree)."""
+    run = subprocess.run(["git", "-C", str(root), "show", base + ":./" + rel], capture_output=True, text=True)
+    return run.stdout if run.returncode == 0 else None
+
+
+USAGE = "usage: tiers.py [--specs DIR] [--file PATH] [--range A...B] [--json] | --check | --help"
+
+
+def refuse(msg):
+    print("tiers: " + msg, file=sys.stderr)
+    return 2
+
+
+def git(root, *args):
+    run = subprocess.run(["git", "-C", str(root)] + list(args), capture_output=True, text=True)
+    return run.stdout.strip() if run.returncode == 0 else None
+
+
+def gitz(root, *args):
+    """NUL-split stdout of a git command, or None on failure; never parses quoted paths."""
+    run = subprocess.run(["git", "-C", str(root)] + list(args), capture_output=True)
+    return [x.decode("utf-8", "surrogateescape") for x in run.stdout.split(b"\0") if x] if run.returncode == 0 else None
+
+
+def classify(root, rel, rng, specs=None):
+    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, why, note}
+    (why is None when a profile was read; note names the base and how it was found) or raises ValueError(message).
+    ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
+    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref."""
+    top = git(root, "rev-parse", "--show-toplevel")
+    prefix = git(root, "rev-parse", "--show-prefix") or ""
+    closed = False
+    if rng:
+        a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
+        base = git(root, "merge-base", a, b) if a and b else None
+        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, b) if base else None
+        note = str(base)[:7] + " (merge base of " + rng + ")"
+    else:
+        head = git(root, "rev-parse", "--verify", "-q", "HEAD")
+        cfg = (Path(specs).name if specs else ".specs") + "/spec-kit.json"
+        try:
+            # As committed at HEAD: a work-tree edit must not move the base. An edit the branch committed is in the
+            # diff from any older merge base, and spec-kit.json is guarded.
+            # shortcut: a committed merged_ref naming the branch itself makes HEAD the base and hides its commits;
+            # only --range binds, upgrade if staged labels ever gate a merge.
+            conf = json.loads(profile_at(root, "HEAD", cfg) or "{}") if head else {}
+            want = conf.get("merged_ref") if isinstance(conf, dict) else 0
+            if not (want is None or isinstance(want, str)):
+                raise ValueError("merged_ref must be a ref name or null")
+            ref = spec_lint.merged_ref(root, {"merged_ref": want})
+        except (ValueError, OSError, subprocess.SubprocessError) as err:
+            raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
+        merge = git(root, "merge-base", "HEAD", ref) if ref and ref != "HEAD" and head else None
+        # No merge base: fail closed, every file takes the last row.
+        base, closed = merge or head, not merge
+        note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (no merge base: last tier)"
+        files = gitz(top, "diff", "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
+    if files is None:
+        raise ValueError("cannot resolve " + (("--range " + rng) if rng else "the staged change") + " in " + str(root))
+    text = profile_at(root, base, rel) if base else None
+    try:
+        rows = parse_tiers(text) if text else None
+    except ValueError as err:
+        raise ValueError(rel + " at " + str(base)[:7] + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+    short = (base or "HEAD")[:7]
+    if rows is None:
+        # Not configured: the human tier, as in 0.5.0.
+        rows = [("human", ["*"], "deep", "required", 0)]
+        text, why = "", ("no autonomy profile at " if not text else "no Tiers section in profile at ") + short
+    else:
+        why = None
+    guarded = guarded_globs(text, rel)
+    guarded += [prefix + g for g in guarded] if prefix else []
+    last, counts, top = len(rows) - 1, {}, (-1, None, None)
+    for f in files:
+        g0 = hit(f, guarded)
+        idx, glob = (last, g0) if g0 or closed else next(
+            ((k, g) for k, r in reversed(list(enumerate(rows))) for g in [hit(f, r[1])] if g), (last, None))
+        counts[rows[idx][0]] = counts.get(rows[idx][0], 0) + 1
+        top = max(top, (idx, f, glob), key=lambda t: t[0])
+    idx = top[0] if files else last
+    tier, _, reviewer, human, _ = rows[idx]
+    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note,
+            "set_by": {"file": top[1], "glob": top[2]} if files else None,
+            "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
+
+
+def label(root, rel, rng, as_json, specs=None):
+    """Print the Risk tier block for the staged change or the range; return the exit code."""
+    try:
+        c = classify(root, rel, rng, specs)
+    except ValueError as err:
+        return refuse(str(err))
+    base, files, tier, reviewer, human, why, set_by, ordered = (c[k] for k in (
+        "base", "files", "tier", "reviewer", "human", "why", "set_by", "counts"))
+    short = (base or "HEAD")[:7]
+    if as_json:
+        print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
+                          "profile_commit": base if why is None else None, "labels_only": True}))
+        return 0
+    print("### Risk tier")
+    print("- tier: " + tier + " (reviewer: " + reviewer + ", human: " + human + ")")
+    if set_by:
+        print("- set by: " + set_by["file"] + (" (`" + set_by["glob"] + "`)" if set_by["glob"] else " (no glob matched)"))
+    print("- files: " + str(len(files)) + (" (" + ", ".join(k + " " + str(v) for k, v in ordered.items()) + ")" if files else ""))
+    print("- base: " + c["note"])
+    print("- profile: " + (why or rel + " at " + short))
+    print("- autonomy: labels only; every change still gets the human check")
+    return 0
+
+
+def main(argv):
+    if "-h" in argv or "--help" in argv:
+        print(__doc__.strip())
+        return 0
+    specs = Path(__file__).resolve().parents[2]
+    profile = None
+    for flag in ("--specs", "--file"):
+        if flag in argv:
+            i = argv.index(flag)
+            if i + 1 >= len(argv):
+                return refuse(USAGE)
+            value, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
+            specs, profile = (value, profile) if flag == "--specs" else (specs, value)
+    rng, as_json = None, "--json" in argv
+    argv = [a for a in argv if a != "--json"]
+    if "--range" in argv:
+        i = argv.index("--range")
+        if i + 1 >= len(argv) or not re.fullmatch(r"[^.\s][^\s]*?\.\.\.?[^.\s][^\s]*", argv[i + 1]):
+            return refuse("--range needs A...B; " + USAGE)
+        rng, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+    check = argv == ["--check"]
+    if argv and not check or check and (rng or as_json):
+        return refuse("unknown or conflicting argument(s) " + " ".join(argv + (["--json"] if as_json else []) + (["--range"] if rng else [])) + "; " + USAGE)
+    profile = profile or specs / "steering" / "autonomy.md"
+    if not check:
+        try:
+            rel = profile.relative_to(specs.parent).as_posix()
+        except ValueError:
+            return refuse(str(profile) + " is outside " + str(specs.parent) + "; " + USAGE)
+        return label(specs.parent, rel, rng, as_json, specs)
+    try:
+        text = profile.read_text()
+    except OSError:
+        print("tiers: no " + str(profile) + ": not configured, every change takes the human tier")
+        return 0
+    try:
+        rows = parse_tiers(text)
+    except ValueError as err:
+        return refuse(str(profile) + ":" + str(err.args[0][0]) + ": " + err.args[0][1])
+    if rows is None:
+        print("tiers: no Tiers section in " + str(profile) + ": not configured, every change takes the human tier")
+        return 0
+    try:
+        rel = profile.relative_to(specs.parent).as_posix()
+    except ValueError:
+        rel = ".specs/steering/autonomy.md"
+    guarded = guarded_globs(text, rel)
+    for tier, globs, _, _, n in rows[:-1]:
+        for g in globs:
+            if hit(g, guarded):
+                print("FAIL " + str(profile) + ":" + str(n) + ": tier '" + tier + "' lists guarded path " + g + ", which always takes '" + rows[-1][0] + "'")
+                return 1
+    print("tiers: " + str(len(rows)) + " tier(s) ok in " + str(profile))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

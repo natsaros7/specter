@@ -67,6 +67,7 @@ python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdou
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
+python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -85,7 +86,7 @@ New `.specs/spec-kit.json` keys (all optional):
 | `decisions` | `{}` | `file` (default `steering/decisions.md`), `backlinks` (`false`, `"warn"` or `true`) and `enabled` (default `true`); any other value or key stops the lint; see below |
 | `unresolved_req` | `"warn"` | `"off"` silences the WARN for REQ ids cited in `.specs/` but defined nowhere |
 | `denylist_sha256` | `[]` | SHA-256 digests of terms that must not appear in `.specs/`; see below |
-| `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count |
+| `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count. Since 0.7.0 it also sets the staged base of `tiers.py` and `ready.py`: with neither it nor `origin/HEAD`, every staged change takes the last tier |
 
 ### Decisions, names, deploy impact, gates
 
@@ -109,7 +110,7 @@ default is a WARN for REQ ids that are cited but defined nowhere.
 - **Gates.** `gates.py` executes, with `sh -c` from the project root, the commands in this project's own
   `| # | Gate | Command |` table of `steering/spec-rules.md` (or `--file`), in order, and nothing else. Whoever can edit
   that table decides what runs, so treat it like code: read it before you run `gates.py` on a branch you didn't write.
-  It stops at the first failure and prints a `### Gates` block with the commit as it was before the run (`+dirty` when
+  It stops at the first failure and prints a `### Gates` block, also on a red run (`pass (…)`, `FAIL (exit n)`, `not run`, then `verdict:`), with the commit as it was before the run (`+dirty` when
   the tree had changes; `none` outside git). It never guesses a command: no table, no run.
 - **Onboarding and grilling.** Setup offers a `.specs/ONBOARDING.md` with starter prompts, and
   [`kit/docs/review-loop.md`](../kit/docs/review-loop.md) describes grilling a spec or plan before any code is written.
@@ -121,10 +122,10 @@ factory slices are tested on. Its README covers the build (JDK 21) and the sandb
 `install.sh`, commit, then hand an agent one of the seed tasks. Specter's optional gate G5 (`sh tests/acme-build.sh`)
 builds it.
 
-## Autonomy profile (0.6.0, slice 1)
+## Autonomy profile (0.6.0)
 
 `.specs/steering/autonomy.md` (template in `kit/templates/steering/`) holds what agents may do here without a human.
-Slice 1 has two sections. Tiers, Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
+Sections so far: Knowledge, Tiers, Chores. Guardrails and Evidence come in later releases. Without the file, the lint and the playbooks
 behave as in 0.5.0; the report always gains the In flight card. Setup asks about it in Q10.
 
 - **Knowledge.** A table of where the project keeps what an agent must know (router, steering, decisions, ADRs,
@@ -133,9 +134,21 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
 - **Lessons.** `.specs/steering/lessons.md` takes one dated line per correction. A lesson seen twice becomes a check first
   (a Gates row, a lint rule or a test), and a rule in spec-rules, code-standards or decisions only when no check can
   catch it (`sync.md`).
+- **Tiers.** A `| Tier | Paths | Reviewer | Human |` table, rows from most to least autonomous (setup suggests routine: tests,
+  docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
+  glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
+  `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
+  Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
+  head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
+  Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base>`,
+  then `python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md` as a staged preflight
+  before the commit, and `… tiers.py --specs .specs --range <base>...HEAD` plus `… ready.py --specs .specs --range
+  <base>...HEAD --pr /tmp/pr.md` after it (the only binding check; steps in `kit/docs/review-loop.md`). The first
+  upgrade to 0.7.0 has no kit at its base: run them from the specter release checkout. `ready` means the PR's
+  declarations agree with the base's rules and the head commit; it does not prove the gates ran: rerun them, or run them in CI.
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
-  `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); on success it prints
-  the same `### Gates` block. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
+  `python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md`. The runner stops at the first failure (exit 1); it prints
+  the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
   are in [`kit/docs/chores.md`](../kit/docs/chores.md).
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.

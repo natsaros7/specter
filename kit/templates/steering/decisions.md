@@ -8,6 +8,8 @@ The record of what was settled, and why. Read it before you open a question it a
   number, or a topic and a number). `D-DAY` in prose is not an id, and neither is one inside another id, such as `REQ-D-01`. Cite them as `Decision: D-<id>` in requirements, designs and PR descriptions.
 - "Where it lands" names the `[REQ-…]` ids (and anything else, in words) the decision governs. Each REQ named there
   cites the decision back in its definition.
+- "Checked by" is optional. It names the row(s) of the Gates table in `steering/spec-rules.md` (its `#`, its Gate name,
+  or both; comma-separated) that fail if the decision is broken. Empty means no gate checks it. A name that is no gate row fails the lint.
 - Only decisions that are settled go here. An open question stays in the feature's "Open decisions" until its owner
   answers it.
 
@@ -16,6 +18,6 @@ defined. With `"decisions": {"backlinks": true}` in `.specs/spec-kit.json` (or `
 
 ## <YYYY-MM-DD>: <topic, e.g. "review of the payment refactor">
 
-| ID | Decision | Why | Where it lands | Supersedes |
-|---|---|---|---|---|
-| D-<id> | <what was decided, one testable sentence> | <the evidence or reason; who decided> | [REQ-<FEAT>-NN], <other places> | <D-<old id>, or empty> |
+| ID | Decision | Why | Where it lands | Checked by | Supersedes |
+|---|---|---|---|---|---|
+| D-<id> | <what was decided, one testable sentence> | <the evidence or reason; who decided> | [REQ-<FEAT>-NN], <other places> | <Gates table row, e.g. G3, or empty> | <D-<old id>, or empty> |

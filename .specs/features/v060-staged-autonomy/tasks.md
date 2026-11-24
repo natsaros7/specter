@@ -3,6 +3,20 @@
 Deploy impact: none (specter has no CI/CD; a project gets each slice only when it re-runs `install.sh`, and nothing
 changes until it adds `steering/autonomy.md`)
 
+## ▶ Resume here (2026-11-22, end of session)
+
+Slice 2 is released as 0.7.0 on branch `feat/0.7.0` (pushed; stacked on `feat/0.6.5-acme-java` and `feat/0.6.0`;
+none merged to `main`, none tagged). Three security reviews in `docs/reviews/2026-11-22-slice2-*.md`; the last one
+says ship, with MINORs left for 0.7.1 (listed in `docs/reviews/2026-11-22-slice2-confirmation-review.md`; the cheap
+ones are already in).
+- Next: slice 3, tasks 16-19 (guardrails and evidence, release 0.8.0); task 16's decision is already recorded
+  (Decided 2026-11-22). Then slice 4, tasks 20-23 (pipeline, release 0.9.0), which closes the v060 milestone.
+- Work one task per dispatch, gates G1-G4 after each, a deep-tier security review before each release: slice 2
+  needed three review rounds, so plan for it. Trust-layer code (tiers.py, ready.py, gates.py) changes go red-first.
+- Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0 to `main` and tag, in that order.
+- Pinned (do not start): the platform layer for multi-repo systems, until the CRRD spec split closes. Its input is
+  gaps G1-G13 in CRRD's `.specs/features/crrd-platform-split/design.md` § 8.4.
+
 ## Slice 1: a solid stage 3 (release 0.6.0)
 
 - [x] 1 Gate: record the memory-file and first-chore decisions in the Open decisions; delete the unused option —
@@ -18,29 +32,42 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 2: risk-tier labels (release 0.7.0)
 
-- [ ] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
+- [x] 9 Gate: record the strictest-file, model-family, shared-family and missing-artifact decisions —
   [REQ-V060-05] [REQ-V060-13] [REQ-V060-14]
-- [ ] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
-- [ ] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]
-- [ ] 11a `gates.py`: every row in the `### Gates` block as `pass (…)`, `FAIL (exit n)` or `not run`, a verdict line,
+- [x] 10 `tiers.py`: parse and `--check` the Tiers table, profile at the base, guarded paths — [REQ-V060-01] [REQ-V060-05]
+  - Evidence: `kit/scripts/tiers.py` (`parse_tiers`, `guarded_globs`, `profile_at`, `--check`); selftest 13b red (no script) then green.
+- [x] 11 `tiers.py`: label staged or `--range`, `### Risk tier` block, `--json` — [REQ-V060-05]
+  - Evidence: `kit/scripts/tiers.py` (`label`); selftest 13b label part red ("expected --check") then green.
+- [x] 11a `gates.py`: every row in the `### Gates` block as `pass (…)`, `FAIL (exit n)` or `not run`, a verdict line,
   the block on red runs too; spec-rules §7.1 "cheapest rows first"; selftest case 11 expectation — [REQ-V060-12]
-- [ ] 11b `ready.py`: PR text from `--pr` or stdin, base and head as `tiers.py`, `### Gates` against the base's table
+  - Evidence: `kit/scripts/gates.py`; selftest 11 red ("red gates block on stdout") then green; spec-rules §7.1, `docs/reference.md` updated.
+- [x] 11b `ready.py`: PR text from `--pr` or stdin, base and head as `tiers.py`, `### Gates` against the base's table
   and the head commit, `### Readiness` block, `--json`, no command run — [REQ-V060-12]
-- [ ] 11c `ready.py`: `### Review` block: both model ids, families compared, `rules:` at the base, blocker form — [REQ-V060-13]
-- [ ] 11d `ready.py`: `### Verification` lines: REQ defined, path at the head, URL declared not fetched — [REQ-V060-14]
-- [ ] 12 Review loop, reviewer role, model routing, spec-rules §7.4: reviewer tier from the label — [REQ-V060-05]
-- [ ] 12a Review loop, reviewer and generator roles, feature `tasks.md` template: rules read at the base, the
+  - Evidence: `kit/scripts/ready.py` (+ `tiers.classify` extracted from `label`); selftest 11b red (ready.py missing) then green: ready, missing/not-run/FAIL lane, stale, dirty, forged row, `--json`, usage.
+- [x] 11c `ready.py`: `### Review` block: both model ids, families compared, `rules:` at the base, blocker form — [REQ-V060-13]
+  - Evidence: `kit/scripts/ready.py` `check_review`; selftest 11c red (a PR with no `### Review` read as ready) then green: valid, missing block, missing id, rules not the base, same-family WARN, open blocker, blocker without evidence or file:line advisory, `--json` review.
+- [x] 11d `ready.py`: `### Verification` lines: REQ defined, path at the head, URL declared not fetched — [REQ-V060-14]
+  - Evidence: `kit/scripts/ready.py` `check_verification`; selftest 11d: valid lines (path ok, URL `declared, not fetched`), unknown REQ, missing path, `..`, absolute path, symlink, malformed line, no block ready, `--json` verification.
+- [x] 12 Review loop, reviewer role, model routing, spec-rules §7.4: reviewer tier from the label — [REQ-V060-05]
+  - Evidence: prose only: `review-loop.md` step 3 and 5, `roles/reviewer.md`, `model-routing.md`, `spec-rules.md` §7.4 point at `tiers.py` and `ready.py`; gates green.
+- [x] 12a Review loop, reviewer and generator roles, feature `tasks.md` template: rules read at the base, the
   blocker/advisory verdict table, advisories filed as follow-ups, artifacts checked against acceptance — [REQ-V060-13]
   [REQ-V060-14]
-- [ ] 13 Lint: decisions `Checked by` column against the Gates table; decisions template column — [REQ-V060-06]
-- [ ] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
+  - Evidence: prose only: `review-loop.md` steps 3-5, prompt and verdict table; `roles/reviewer.md`, `roles/generator.md`, feature `tasks.md` PR task; formats match `ready.py` `check_review`/`check_verification`; gates green.
+- [x] 13 Lint: decisions `Checked by` column against the Gates table; decisions template column — [REQ-V060-06]
+  - Evidence: `spec_lint.py` (`decision_rows`, `landings`); selftest case 12 "Checked by" part red (rc=0) then green.
+- [x] 14 Tiers section in the template, setup Q10 and the example; selftest case 13b, readiness, review and artifact
   cases included — [REQ-V060-05] [REQ-V060-06] [REQ-V060-11] [REQ-V060-12] [REQ-V060-13] [REQ-V060-14]
-- [ ] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
+  - Evidence: template and acme `autonomy.md` gain `## Tiers`; setup Q10 and Phase 5 step 8 cover it; selftest case 14 (installed repo, acme table: test file routine, order source domain, GrpcSecurityFilter critical; `ready.py` verdict) beside 13b, 11b-11d.
+- [x] 15 Gate G1-G4 green (deep-tier review); docs, CHANGELOG naming the `### Gates` format change; release 0.7.0 —
   [REQ-V060-11] [REQ-V060-12]
+  - Evidence (review fix, ready.py): selftest 11b/11e rows red then green for head gate commands (changed, removed), staged base, stale staged block, blocker location forms, `FAIL (exit -9)`, reviewer-tier warning, provider-prefixed ids, hidden blocks, directory targets, no `__pycache__`; docs name the trusted-copy run.
+  - Evidence (review fix, tiers.py): selftest 13b rows for case-folded, nested, quoted-path, subfolder-.specs guards and the merge-base staged base red, then green.
+  - Evidence (re-review fix): selftest rows red, then green: folded names (`AGENTſ.md`, `.ſpecs/kit/x`, `.specs/ﬆeering/x.md`, `.clınerules`, `src/Security/Bypass.java`, NFD Knowledge target), `AGENTS.override.md`/`CLAUDE.local.md`/nested `.claude`, work-tree `merged_ref` ignored, no merge base fails closed, Gates table equal (prepended row, duplicate label), `tree changed during gates`, unreadable and en-dash blocker locations, `./` targets, `--range` bad `spec-kit.json` exits 2.
 
 ## Slice 3: guardrails and evidence (release 0.8.0)
 
-- [ ] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
+- [x] 16 Gate: record the evidence-thresholds decision — [REQ-V060-08]
 - [ ] 17 Guardrails section and the `none` → `spot` downgrade in `tiers.py` — [REQ-V060-07]
 - [ ] 17a Guardrail rows seven (untrusted-text jobs read-only, no secrets, validated write step) and eight (chores from
   a clean clone) in the template and the example; `chores.md` points to row eight — [REQ-V060-07]
@@ -50,7 +77,7 @@ changes until it adds `steering/autonomy.md`)
 
 ## Slice 4: the pipeline (release 0.9.0)
 
-- [ ] 20 Gate: record the auto-merge, `spot` and planner-round decisions as decision rows — [REQ-V060-09] [REQ-V060-15]
+- [x] 20 Gate: record the auto-merge, `spot` and planner-round decisions as decision rows — [REQ-V060-09] [REQ-V060-15]
 - [ ] 21 Review-loop step 5 by tier; `labels_only` off; the platform recipe with a merge queue; a shared family bars
   `none` — [REQ-V060-09] [REQ-V060-13] [REQ-V060-16]
 - [ ] 21a Fix-round cap: review-loop diagram and step 4, model-routing rule 3, generator role, `next-task.md`;
