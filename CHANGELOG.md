@@ -41,11 +41,15 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ### Security
 - Refs resolve to full names. `merged_ref`, its fallback (now spelled `refs/remotes/origin/HEAD`) and each `--range`
-  end must name exactly one branch or remote-tracking ref (or `HEAD`, or a commit sha for a range end): git's own lookup
+  end must name exactly one branch or remote-tracking ref (or `HEAD`, or a full commit id for a range end): git's own lookup
   takes `refs/tags/<name>` first, so a pushed tag `origin/HEAD` or `origin/main` stood in for merged history or moved the
   range base, and earned `none`. A tag or an ambiguous name is refused: the label says `spot` (`evidence: merged_ref
   … is ambiguous`), `tiers.py --evidence` and a bad `--range` end exit 2, staged mode takes the last row, and
-  `spec_lint.py`/`spec_report.py` skip that ref. The staged note names the full ref (`merge base with refs/heads/main`).
+  `spec_lint.py` skips that ref with `WARN merged-work check skipped in <repo>: merged_ref …`, and `spec_report.py`
+  skips it. The staged note names the full ref (`merge base with refs/heads/main`).
+- A `refs/remotes/<remote>/HEAD` counts only as a symbolic ref: a pushed branch named `HEAD` lands there as a plain
+  ref in a CI fetch and stood in for merged history. A short sha is no longer a `--range` end (git looks it up as a ref
+  first, and a loose tag can shadow it on a case-insensitive disk): pass full commit ids.
 - The label and `ready.py` refuse evidence whose history holds any commit of the change (`evidence: <ref> contains the
   change`), so an `origin/HEAD` pointing at the PR branch earns nothing.
 

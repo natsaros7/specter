@@ -205,6 +205,8 @@ grep -q "merged, not closed" "$M/r.html" && grep -q "Merged, not closed" "$M/r.h
 rc=0; L --specs "$M/.specs" >/dev/null || rc=$?; [ "$rc" = 0 ] || fail "merged warning changed the exit code"
 rc=0; out=$(PATH=/nonexistent "$(command -v python3)" "$KIT/kit/scripts/spec_lint.py" --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available or timed out" || fail "missing git: $out"
+gitq -C "$M" tag v1; cfg ', "merged_ref": "v1"'; rc=0; out=$(L --specs "$M/.specs") || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped in .: merged_ref v1 is a tag" || fail "a refused merged_ref was skipped silently: $out"
 printf '{"tracker_pattern": "ABC-["}\n' > "$M/.specs/spec-kit.json"
 rc=0; out=$(L --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && [ "$(echo "$out" | grep -c 'invalid tracker_pattern')" = 1 ] || fail "invalid tracker_pattern: $out"
@@ -777,6 +779,14 @@ rc=0; out=$(crd origin/main...HEAD --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo
 # control: the real remote-tracking origin/HEAD, at main, still earns none
 gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
 out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "evidence: hold (merged [0-9]* < min 3)" || fail "13e N1: control origin/HEAD at main: $out"
+# C1: a pushed branch named HEAD lands as a plain refs/remotes/origin/HEAD in CI: only a symref is the remote's HEAD
+xmk c1 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b side; xdoc 1; xdoc 2; xdoc 3
+gitq -C "$R" checkout -q main; gitq -C "$R" checkout -q -b pr; xdoc 4; gitq -C "$R" update-ref refs/heads/HEAD side; gitq -C "$R" branch -D side
+xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e C1: a branch named HEAD earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e C1: a branch named HEAD gave auto-merge (exit $rc): $out"
+# C2: a short sha as a range end goes through git's ref lookup (a loose tag can shadow it on a case-insensitive disk): full ids only
+rc=0; out=$(cl --range "$(git -C "$C" rev-parse --short "$MB")...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e C2: a short sha range end was read (exit $rc): $out"
 
 # N2: under --auto-merge every warning is a no: no human is there to read it
 xmk n2 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1

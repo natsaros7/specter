@@ -367,6 +367,9 @@ def branch_ref(path, name):
         return None, name + " is ambiguous (" + ", ".join(hits) + ")"
     if hits and not (ok(hits[0]) and (not found[hits[0]] or ok(found[hits[0]]))):
         return None, name + " is " + ("a tag" if hits[0].startswith("refs/tags/") else "not a branch or remote-tracking ref") + " (" + hits[0] + ")"
+    # a pushed branch named HEAD lands as a plain refs/remotes/<remote>/HEAD: only a symref is the remote's default branch
+    if hits and hits[0].startswith("refs/remotes/") and hits[0].endswith("/HEAD") and not found[hits[0]]:
+        return None, name + " is not a symbolic ref (" + hits[0] + ": a branch named HEAD?)"
     return (hits[0] if hits else None), None
 
 
@@ -384,22 +387,25 @@ def merged_ref(path, config):
 
 
 def merged_commits(root, child_repos, config):
-    """{repo label: [commit message, ...]}, one git log per repo, ignoring commits that touch only .specs/.
-    Ref: merged_ref if set (a repo without it, or where it names a tag or is ambiguous, is skipped), else refs/remotes/origin/HEAD, then HEAD. None when git is missing or times out."""
-    out = {}
+    """({repo label: [commit message, ...]}, [why a repo was skipped]), one git log per repo, ignoring commits that touch
+    only .specs/. Ref: merged_ref if set (a repo without it is skipped; one where it names a tag or is ambiguous is skipped
+    with a why), else refs/remotes/origin/HEAD, then HEAD. None when git is missing or times out."""
+    out, skipped = {}, []
     for label, path in [(".", root)] + [(r, root / r) for r in child_repos]:
         if not (path / ".git").exists():
             continue
         git = lambda *a: subprocess.run(["git", "-C", str(path)] + list(a), capture_output=True, encoding="utf-8", errors="replace",
                                         timeout=60)
         try:
-            ref = merged_ref(path, config)[0]
+            ref, why = merged_ref(path, config)
+            if why:
+                skipped.append(label + ": " + why)
             log = git("log", ref, "--format=%x00%s%n%b", "--", ".", ":(exclude).specs") if ref else None
         except (OSError, subprocess.TimeoutExpired):
             return None
         if log and log.returncode == 0:
             out[label] = [m for m in log.stdout.split("\0") if m.strip()]
-    return out
+    return out, skipped
 
 
 def drift_rows(specs, max_age):
@@ -470,10 +476,13 @@ def lint_all(specs, names=()):
             keys = {m.group(0).upper() for m in tracker.finditer(feature.name) if m.group(0)} if tracker else set()
             if keys and (feature / "requirements.md").exists():
                 if commits is None:
-                    commits = merged_commits(specs.parent, repos(specs.parent), config)
-                    if commits is None:
+                    got = merged_commits(specs.parent, repos(specs.parent), config)
+                    if got is None:
                         commits = {}
                         warnings.append("WARN merged-work check skipped: git not available or timed out")
+                    else:
+                        commits = got[0]
+                        warnings.extend("WARN merged-work check skipped in " + w for w in got[1])
                 hit = re.compile("|".join("(?<![A-Za-z0-9])" + re.escape(k) + "(?![A-Za-z0-9])" for k in sorted(keys)))
                 found = {r: sum(1 for m in msgs if hit.search(m.upper())) for r, msgs in commits.items()}
                 found = {r: n for r, n in found.items() if n}

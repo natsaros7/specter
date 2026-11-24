@@ -17,7 +17,7 @@ staged files (base = merge-base of HEAD and merged_ref, read from spec-kit.json 
 own commits count; no merged_ref, refs/remotes/origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
 (base = merge-base A B, head B); the block names the base. merged_ref must name exactly one branch or remote-tracking
 ref (`refs/remotes/origin/main`, or a short name that is not also a tag or another ref): a tag or an ambiguous name is
-refused (staged: the last row; label: spot; --evidence: exit 2). A --range end is HEAD, a commit sha or such a ref; a
+refused (staged: the last row; label: spot; --evidence: exit 2). A --range end is HEAD, a full commit id or such a ref; a
 tag, an ambiguous name or an expression (`main~1`) is exit 2. The binding check passes full shas. The profile is read at the base, never the working tree.
 Paths and globs are repo-root-relative, even when .specs/ sits in a subfolder, and compared under one key (NFKC and a
 full case fold), the way APFS and NTFS open them. Each file takes the lowest row a glob matches (none: the last row;
@@ -288,16 +288,17 @@ def committed_ref(root, specs, head):
 
 
 def end_commit(root, end):
-    """The commit a --range end names, or None: HEAD, a full object id, a short sha that no ref is named, or exactly one
-    branch or remote-tracking ref (spec_lint.branch_ref). Raises ValueError for a tag, an ambiguous name or anything
-    else (`main~1`): git would resolve a tag `origin/main` before the remote, and move the base or the head."""
+    """The commit a --range end names, or None: HEAD, a full object id, or exactly one branch or remote-tracking ref
+    (spec_lint.branch_ref). Raises ValueError for a tag, an ambiguous name, a short sha or anything else (`main~1`): git
+    would resolve a tag `origin/main` before the remote, and a short sha goes through the same ref lookup (a loose tag
+    `C282714` shadows `c282714` on a case-insensitive disk), moving the base or the head."""
     name = end
     if end != "HEAD" and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", end):
         name, why = spec_lint.branch_ref(root, end)
         if why:
             raise ValueError("--range end " + why)
-        if not name and not re.fullmatch(r"[0-9a-f]{4,63}", end):
-            raise ValueError("--range end " + end + " is not a branch, a remote-tracking ref, HEAD or a commit sha")
+        if not name:
+            raise ValueError("--range end " + end + " is not a branch, a remote-tracking ref, HEAD or a full commit id")
     return git(root, "rev-parse", "--verify", "-q", (name or end) + "^{commit}")
 
 
