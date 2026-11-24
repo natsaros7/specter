@@ -1,0 +1,11 @@
+$ python3 .specs/kit/scripts/tiers.py --check
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:36: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:37: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:38: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:39: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:40: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:41: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:42: declared
+guardrail ~/sandbox/acme-shop/.specs/steering/autonomy.md:43: declared
+tiers: 3 tier(s) ok in ~/sandbox/acme-shop/.specs/steering/autonomy.md
+[exit 0]

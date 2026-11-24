@@ -1,0 +1,10 @@
+$ python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range main...HEAD
+### Risk tier
+- tier: domain (reviewer: standard, human: spot)
+- set by: orders-api/src/main/java/com/acme/shop/orders/order/OrderService.java (`*/src/main/java/*`)
+- files: 2 (routine 1, domain 1)
+- base: 1d81586 (merge base of main...HEAD)
+- profile: .specs/steering/autonomy.md at 1d81586
+- guardrails: 8 declared
+- autonomy: labels only; every change still gets the human check
+[exit 0]

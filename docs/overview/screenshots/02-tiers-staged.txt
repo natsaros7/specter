@@ -1,0 +1,10 @@
+$ python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs   # staged pom.xml
+### Risk tier
+- tier: critical (reviewer: deep, human: required)
+- set by: orders-api/pom.xml (`*pom.xml`)
+- files: 1 (critical 1)
+- base: 1d81586 (merge base with main)
+- profile: .specs/steering/autonomy.md at 1d81586
+- guardrails: 8 declared
+- autonomy: labels only; every change still gets the human check
+[exit 0]
