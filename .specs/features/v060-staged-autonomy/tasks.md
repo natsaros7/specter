@@ -94,8 +94,9 @@ ones are already in).
 ## Slice 4: the pipeline (release 0.9.0)
 
 - [x] 20 Gate: record the auto-merge, `spot` and planner-round decisions as decision rows — [REQ-V060-09] [REQ-V060-15]
-- [ ] 21 Review-loop step 5 by tier; `labels_only` off; the platform recipe with a merge queue; a shared family bars
+- [x] 21 Review-loop step 5 by tier; `labels_only` off; the platform recipe with a merge queue; a shared family bars
   `none` — [REQ-V060-09] [REQ-V060-13] [REQ-V060-16]
+  - Evidence: selftest 13c2 red first (`- autonomy: labels only` on an eligible lowest tier), then green: `none` kept only on the lowest row with guardrails declared and evidence `eligible`, else `spot` with the reason (hold, a refusing evidence read, not the lowest tier); `labels_only` false; `ready.py` same family → spot. Lead fix, red then green: `ready.py` kept `none` on held evidence while the label said `spot`; it now applies `earned()` too. 13b, 13c and 14b expectations moved from `none` to `spot` (no earned evidence in those fixtures). G1-G4 green.
 - [ ] 21a Fix-round cap: review-loop diagram and step 4, model-routing rule 3, generator role, `next-task.md`;
   `rounds:` in `### Review`, checked by `ready.py` — [REQ-V060-15]
 - [ ] 21b `tiers.py --evidence`: the `demote:` line on a breach, profile untouched — [REQ-V060-16]

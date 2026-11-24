@@ -21,6 +21,8 @@ it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
+Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
+implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
 --json: {verdict, gates, tier, review, verification, warnings}.
 """
 import json
@@ -108,8 +110,8 @@ def check_gates(text, labels, head, ranged, staged=False):
 
 
 def family(model):
-    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. It only
-    # warns today; replace with a profile table before slice 4 lets a family bar Human none.
+    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. A miss
+    # leaves Human none unbarred; replace with a profile table when a repo mixes providers behind one family name.
     """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
     m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
     return m.split("-")[0]
@@ -284,6 +286,15 @@ def main(argv):
     warnings = g["warnings"] + review["warnings"]
     verdict = "not ready" if problems else "ready"
     tier = {k: change[k] for k in ("tier", "reviewer", "human")}
+    # none needs earned evidence, as in the label, and a reviewer of another family (REQ-V060-09, -13); exit code unchanged
+    why = []
+    if tier["human"] == "none":
+        prof = specs / "steering" / "autonomy.md"
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"])
+                           if change["why"] is None else None,
+                           "same family" if review["same_family"] else None) if w]
+    tier["human_why"] = "; ".join(why) or None
+    tier["human"] = "spot" if tier["human_why"] else tier["human"]
     if as_json:
         print(json.dumps({"verdict": verdict, "gates": g, "tier": tier, "review": review,
                           "verification": verification, "warnings": warnings}))
@@ -291,6 +302,8 @@ def main(argv):
         print("### Readiness")
         print("- gates: %d/%d pass at %s" % (g["passed"], g["total"], head[:7]))
         print("- tier: %s (reviewer: %s, human: %s)" % (tier["tier"], tier["reviewer"], tier["human"]))
+        if tier["human_why"]:
+            print("- human: none → spot (" + tier["human_why"] + ")")
         print("- verdict: " + verdict)
         for ln in verification["lines"]:
             print("- verification: %s %s: %s" % (ln["req"], ln["target"], ln["status"]))

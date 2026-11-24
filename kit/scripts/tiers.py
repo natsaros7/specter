@@ -26,6 +26,9 @@ declared to enforce (specter never checks it). A row is declared when Enforced b
 and not a word that names nothing: - — – ? tbd todo n/a na none pending, in any case, a trailing `.` ignored) and
 Verified is a YYYY-MM-DD date that is not in the future. A tier whose Human is `none` is reported as `spot` ("none → spot") while the section is
 absent or empty or any row is undeclared; --check prints one line per row (undeclared rows keep exit 0), a bad header is exit 2.
+Human `none` also needs the lowest row (the first of the Tiers table) and, in the label (not --check), `eligible` from
+--evidence below for that tier; otherwise the label says `spot` and `- human: none → spot (<why>)` names it (--json: `reasons`).
+A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -43,6 +46,8 @@ Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `
 """
 import datetime
 import fnmatch
+import contextlib
+import io
 import json
 import posixpath
 import re
@@ -321,21 +326,45 @@ def classify(root, rel, rng, specs=None, where=None):
         top = max(top, (idx, f, glob), key=lambda t: t[0])
     idx = top[0] if files else last
     tier, _, reviewer, human, _ = rows[idx]
-    guard = None
+    guard, no_low = None, False
     if why is None:
         undeclared = sum(1 for r in gr or [] if r[4])
         down = human == "none" and (not gr or undeclared > 0)
         guard = {"rows": len(gr or []), "undeclared": undeclared, "downgraded": down}
         human = "spot" if down else human
+        # none is for the lowest row only; a higher row that says none is read as spot
+        no_low = human == "none" and idx != 0
+        human = "spot" if no_low else human
     return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
+            "reasons": ["not the lowest tier"] if why is None and no_low else [],
             "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
-def label(root, rel, rng, as_json, specs=None):
+def earned(root, rel, specs, profile, tier):
+    """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed)."""
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = evidence(root, rel, specs, profile, True)
+    if rc:
+        return "evidence: " + (err.getvalue().strip().replace("tiers: ", "", 1) or "cannot be read")
+    m = json.loads(out.getvalue())["tiers"].get(tier) or {}
+    return None if m.get("verdict") == "eligible" else "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
+
+
+AUTONOMY = {"required": "the human check before merge",
+            "spot": "approve on the readiness verdict, the ### Gates block and the tests; read the flagged files in full",
+            "none": "no human before merge; the merge is the platform's auto-merge on required checks, never a specter script's"}
+
+
+def label(root, rel, rng, as_json, specs=None, profile=None):
     """Print the Risk tier block for the staged change or the range; return the exit code."""
     try:
         c = classify(root, rel, rng, specs)
+        # Only a label that would still be none reads history; a profile with no Tiers section has no tier to count.
+        if c["human"] == "none" and c["why"] is None:
+            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"])
+            c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
     except ValueError as err:
         return refuse(str(err))
     base, files, tier, reviewer, human, why, set_by, ordered, guard = (c[k] for k in (
@@ -343,7 +372,7 @@ def label(root, rel, rng, as_json, specs=None):
     short = (base or "HEAD")[:7]
     if as_json:
         print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
-                          "guardrails": guard, "profile_commit": base if why is None else None, "labels_only": True}))
+                          "guardrails": guard, "reasons": c["reasons"], "profile_commit": base if why is None else None, "labels_only": False}))
         return 0
     print("### Risk tier")
     print("- tier: " + tier + " (reviewer: " + reviewer + ", human: " + human + ")")
@@ -356,7 +385,9 @@ def label(root, rel, rng, as_json, specs=None):
         n, m = guard["rows"], guard["undeclared"]
         print("- guardrails: " + ("no Guardrails section" if not n else str(m) + " of " + str(n) + " undeclared" if m else str(n) + " declared")
               + (", none → spot" if guard["downgraded"] else ""))
-    print("- autonomy: labels only; every change still gets the human check")
+    if c["reasons"]:
+        print("- human: none → spot (" + "; ".join(c["reasons"]) + ")")
+    print("- autonomy: human " + human + ": " + AUTONOMY[human])
     return 0
 
 
@@ -512,7 +543,7 @@ def main(argv):
             return refuse(str(profile) + " is outside " + str(specs.parent) + "; " + USAGE)
         if evid:
             return evidence(specs.parent, rel, specs, profile, as_json)
-        return label(specs.parent, rel, rng, as_json, specs)
+        return label(specs.parent, rel, rng, as_json, specs, profile)
     try:
         text = profile.read_text()
     except OSError:

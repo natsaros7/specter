@@ -37,8 +37,16 @@ flowchart LR
 4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up
    (a task in the feature's `tasks.md`, or an issue); advisories never block. After a second red gate or a disputed finding,
    escalate to the planner (deep) with the spec, the diff and both outputs.
-5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
-   reviewer's verdict table. Write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
+5. **Human check, by the label's Human value** (`tiers.py`; `none` is kept only on the lowest tier with every
+   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so):
+   - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
+     reviewer's verdict table, as below.
+   - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
+   - `none`: no human before merge. Set the platform up once: the Gates as required checks, auto-merge on green,
+     CODEOWNERS for the `required` paths, and a merge queue (GitHub merge queue, GitLab merge trains or the
+     equivalent) so changes that are green alone are gated together. Nothing in the kit merges.
+
+   For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
    `### Verification` block. Then check it with the trusted copy from step 3, in two modes:
 

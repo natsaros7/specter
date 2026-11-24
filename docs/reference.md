@@ -170,8 +170,14 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
   `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
   max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
-  It edits nothing: raising a tier is a human edit of the profile, a guarded path. Still labels only: nothing merges
-  by itself until 0.9.0.
+  It edits nothing: raising a tier is a human edit of the profile, a guarded path.
+- **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the
+  `### Gates` block and the tests, with the flagged files read in full; `none` is no human before merge, and the merge
+  is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
+  guardrail declared and that tier `eligible` in `tiers.py --evidence`; otherwise it says `spot` and
+  `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
+  the implementer's model family makes `ready.py` report `spot` too; `ready.py` applies the evidence rule as the label does. The platform recipe (required checks = the
+  Gates, auto-merge on green, CODEOWNERS for `required` paths, a merge queue) is in `kit/docs/review-loop.md` step 5.
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.
 

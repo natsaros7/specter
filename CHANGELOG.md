@@ -5,6 +5,17 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+### Added
+- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe
+  (Gates as required checks, auto-merge on green, CODEOWNERS for `required` paths, a merge queue). Nothing in the kit merges.
+
+### Changed
+- `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier
+  `eligible` in `--evidence`; otherwise `spot`, with `- human: none → spot (<why>)` and `reasons` in `--json`. A failing
+  evidence read fails closed to `spot`. `labels_only` is `false`; the `- autonomy:` line states what the Human value means.
+- `ready.py` reports Human `none` as `spot` on the same rules as the label, and when reviewer and implementer share a
+  model family (exit code unchanged).
+
 ## [0.8.0] - 2026-11-23
 
 Slice 3 of staged autonomy: guardrails and evidence. The profile records what the platform enforces, and

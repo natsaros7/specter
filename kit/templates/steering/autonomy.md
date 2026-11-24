@@ -27,7 +27,7 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | C1 | Spec health | `python3 .specs/kit/scripts/spec_lint.py --cites && python3 .specs/kit/scripts/spec_report.py` |
 
 ## Guardrails
-<!-- Specter records these; the platform enforces them. A row counts as declared when Enforced by names what enforces it (no <placeholder>) and Verified is a YYYY-MM-DD date. Until every row is declared, a tier with Human none is labelled spot. No such job or no chores: say so, e.g. "no such job, checked .github/workflows/", and date it. -->
+<!-- Specter records these; the platform enforces them. A row counts as declared when Enforced by names what enforces it (no <placeholder>) and Verified is a YYYY-MM-DD date. Until every row is declared, a tier with Human none is labelled spot. Human none also needs the lowest tier and an eligible Evidence row; the merge is then the platform's auto-merge, with a merge queue. No such job or no chores: say so, e.g. "no such job, checked .github/workflows/", and date it. -->
 | Guardrail | Enforced by | Verified |
 |---|---|---|
 | No direct or force push to the default branch | <branch protection or ruleset> | <YYYY-MM-DD> |
