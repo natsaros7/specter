@@ -14,8 +14,11 @@ Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or arg
 
 Without --check it labels a change and prints a `### Risk tier` block (--json: the same as JSON). The change is the
 staged files (base = merge-base of HEAD and merged_ref, read from spec-kit.json as committed at HEAD, so the branch's
-own commits count; no merged_ref, origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
-(base = merge-base A B, head B); the block names the base. The profile is read at the base, never the working tree.
+own commits count; no merged_ref, refs/remotes/origin/HEAD or merge base: every file takes the last row) or --range A...B / A..B
+(base = merge-base A B, head B); the block names the base. merged_ref must name exactly one branch or remote-tracking
+ref (`refs/remotes/origin/main`, or a short name that is not also a tag or another ref): a tag or an ambiguous name is
+refused (staged: the last row; label: spot; --evidence: exit 2). A --range end is HEAD, a full commit id or such a ref; a
+tag, an ambiguous name or an expression (`main~1`) is exit 2. The binding check passes full shas. The profile is read at the base, never the working tree.
 Paths and globs are repo-root-relative, even when .specs/ sits in a subfolder, and compared under one key (NFKC and a
 full case fold), the way APFS and NTFS open them. Each file takes the lowest row a glob matches (none: the last row;
 guarded: the last row) and the change takes its strictest file's tier. Renames count under both paths. Staged mode is
@@ -26,6 +29,12 @@ declared to enforce (specter never checks it). A row is declared when Enforced b
 and not a word that names nothing: - — – ? tbd todo n/a na none pending, in any case, a trailing `.` ignored) and
 Verified is a YYYY-MM-DD date that is not in the future. A tier whose Human is `none` is reported as `spot` ("none → spot") while the section is
 absent or empty or any row is undeclared; --check prints one line per row (undeclared rows keep exit 0), a bad header is exit 2.
+Human `none` also needs the lowest row (the first of the Tiers table) and, in the label (not --check), `eligible` from
+--evidence below for that tier; otherwise the label says `spot` and `- human: none → spot (<why>)` names it (--json: `reasons`).
+The label counts history with the Evidence thresholds of the profile at the base (never the working tree), and with no
+merged_ref or refs/remotes/origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no
+merged_ref …`), and so it does when that history holds any commit of the change (`evidence: <ref> contains the change`).
+A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the working-tree Tiers table, `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -39,10 +48,14 @@ counts per tier: merged; reverted (a later commit whose change set, F^1..F, has 
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
 human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
 share of the merges that carry one. With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold. It never edits the profile.
+Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter> (a human edit; tiers.py changes nothing)` for that tier's
+row (none → spot, spot → required; `required` says already required); --json: per tier `demote` {file, line, from, to} or null.
 Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `file:line` for a bad row.
 """
 import datetime
 import fnmatch
+import contextlib
+import io
 import json
 import posixpath
 import re
@@ -203,9 +216,9 @@ def parse_evidence(text, tiers):
 
 
 def guarded_globs(text, rel):
-    """GUARDED plus the in-repo link targets of the Knowledge table (a folder becomes folder/*). rel is the profile's
-    path from the repo root, which relative links resolve against."""
-    out = list(GUARDED)
+    """GUARDED, the profile itself (rel, its path from the repo root, which also resolves relative links; --file can put it
+    outside GUARDED) and the in-repo link targets of the Knowledge table (a folder becomes folder/*)."""
+    out = list(GUARDED) + [rel]
     for _, line in section(text, "Knowledge") or []:
         for target in re.findall(r"\]\(([^)\s]+)\)", line):
             target = target.split("#")[0]
@@ -256,8 +269,9 @@ def gitz(root, *args):
 
 
 def committed_ref(root, specs, head):
-    """merged_ref as spec-kit.json is committed at head (next to the profile's .specs/ folder `specs`, default root/.specs),
-    resolved like spec_lint.merged_ref; None when nothing resolves. Raises ValueError on a bad spec-kit.json."""
+    """(ref, why): merged_ref as spec-kit.json is committed at head (next to the profile's .specs/ folder `specs`, default
+    root/.specs), resolved by spec_lint.merged_ref to a full branch or remote-tracking ref name (or HEAD); ref None when
+    nothing resolves, why the reason a tag or ambiguous name was refused. Raises ValueError on a bad spec-kit.json."""
     cfg = (Path(specs).name if specs else ".specs") + "/spec-kit.json"
     try:
         # As committed at HEAD: a work-tree edit must not move the base. An edit the branch committed is in the
@@ -273,8 +287,23 @@ def committed_ref(root, specs, head):
         raise ValueError("cannot read " + cfg + " at HEAD: " + str(err))
 
 
+def end_commit(root, end):
+    """The commit a --range end names, or None: HEAD, a full object id, or exactly one branch or remote-tracking ref
+    (spec_lint.branch_ref). Raises ValueError for a tag, an ambiguous name, a short sha or anything else (`main~1`): git
+    would resolve a tag `origin/main` before the remote, and a short sha goes through the same ref lookup (a loose tag
+    `C282714` shadows `c282714` on a case-insensitive disk), moving the base or the head."""
+    name = end
+    if end != "HEAD" and not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", end):
+        name, why = spec_lint.branch_ref(root, end)
+        if why:
+            raise ValueError("--range end " + why)
+        if not name:
+            raise ValueError("--range end " + end + " is not a branch, a remote-tracking ref, HEAD or a full commit id")
+    return git(root, "rev-parse", "--verify", "-q", (name or end) + "^{commit}")
+
+
 def classify(root, rel, rng, specs=None, where=None):
-    """Label the staged change or the range. Returns {base, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
+    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
     ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
@@ -284,16 +313,17 @@ def classify(root, rel, rng, specs=None, where=None):
     closed = False
     if rng:
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
-        base = git(root, "merge-base", a, b) if a and b else None
-        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, b) if base else None
+        a, head = end_commit(root, a), end_commit(root, b)
+        base = git(root, "merge-base", a, head) if a and head else None
+        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, head) if base else None
         note = str(base)[:7] + " (merge base of " + rng + ")"
     else:
         head = git(root, "rev-parse", "--verify", "-q", "HEAD")
-        ref = committed_ref(root, specs, head)
+        ref, rwhy = committed_ref(root, specs, head)
         merge = git(root, "merge-base", "HEAD", ref) if ref and ref != "HEAD" and head else None
-        # No merge base: fail closed, every file takes the last row.
+        # No merge base (or a merged_ref refused as a tag or ambiguous): fail closed, every file takes the last row.
         base, closed = merge or head, not merge
-        note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (no merge base: last tier)"
+        note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (" + (rwhy or "no merge base") + ": last tier)"
         files = gitz(top, "diff", "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
     if files is None:
         raise ValueError("cannot resolve " + (("--range " + rng) if rng else "the staged change") + " in " + str(root))
@@ -321,21 +351,63 @@ def classify(root, rel, rng, specs=None, where=None):
         top = max(top, (idx, f, glob), key=lambda t: t[0])
     idx = top[0] if files else last
     tier, _, reviewer, human, _ = rows[idx]
-    guard = None
+    guard, no_low = None, False
     if why is None:
         undeclared = sum(1 for r in gr or [] if r[4])
         down = human == "none" and (not gr or undeclared > 0)
         guard = {"rows": len(gr or []), "undeclared": undeclared, "downgraded": down}
         human = "spot" if down else human
-    return {"base": base, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
+        # none is for the lowest row only; a higher row that says none is read as spot
+        no_low = human == "none" and idx != 0
+        human = "spot" if no_low else human
+    return {"base": base, "head": head, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
+            "reasons": ["not the lowest tier"] if why is None and no_low else [],
             "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
-def label(root, rel, rng, as_json, specs=None):
+def earned(root, rel, specs, profile, tier, base, head):
+    """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed).
+    Thresholds are the profile's text at `base`, the text classify() read, never the working tree. With no merged_ref the
+    history would be HEAD, the change itself: refused, as staged mode refuses it. So is a history that holds any commit
+    of the change (base..head), whatever its name: a merged_ref or origin/HEAD at the PR branch, or one that merged it."""
+    text = profile_at(root, base, rel) if base and head else None
+    if text is None:
+        return "evidence: no profile at the base"
+    try:
+        ref, why = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+    except ValueError as err:
+        return "evidence: " + str(err)
+    if why:
+        return "evidence: " + why
+    if ref in (None, "HEAD"):
+        return "evidence: no merged_ref (set merged_ref or refs/remotes/origin/HEAD)"
+    out, err = io.StringIO(), io.StringIO()
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        rc = evidence(root, rel, specs, profile, True, text)
+    if rc:
+        return "evidence: " + (err.getvalue().strip().replace("tiers: ", "", 1) or "cannot be read")
+    rep_ = json.loads(out.getvalue())
+    mine = git(root, "rev-list", "--count", head, "^" + base)
+    if mine is None or mine != git(root, "rev-list", "--count", head, "^" + base, "^" + rep_["head"]):
+        return "evidence: " + ref + " contains the change"
+    m = rep_["tiers"].get(tier) or {}
+    return None if m.get("verdict") == "eligible" else "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
+
+
+AUTONOMY = {"required": "the human check before merge",
+            "spot": "approve on the readiness verdict, the ### Gates block and the tests; read the flagged files in full",
+            "none": "no human before merge; the merge is the platform's auto-merge on required checks, never a specter script's"}
+
+
+def label(root, rel, rng, as_json, specs=None, profile=None):
     """Print the Risk tier block for the staged change or the range; return the exit code."""
     try:
         c = classify(root, rel, rng, specs)
+        # Only a label that would still be none reads history; a profile with no Tiers section has no tier to count.
+        if c["human"] == "none" and c["why"] is None:
+            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"], c["head"])
+            c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
     except ValueError as err:
         return refuse(str(err))
     base, files, tier, reviewer, human, why, set_by, ordered, guard = (c[k] for k in (
@@ -343,7 +415,7 @@ def label(root, rel, rng, as_json, specs=None):
     short = (base or "HEAD")[:7]
     if as_json:
         print(json.dumps({"tier": tier, "reviewer": reviewer, "human": human, "set_by": set_by, "counts": ordered,
-                          "guardrails": guard, "profile_commit": base if why is None else None, "labels_only": True}))
+                          "guardrails": guard, "reasons": c["reasons"], "profile_commit": base if why is None else None, "labels_only": False}))
         return 0
     print("### Risk tier")
     print("- tier: " + tier + " (reviewer: " + reviewer + ", human: " + human + ")")
@@ -356,7 +428,9 @@ def label(root, rel, rng, as_json, specs=None):
         n, m = guard["rows"], guard["undeclared"]
         print("- guardrails: " + ("no Guardrails section" if not n else str(m) + " of " + str(n) + " undeclared" if m else str(n) + " declared")
               + (", none → spot" if guard["downgraded"] else ""))
-    print("- autonomy: labels only; every change still gets the human check")
+    if c["reasons"]:
+        print("- human: none → spot (" + "; ".join(c["reasons"]) + ")")
+    print("- autonomy: human " + human + ": " + AUTONOMY[human])
     return 0
 
 
@@ -367,10 +441,11 @@ def findings(body):
     return bool(vals), any(not re.fullmatch(r"[0-9]+", v) or v.strip("0") for v in vals)
 
 
-def evidence(root, rel, specs, profile, as_json):
-    """Print the Evidence report for the working-tree profile; return the exit code. Never writes anything."""
+def evidence(root, rel, specs, profile, as_json, text=None):
+    """Print the Evidence report for the working-tree profile (or `text`, the profile as of the label's base); return the
+    exit code. Never writes anything."""
     try:
-        text = profile.read_text()
+        text = profile.read_text() if text is None else text
         tiers = parse_tiers(text)
         names = [r[0] for r in tiers or []]
         ev = parse_evidence(text, names)
@@ -381,12 +456,14 @@ def evidence(root, rel, specs, profile, as_json):
     if tiers is None:
         return refuse("no Tiers section in " + str(profile) + ": nothing to count")
     try:
-        ref = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
+        ref, why = committed_ref(root, specs, git(root, "rev-parse", "--verify", "-q", "HEAD"))
     except ValueError as err:
         return refuse(str(err))
+    if why:
+        return refuse(why)
     head = git(root, "rev-parse", "--verify", "-q", ref + "^{commit}") if ref else None
     if not head:
-        return refuse("no merged_ref, origin/HEAD or HEAD resolves in " + str(root))
+        return refuse("no merged_ref, refs/remotes/origin/HEAD or HEAD resolves in " + str(root))
     now = time.time()
     longest = max([r[0] for r in (ev or {}).values() if r] or [90])
     # commits below the depth, and their reverts, are missing; only an explicit "false" counts as full (git < 2.15 echoes the flag)
@@ -461,6 +538,12 @@ def evidence(root, rel, specs, profile, as_json):
         m["why"] = next(("%s %.1f%% > %g%%" % (k.replace("_", "-"), pct[k], cap) for k, cap in zip(pct, caps)
                          if cap is not None and pct[k] > cap), None)
         m["verdict"] = "breach" if m["why"] else "eligible"
+    rows = {r[0]: r for r in tiers}  # Evidence rows name Tiers rows of the same profile (parse_evidence)
+    for name, m in out.items():  # the demotion is a report: the human edits the row, tiers.py never does
+        r, m["demote"] = rows[name], None
+        if m["verdict"] == "breach":
+            m["demote"] = {"file": rel, "line": r[4], "from": r[3],
+                           "to": None if r[3] == "required" else HUMAN[HUMAN.index(r[3]) + 1]}
     if as_json:
         print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
         return 0
@@ -473,6 +556,10 @@ def evidence(root, rel, specs, profile, as_json):
         print("- " + name + ": " + m["verdict"] + (" (" + m["why"] + ")" if m["why"] else "") + (
             " — merged %d, reverted %s, escaped %s, human-caught %s, %d days" % (m["merged"], pc("reverted"), pc("escaped"), pc("human_caught", "with_trailer"), m["window_days"])
             if m["window_days"] else ""))
+        d = m["demote"]
+        if d is not None:
+            print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
+                  + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
@@ -512,7 +599,7 @@ def main(argv):
             return refuse(str(profile) + " is outside " + str(specs.parent) + "; " + USAGE)
         if evid:
             return evidence(specs.parent, rel, specs, profile, as_json)
-        return label(specs.parent, rel, rng, as_json, specs)
+        return label(specs.parent, rel, rng, as_json, specs, profile)
     try:
         text = profile.read_text()
     except OSError:

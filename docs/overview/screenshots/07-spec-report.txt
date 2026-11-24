@@ -1,0 +1,2 @@
+$ python3 .specs/kit/scripts/spec_report.py   # then open .specs/report.html in a browser
+spec-report: wrote ~/sandbox/acme-shop/.specs/report.html

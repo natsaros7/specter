@@ -1,0 +1,13 @@
+{
+  "name": "specter-overview-deck",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md",
+    "export": "slidev export slides.md --output specter-overview.pdf --dark false"
+  },
+  "dependencies": {
+    "@slidev/cli": "^53.1.0",
+    "@slidev/theme-apple-basic": "^0.25.1",
+    "playwright-chromium": "^1.65.1"
+  }
+}

@@ -3,7 +3,64 @@
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
 The installed version is stamped into each project (`.specs/kit/VERSION`; a `spec-kit.json` the installer creates records the first-install version in `kit_version`, and is never rewritten).
 
-## [Unreleased]
+## [0.9.0] - 2026-11-24
+
+### Added
+- Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe: branch
+  protection requires one approval on every PR, dropped on a new commit, and the Gates as required checks; a
+  non-required job runs `ready.py --range <base sha>...<head sha> --pr … --auto-merge` from a trusted worktree of the
+  base and, on exit 0 only, approves with a non-agent identity and enables auto-merge. The merge queue re-runs the
+  Gates, not `ready.py` (its commit and rules checks are for the PR). One concrete line each for GitHub and GitLab.
+  Nothing in the kit merges.
+- `ready.py --auto-merge`: exit 0 only when the verdict is `ready`, the reported human is `none` and there is no
+  warning (a missing `rounds:` line, a Gates row not in the base's table, a reviewer below the label's tier), else exit
+  1 with `auto-merge: no (<why>)`; `--json` has `auto_merge`.
+- Fix-round cap: at most 2 fix rounds per task (worker retry, then the planner), then the task goes to the human with
+  both outputs. The `### Review` block carries `rounds: <n>`; `ready.py` says `not ready` above 2 or for a malformed
+  value, warns when the line is missing, and `--json` has `review.rounds`.
+- `tiers.py --evidence` prints `demote: <file>:<line> Human <cur> → <one step stricter>` under a tier in `breach`
+  (`required` says already required) and `--json` has `demote` per tier. The profile is still a human edit.
+- `kit/docs/pipeline.md`: triage, implement, review, merge and evidence mapped to the playbooks and roles, what each hands
+  on, and when the human enters (spec approval, the fix-round cap, a disputed finding, the tier's Human value, a
+  guarded path, `Deploy impact`, a `demote:` line). The queue is the host's; the kit ships no orchestrator.
+
+### Changed
+- `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier
+  `eligible` in `--evidence`; otherwise `spot`, with `- human: none → spot (<why>)` and `reasons` in `--json`. A failing
+  evidence read fails closed to `spot`; so does a run with no `merged_ref` or `origin/HEAD` (the history would be the
+  change itself). The label and `ready.py` read the Evidence thresholds from the profile at the base, never the working
+  tree (`tiers.py --evidence` still reads the working tree). `labels_only` is `false`; the `- autonomy:` line states what the Human value means.
+- `tiers.py` guards the profile at the `--file` path too, so an edit of it takes the last tier.
+- `ready.py` reads a `rounds:` list item in any Markdown spelling (`*`, indent, case, `rounds :`); a rounds item that does not parse is not ready.
+- `ready.py` reports Human `none` as `spot` on the same rules as the label, and when reviewer and implementer share a
+  model family (exit code unchanged).
+- Guardrails template: row three is now "every PR needs an approval, dropped on a new commit; only the `ready.py
+  --auto-merge` job's identity approves a `none` PR", and row six also bars agents from creating tags and
+  `refs/replace/` refs. An existing profile keeps its old wording and stays declared: update both rows, check the
+  platform does what they say, and re-date them. acme-shop's rows are re-dated 2026-11-24.
+
+### Security
+- Refs resolve to full names. `merged_ref`, its fallback (now spelled `refs/remotes/origin/HEAD`) and each `--range`
+  end must name exactly one branch or remote-tracking ref (or `HEAD`, or a full commit id for a range end): git's own lookup
+  takes `refs/tags/<name>` first, so a pushed tag `origin/HEAD` or `origin/main` stood in for merged history or moved the
+  range base, and earned `none`. A tag or an ambiguous name is refused: the label says `spot` (`evidence: merged_ref
+  … is ambiguous`), `tiers.py --evidence` and a bad `--range` end exit 2, staged mode takes the last row, and
+  `spec_lint.py` skips that ref with `WARN merged-work check skipped in <repo>: merged_ref …`, and `spec_report.py`
+  skips it. The staged note names the full ref (`merge base with refs/heads/main`).
+- A `refs/remotes/<remote>/HEAD` counts only as a symbolic ref: a pushed branch named `HEAD` lands there as a plain
+  ref in a CI fetch and stood in for merged history. A short sha is no longer a `--range` end (git looks it up as a ref
+  first, and a loose tag can shadow it on a case-insensitive disk): pass full commit ids.
+- The label and `ready.py` refuse evidence whose history holds any commit of the change (`evidence: <ref> contains the
+  change`), so an `origin/HEAD` pointing at the PR branch earns nothing.
+
+### Known limits (open in `.specs/features/v061-trust-hardening/`)
+- `none` is earned from declarations and trailers: who writes `Human-Findings:` on an auto-merge is open (v061 task 8).
+- The step 5 recipe is written from the platforms' documented settings, not run live; keep the approver identity out of
+  reach of the PR's own jobs and approve the checked sha only (v061 tasks 11, 12).
+- A hand-made symref chain (`origin/HEAD` → another remote's plain `HEAD` ref) and a 64-hex range end in a SHA-1 repo
+  are still read; neither comes from a git command or a platform event (v061 task 13).
+- The slice 3 evidence advisories (thresholds at the working tree for plain `--evidence`, fenced sections, rebase
+  merges, renamed tiers, the idle-gap window, bad dates, `refs/replace`) are v061 tasks 1-7.
 
 ## [0.8.0] - 2026-11-23
 

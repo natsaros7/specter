@@ -375,8 +375,9 @@ guardrail row one); cap the window by count if that is ever abused.
 
 Starts only after the auto-merge decision is recorded in `steering/decisions.md`. Review-loop step 5 then branches on
 the label: `required` as today; `spot` as defined in the requirement; `none` documents the platform recipe (required
-checks = the Gates, auto-merge on green, CODEOWNERS for `required` paths, and a merge queue per REQ-V060-16) and
-nothing in the kit merges. The `labels_only` flag goes `false`. A change whose `### Review` shows a shared model
+checks = the Gates, one approval on every PR, dropped on a new commit; a non-required job runs `ready.py --range <base
+sha>...<head sha> --auto-merge` from a trusted worktree of the base and, on exit 0 only, approves with a non-agent
+identity and enables auto-merge; a merge queue per REQ-V060-16 re-runs the Gates) and nothing in the kit merges. The `labels_only` flag goes `false`. A change whose `### Review` shows a shared model
 family is labelled `spot`, not `none` (REQ-V060-13).
 
 ### Fix-round cap ([REQ-V060-15])

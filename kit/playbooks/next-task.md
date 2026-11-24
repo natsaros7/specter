@@ -12,7 +12,7 @@ Execute a feature one task at a time. **Run on:** a mid-tier model is enough whe
    now, and the full gate before a push.
    - On failure, fix it and run once more with the full error output in front of you.
    - A second failure means stop: report the spec, the diff and both error outputs (see `.specs/kit/docs/review-loop.md`
-     — it escalates to a stronger model or to a human).
+     — it escalates to a stronger model). Two fix rounds per task, then stop and hand both outputs to the human.
 5. Review the diff yourself: does it do only what the task says, and does every changed behaviour trace to a REQ?
 6. Tick `- [x]` only when code and tests are in and the gate is green. Update `▶ Resume here`.
 7. If the task changed an interface, config, schema or dependency, do the matching part of `sync.md` now, in the

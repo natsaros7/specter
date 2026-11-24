@@ -1,0 +1,9 @@
+$ python3 .specs/kit/scripts/gates.py
+>> G4 Spec lint: python3 .specs/kit/scripts/spec_lint.py
+>> G5 Citations: python3 .specs/kit/scripts/spec_lint.py --cites
+### Gates
+- G4 Spec lint: pass (spec-lint: 0 FAIL across 2 feature(s))
+- G5 Citations: pass (spec-lint --cites: 0 FAIL of 7 citation(s))
+- commit: d1852a5
+- verdict: ready (2 passed)
+[exit 0]

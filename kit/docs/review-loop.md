@@ -1,17 +1,22 @@
 # Review loop (optional)
 
 An agent reviewing its own work in the same context mostly confirms what it already believes. The loop below makes
-review independent and makes the feedback reach the implementer.
+review independent and makes the feedback reach the implementer. The stages around it and when the human enters are in
+[pipeline.md](pipeline.md).
 
 ```mermaid
 flowchart LR
   W[Worker<br/>standard tier] --> G{Gate<br/>script}
-  G -- red --> W
-  G -- red twice --> P[Planner<br/>deep tier]
-  G -- green --> R[Reviewer<br/>fresh context]
-  R -- findings --> W
-  R -- clean --> H[Human check<br/>+ commit]
+  G -- "red: round 1" --> W
+  G -- "red again: round 2" --> P[Planner<br/>deep tier]
   P --> G
+  G -- green --> R[Reviewer<br/>fresh context]
+  R -- "complete blockers: round 1" --> W
+  R -- "complete blockers: round 2" --> P
+  R -- "clean, required or spot" --> C[Human check<br/>+ commit]
+  R -- "clean, none" --> A[ready.py --auto-merge job approves:<br/>platform auto-merge]
+  G -- "red after round 2" --> H[Human, with both outputs]
+  R -- "blockers after round 2" --> H
 ```
 
 ## Steps
@@ -28,17 +33,55 @@ flowchart LR
    edit it). From the repo root:
 
    ```sh
-   git worktree add --detach /tmp/specter-base <base>     # the kit as it is at <base>; works while <base> is checked out
+   git worktree add --detach /tmp/specter-base <base sha> # the kit as it is at the base; a sha, never a name a tag could shadow
    python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs
    ```
 
    Its `reviewer:` is the reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation,
    permissions) get the deep tier.
-4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up
-   (a task in the feature's `tasks.md`, or an issue); advisories never block. After a second red gate or a disputed finding,
-   escalate to the planner (deep) with the spec, the diff and both outputs.
-5. **Human check:** rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
-   reviewer's verdict table. Write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
+4. **Only complete blockers go back to the worker.** The lead files each advisory as a follow-up (a task in the
+   feature's `tasks.md`, or an issue); advisories never block. **A task gets at most 2 fix rounds.** A round is one
+   attempt to fix a red gate or the complete blockers of a review: round 1 is the worker's retry, round 2 the
+   planner's (deep) with the spec, the diff and both outputs. A disputed finding goes to the planner too. When round 2
+   ends with a red gate or a complete blocker, the task goes to the human with both rounds' outputs (the gate output
+   or the verdict table), and no agent retries it until the human acts. The lead writes `rounds: <n>` in `### Review`;
+   `ready.py` says `not ready` above 2 and warns when the line is missing.
+   <!-- shortcut: the cap is fixed at 2; make it a profile value when a repository asks for another number. -->
+   <!-- shortcut: rounds are declared by the lead, not counted by a script; count them from the frozen patch files when the declared numbers prove wrong. -->
+5. **Human check, by the label's Human value** (`tiers.py`; `none` is kept only on the lowest tier with every
+   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so):
+   - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
+     reviewer's verdict table, as below.
+   - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
+   - `none`: no human before merge, through one job and the platform's own rules; nothing in the kit merges.
+     1. Branch protection requires one approval on every PR (not only on the `required` paths) and drops it when a
+        commit is pushed. The required checks are the Gates, and only the Gates.
+     2. A non-required job, defined where the PR cannot edit it, runs from a trusted worktree of the base (as step 3
+        shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
+        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
+        when the verdict is `ready`, the reported human is `none` (evidence earned at the base, another model family)
+        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`).
+     3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
+        or merge: the Guardrails row), and enables auto-merge; the platform merges when the Gates pass. Any other exit
+        does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never
+        blocks a PR a human approved.
+     4. The merge queue (GitHub merge queue, GitLab merge trains or the equivalent) re-runs the Gates on the merged
+        result, so changes that are green alone are gated together. It does not re-run `ready.py`: its block-commit
+        and rules-at-base checks are for the PR head and its base, and on the queue's merge commit they fail every PR.
+        <!-- shortcut: the label is the one made at approval; a base that moves under the PR re-labels it only when the branch is updated (a new commit drops the approval and the job runs again); re-run ready.py in the queue against the PR head when evidence that moved must bar a queued merge. -->
+
+     - GitHub: a ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
+       "Dismiss stale pull request approvals when new commits are pushed"; the job is a `pull_request_target` workflow
+       (its definition comes from the base branch) that checks out the base, fetches the PR head as data without running
+       it, passes the PR body through an environment variable (never `${{ }}` in the script), and on exit 0 runs
+       `gh pr review --approve` and `gh pr merge --auto` with a GitHub App token (or `GITHUB_TOKEN` with "Allow GitHub
+       Actions to create and approve pull requests" on; a merge by `GITHUB_TOKEN` starts no workflow on the default branch).
+     - GitLab: an approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
+       commits are added to the source branch"; the job has `allow_failure: true` and comes from a CI/CD configuration the
+       MR cannot edit (a configuration file in another project); on exit 0 a project access token's bot user approves the
+       MR and sets auto-merge through the merge requests API.
+
+   For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
    `### Verification` block. Then check it with the trusted copy from step 3, in two modes:
 
@@ -46,9 +89,9 @@ flowchart LR
    # preflight, staged, before the commit (a +dirty Gates block binds no content)
    python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md
    git commit                                            # then rerun gates.py and put its new block in /tmp/pr.md
-   # the binding check, after the commit: the label and the verdict for <base>...HEAD
-   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base>...HEAD
-   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base>...HEAD --pr /tmp/pr.md
+   # the binding check, after the commit: the label and the verdict for <base sha>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/tiers.py --specs .specs --range <base sha>...HEAD
+   python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range <base sha>...HEAD --pr /tmp/pr.md
    git worktree remove /tmp/specter-base
    ```
 
@@ -84,6 +127,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - implementer: <model id>
 - reviewer: <model id>
 - rules: <base sha>
+- rounds: <n>
 | Severity | Location | Evidence | Trigger | Consequence | Fix |
 |---|---|---|---|---|---|
 | blocker | src/shop/Order.java:42 | "if (total > 0)" | an order with total 0 | it ships unpaid | ">= 0", and a test |
@@ -95,7 +139,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 | `blocker` | A defect with all four cells filled | `ready.py` says `not ready`; goes back to the worker |
 | `advisory` | Anything else, including a blocker missing a cell | Filed as a follow-up; does not block |
 
-`rules:` is the base sha (a prefix of at least 7 characters). Verification lines are
+`rules:` is the base sha (a prefix of at least 7 characters). `rounds:` is the fix rounds this task used (0 to 2). Verification lines are
 `- [REQ-<FEAT>-NN] <path or URL>: <what it shows>`; a path must exist at the head, a URL is not fetched.
 
 ## Running parallel workers safely

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Check a PR description's `### Gates` block against the repository and print a `### Readiness` block. Python 3.8+, stdlib only.
 
-Usage: python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help
+Usage: python3 .specs/kit/scripts/ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] [--auto-merge] | --help
        default DIR = the .specs/ this script is installed in; PR text comes from FILE, else stdin.
 
 Reads only: it runs no command, and never executes or evals anything from the PR text. Base and head are as in
@@ -15,13 +15,21 @@ needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeate
 `- tree changed during gates` line, or a verdict other than `ready (N passed)` is not ready. A row whose label is not
 in the base's table is a warning, never trusted. The block's Risk tier (tiers.py) is printed.
 Exit 0 ready, 1 not ready, 2 bad argument or unreadable input (a bad spec-kit.json included).
-Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, one
+Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, `- rounds: <n>` (any list item, `-`, `*` or `+`, any case, spaces around the colon; at most 2
+fix rounds: more, a value that is not a non-negative integer or a rounds item that does not parse is not ready; a missing line is a warning), one
 verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready; an empty cell makes
 it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
---json: {verdict, gates, tier, review, verification, warnings}.
+Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
+implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
+--auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
+is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
+non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha> (without
+--range, `auto-merge: no`); on exit 0 only, it approves with a non-agent identity and enables auto-merge (review-loop.md
+step 5). --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
+--json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
 """
 import json
 import posixpath
@@ -36,7 +44,7 @@ import gates  # noqa: E402
 import spec_lint  # noqa: E402
 import tiers  # noqa: E402
 
-USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] | --help"
+USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] [--auto-merge] | --help"
 ROW = re.compile(r"- (.+?): (pass \(.*\)|FAIL \(exit -?\d+\)|not run)")
 
 
@@ -108,16 +116,16 @@ def check_gates(text, labels, head, ranged, staged=False):
 
 
 def family(model):
-    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. It only
-    # warns today; replace with a profile table before slice 4 lets a family bar Human none.
+    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. A miss
+    # leaves Human none unbarred; replace with a profile table when a repo mixes providers behind one family name.
     """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
     m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
     return m.split("-")[0]
 
 
 def check_review(text, base, want="standard"):
-    """{implementer, reviewer, same_family, rules, blockers, advisories, problems, warnings} for the ### Review block."""
-    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "blockers": [], "advisories": [],
+    """{implementer, reviewer, same_family, rules, rounds, blockers, advisories, problems, warnings} for the ### Review block."""
+    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "blockers": [], "advisories": [],
          "problems": [], "warnings": []}
     lines, cur, n = [], False, 0
     for line in text.splitlines():
@@ -136,6 +144,17 @@ def check_review(text, base, want="standard"):
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None
+        elif re.match(r"\s*[-*+]\s*rounds\b", line, re.I):
+            m = re.fullmatch(r"\s*[-*+]\s*rounds\s*:(.*)", line, re.I)
+            v = m.group(1).strip() if m else None
+            if v is None:
+                r["problems"].append("review rounds line unreadable: " + line.strip()[:30])
+            elif r["rounds"] is not None or any(x.startswith("review rounds") for x in r["problems"]):
+                r["problems"].append("review rounds repeated: one `rounds:` line per Review block")
+            elif re.fullmatch(r"[0-9]{1,6}", v):
+                r["rounds"] = int(v)
+            else:
+                r["problems"].append("review rounds '" + v[:20] + "' is not a non-negative integer")
         elif line.startswith("|"):
             c = gates.split_row(line) + [""] * 6
             if c[0].lower() == "severity" or set("".join(c)) <= set("-: "):
@@ -167,6 +186,11 @@ def check_review(text, base, want="standard"):
     # shortcut: warning only; slice 4 makes a reviewer below the label's reviewer blocking.
     if r["reviewer"] and want == "deep" and r["reviewer_tier"] != "deep":
         r["warnings"].append("reviewer tier below the label's reviewer (" + (r["reviewer_tier"] or "none") + " < " + want + ")")
+    # shortcut: rounds are declared by the lead, not counted; count them from the frozen patch files if the numbers prove wrong.
+    if r["rounds"] is None and not any(x.startswith("review rounds") for x in r["problems"]):
+        r["warnings"].append("review has no `rounds: <n>` line (fix rounds per task, at most 2)")
+    elif r["rounds"] is not None and r["rounds"] > 2:
+        r["problems"].append("fix-round cap: rounds " + str(r["rounds"]) + " > 2; the task goes to the human")
     rules = r["rules"] or ""
     if not re.fullmatch(r"[0-9a-f]{7,40}", rules) or not (base or "").startswith(rules):
         r["problems"].append("review rules " + (rules or "(none)") + " is not the base " + (base or "?")[:7])
@@ -221,7 +245,8 @@ def main(argv):
         print(__doc__.strip())
         return 0
     specs, pr, rng, as_json = Path(__file__).resolve().parents[2], None, None, "--json" in argv
-    argv = [a for a in argv if a != "--json"]
+    auto = "--auto-merge" in argv
+    argv = [a for a in argv if a not in ("--json", "--auto-merge")]
     for flag in ("--specs", "--pr", "--range"):
         if flag in argv:
             i = argv.index(flag)
@@ -256,7 +281,7 @@ def main(argv):
     except ValueError as err:
         return refuse(str(err))
     base = change["base"]
-    head = tiers.git(root, "rev-parse", "--verify", "-q", (rng.replace("...", "..").split("..")[1] if rng else "HEAD"))
+    head = change["head"]  # resolved by tiers.end_commit: a tag or ambiguous name never stands in for the head
     rules = tiers.profile_at(root, base, rel) if base else None
     try:
         rows = gates.gate_rows(rules) if rules else None
@@ -284,13 +309,29 @@ def main(argv):
     warnings = g["warnings"] + review["warnings"]
     verdict = "not ready" if problems else "ready"
     tier = {k: change[k] for k in ("tier", "reviewer", "human")}
+    # none needs earned evidence, as in the label, and a reviewer of another family (REQ-V060-09, -13); exit code unchanged
+    why = []
+    if tier["human"] == "none":
+        prof = specs / "steering" / "autonomy.md"
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head)
+                           if change["why"] is None else None,
+                           "same family" if review["same_family"] else None) if w]
+    tier["human_why"] = "; ".join(why) or None
+    tier["human"] = "spot" if tier["human_why"] else tier["human"]
+    # the one merge-without-a-human test: a ready verdict and a reported human of none (a platform check runs it)
+    # the staged index is not what merges: only a range names the commits the platform would merge
+    no_merge = ([] if rng else ["needs --range base...head"]) + (["verdict not ready"] if problems else []) + (
+        ["human " + tier["human"] + (": " + tier["human_why"] if tier["human_why"] else "")] if tier["human"] != "none" else [])
+    no_merge = no_merge or warnings  # no human reads a warning on the none path: each one is a no
     if as_json:
         print(json.dumps({"verdict": verdict, "gates": g, "tier": tier, "review": review,
-                          "verification": verification, "warnings": warnings}))
+                          "verification": verification, "warnings": warnings, "auto_merge": not no_merge}))
     else:
         print("### Readiness")
         print("- gates: %d/%d pass at %s" % (g["passed"], g["total"], head[:7]))
         print("- tier: %s (reviewer: %s, human: %s)" % (tier["tier"], tier["reviewer"], tier["human"]))
+        if tier["human_why"]:
+            print("- human: none → spot (" + tier["human_why"] + ")")
         print("- verdict: " + verdict)
         for ln in verification["lines"]:
             print("- verification: %s %s: %s" % (ln["req"], ln["target"], ln["status"]))
@@ -298,7 +339,9 @@ def main(argv):
             print("- not ready: " + p)
         for w in warnings:
             print("- warning: " + w)
-    return 1 if problems else 0
+        if auto:
+            print("auto-merge: " + ("no (" + "; ".join(no_merge) + ")" if no_merge else "yes"))
+    return 1 if problems or auto and no_merge else 0
 
 
 if __name__ == "__main__":

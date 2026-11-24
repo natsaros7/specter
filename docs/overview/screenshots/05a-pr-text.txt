@@ -1,0 +1,20 @@
+fix(order): trim the customer note (ORD-158)
+
+Deploy impact: none
+
+### Gates
+- G4 Spec lint: pass (spec-lint: 0 FAIL across 2 feature(s))
+- G5 Citations: pass (spec-lint --cites: 0 FAIL of 7 citation(s))
+- commit: d1852a5
+- verdict: ready (2 passed)
+
+### Review
+- implementer: claude-sonnet-5-5
+- reviewer: gpt-5
+- rules: 1d81586
+| Severity | Location | Evidence | Trigger | Consequence | Fix |
+|---|---|---|---|---|---|
+| advisory | orders-api/src/main/java/com/acme/shop/orders/order/OrderService.java:10 | | | | follow-up: add a note-length test |
+
+### Verification
+- [REQ-STB-01] orders-api/src/test/java/com/acme/shop/orders/order/rest/OrderControllerIT.java: the order endpoint test the change extends

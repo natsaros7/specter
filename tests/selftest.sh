@@ -205,6 +205,8 @@ grep -q "merged, not closed" "$M/r.html" && grep -q "Merged, not closed" "$M/r.h
 rc=0; L --specs "$M/.specs" >/dev/null || rc=$?; [ "$rc" = 0 ] || fail "merged warning changed the exit code"
 rc=0; out=$(PATH=/nonexistent "$(command -v python3)" "$KIT/kit/scripts/spec_lint.py" --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped: git not available or timed out" || fail "missing git: $out"
+gitq -C "$M" tag v1; cfg ', "merged_ref": "v1"'; rc=0; out=$(L --specs "$M/.specs") || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "WARN merged-work check skipped in .: merged_ref v1 is a tag" || fail "a refused merged_ref was skipped silently: $out"
 printf '{"tracker_pattern": "ABC-["}\n' > "$M/.specs/spec-kit.json"
 rc=0; out=$(L --specs "$M/.specs") || rc=$?
 [ "$rc" = 0 ] && [ "$(echo "$out" | grep -c 'invalid tracker_pattern')" = 1 ] || fail "invalid tracker_pattern: $out"
@@ -538,7 +540,7 @@ tl() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" "$@" 2>&1; }
 mkdir -p "$B/tests" "$B/src/security" "$B/docs"; echo a > "$B/tests/a.txt"; echo a > "$B/docs/d.md"; echo a > "$B/src/s.txt"
 tprof "$GOOD"; printf '{"merged_ref": "trunk"}' > "$B/.specs/spec-kit.json"; gitq -C "$B" add -A; gitq -C "$B" commit -m base2; BASE=$(git -C "$B" rev-parse HEAD); gitq -C "$B" branch trunk
 echo b > "$B/docs/d.md"; gitq -C "$B" add -A
-out=$(tl) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && echo "$out" | grep -q "^### Risk tier" || fail "13b: staged docs change not routine: $out"
+out=$(tl) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "^### Risk tier" || fail "13b: staged docs change not routine: $out"
 echo b > "$B/src/s.txt"; gitq -C "$B" add -A
 out=$(tl) && echo "$out" | grep -q "tier: domain" && echo "$out" | grep -q "files: 2 (routine 1, domain 1)" && echo "$out" | grep -q 'set by: src/s.txt (`src/\*`)' || fail "13b: strictest file did not win: $out"
 echo b > "$B/src/security/k.txt"; gitq -C "$B" add -A
@@ -550,7 +552,7 @@ out=$(tl) && echo "$out" | grep -q "files: 2" || fail "13b: rename not counted u
 gitq -C "$B" reset -q --hard; gitq -C "$B" clean -fdq
 echo z > "$B/tests/z.txt"; gitq -C "$B" add -A; gitq -C "$B" commit -m z
 out=$(tl --range "$BASE..HEAD") && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "profile: .specs/steering/autonomy.md at ${BASE%"${BASE#???????}"}" || fail "13b: --range label: $out"
-js=$(tl --range "$BASE...HEAD" --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]=="routine" and d["reviewer"]=="standard" and d["human"]=="none" and d["set_by"]["file"]=="tests/z.txt" and d["set_by"]["glob"]=="tests/*" and d["counts"]=={"routine":1} and d["profile_commit"]=="'"$BASE"'" and d["labels_only"] is True, d' || fail "13b: --json shape: $js"
+js=$(tl --range "$BASE...HEAD" --json) && printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]=="routine" and d["reviewer"]=="standard" and d["human"]=="spot" and d["set_by"]["file"]=="tests/z.txt" and d["set_by"]["glob"]=="tests/*" and d["counts"]=={"routine":1} and d["profile_commit"]=="'"$BASE"'" and d["labels_only"] is False, d' || fail "13b: --json shape: $js"
 # a branch that rewrites the Tiers table is labelled by the base's table
 tprof '| critical | `*` | deep | required |'; ( cd "$B" && echo q > docs/e.md ); gitq -C "$B" add -A; gitq -C "$B" commit -m rewrite
 out=$(tl --range "$BASE..HEAD") && echo "$out" | grep -q "tier: critical" || fail "13b: guarded profile edit not critical: $out"
@@ -565,7 +567,7 @@ G="$TMP/t13b-g"; mkdir -p "$G"; gitq -C "$G" init; "$KIT/install.sh" "$G" >/dev/
 printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `*/security/*` | deep | required |\n' > "$G/.specs/steering/autonomy.md"
 printf '{"merged_ref": "main"}' > "$G/.specs/spec-kit.json"; echo r > "$G/readme"; gitq -C "$G" add -A; gitq -C "$G" commit -m g
 tg() { python3 "$G/.specs/kit/scripts/tiers.py" --specs "$G/.specs" 2>&1; }
-echo x > "$G/readme2"; gitq -C "$G" add -A; out=$(tg) && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "base: $(git -C "$G" rev-parse --short HEAD) (merge base with main)" || fail "13b: control file not routine at the merge base: $out"
+echo x > "$G/readme2"; gitq -C "$G" add -A; out=$(tg) && echo "$out" | grep -q "tier: routine" && echo "$out" | grep -q "base: $(git -C "$G" rev-parse --short HEAD) (merge base with refs/heads/main)" || fail "13b: control file not routine at the merge base: $out"
 gitq -C "$G" reset -q --hard; gitq -C "$G" clean -fdq
 # Names a folding filesystem opens as a guarded or critical path (APFS: s-long, st-ligature, NFD; NTFS: dotless i).
 # Staged by blob so the folding checkout never rewrites them; a mixed reset leaves the work tree alone.
@@ -586,7 +588,7 @@ gitq -C "$G" checkout -q -b feat
 printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `*` | standard | none |\n| critical | `nothing` | deep | required |\n' > "$G/.specs/steering/autonomy.md"; gitq -C "$G" commit -qam loosen
 mkdir -p "$G/src/security"; echo x > "$G/src/security/k.java"; gitq -C "$G" add src/security/k.java
 printf '{"merged_ref": "feat"}' > "$G/.specs/spec-kit.json"
-out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "(merge base with main)" || fail "13b: a work-tree merged_ref edit moved the staged base: $out"
+out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "(merge base with refs/heads/main)" || fail "13b: a work-tree merged_ref edit moved the staged base: $out"
 gitq -C "$G" reset -q --hard; printf '{"merged_ref": null}' > "$G/.specs/spec-kit.json"; gitq -C "$G" commit -qam nobase
 echo x > "$G/readme3"; gitq -C "$G" add readme3
 out=$(tg) && echo "$out" | grep -q "tier: critical" && echo "$out" | grep -q "base: HEAD (no merge base: last tier)" || fail "13b: no merge base did not fail closed to the last tier: $out"
@@ -613,12 +615,12 @@ cset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|-
 GH='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n'
 cset ''; out=$(cl)
 echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: no Guardrails section did not downgrade none: $out"
-echo "$out" | tail -1 | grep -q "^- autonomy: labels only" || fail "13c: autonomy line not last: $out"
+echo "$out" | tail -1 | grep -q "^- autonomy: human spot" || fail "13c: autonomy line not last: $out"
 cset "${GH}| Protected branch | branch rule main | 2026-01-02 |\n| Untrusted jobs | <platform setting> | 2026-01-02 |\n"; out=$(cl)
 echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: placeholder row did not downgrade: $out"
 cset "${GH}| Protected branch | branch rule main | 2026-01-02 |\n| Untrusted jobs | no such job, checked CI workflows | 2026-01-02 |\n"; out=$(cl)
-echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && echo "$out" | grep -q "guardrails: 2 declared$" && ! echo "$out" | grep -q "none → spot" || fail "13c: declared rows changed the label: $out"
-js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="none" and d["guardrails"]=={"rows":2,"undeclared":0,"downgraded":False}, d' || fail "13c: --json declared: $js"
+echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 2 declared$" && ! echo "$out" | grep -q "guardrails: .*none → spot" || fail "13c: declared rows changed the label: $out"
+js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["guardrails"]=={"rows":2,"undeclared":0,"downgraded":False}, d' || fail "13c: --json declared: $js"
 cset "${GH}| Protected branch | branch rule main | 2026-13-45 |\n| Untrusted jobs | no such job, checked CI | 2026-01-02 |\n"; out=$(cl)
 echo "$out" | grep -q "guardrails: 1 of 2 undeclared, none → spot" || fail "13c: bad date was not undeclared: $out"
 js=$(cl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["tier"]=="routine" and d["guardrails"]=={"rows":2,"undeclared":1,"downgraded":True}, d' || fail "13c: --json downgraded: $js"
@@ -634,6 +636,168 @@ gitq -C "$C" add -A; gitq -C "$C" commit -m badhead; gitq -C "$C" branch -f trun
 rc=0; out=$(cl) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "header must be" || fail "13c: bad Guardrails header label exits $rc: $out"
 cset "${GH}| A | <x> | 2026-01-02 |\n"; echo b > "$C/src/s.txt"; gitq -C "$C" add -A; out=$(cl)
 echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 1 undeclared$" && ! echo "$out" | grep -q "none → spot" || fail "13c: a spot change was touched by the downgrade: $out"
+echo "13c2. human none by tier: only the lowest row, guardrails declared and evidence eligible keep it; labels_only false; ready.py same family bars it"
+F="$TMP/t13f"; mkdir -p "$F/docs" "$F/src"; gitq -C "$F" init; "$KIT/install.sh" "$F" >/dev/null
+printf '{"merged_ref": "trunk"}' > "$F/.specs/spec-kit.json"; echo a > "$F/src/s.txt"
+fl() { python3 "$F/.specs/kit/scripts/tiers.py" --specs "$F/.specs" "$@" 2>&1; }
+# fset <tiers> <min merged>: commit a profile with declared guardrails and a routine Evidence row, two routine commits, then stage a docs change
+fset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n%b\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |\n|---|---|---|---|---|---|\n| routine | 30 | %s | - | - | - |\n' "$1" "$2" > "$F/.specs/steering/autonomy.md"
+  printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$F/.specs/steering/spec-rules.md"
+  gitq -C "$F" add -A; gitq -C "$F" commit -m "p$2$n"; for i in 1 2; do date +%s%N > "$F/docs/m$i"; gitq -C "$F" add -A; gitq -C "$F" commit -m "m$i"; done
+  gitq -C "$F" branch -f trunk; date +%s%N > "$F/docs/d.md"; gitq -C "$F" add -A; }
+T1='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+n=1; fset "$T1" 2; out=$(fl)
+echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && ! echo "$out" | grep -q "none → spot" && echo "$out" | grep -q "^- autonomy: human none.*auto-merge" || fail "13c2: lowest tier, declared, eligible lost none: $out"
+js=$(fl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="none" and d["labels_only"] is False and d["reasons"]==[], d' || fail "13c2: --json eligible: $js"
+n=2; fset "$T1" 20; out=$(fl)
+echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: evidence hold did not give spot: $out"
+js=$(fl --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["reasons"] and d["reasons"][0].startswith("evidence: hold"), d' || fail "13c2: --json hold: $js"
+n=3; fset "$T1" 2; sed -i.bak 's/^| Tier | Window (days) | Min merged/| Tier | Window | Min merged/' "$F/.specs/steering/autonomy.md"; rm -f "$F/.specs/steering/autonomy.md.bak"
+# the bad header must be in the base's profile (the label reads the base, never the working tree): commit it, move trunk, stage a change
+gitq -C "$F" add -A; gitq -C "$F" commit -m badhdr; gitq -C "$F" branch -f trunk; date +%s%N > "$F/docs/e.md"; gitq -C "$F" add -A
+rc=0; out=$(fl) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "none → spot (evidence: " || fail "13c2: a refusing evidence run did not fail closed to spot (exit $rc): $out"
+n=4; fset '| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | none |\n| critical | `*/security/*` | deep | required |' 2; echo b > "$F/src/s.txt"; gitq -C "$F" add -A; out=$(fl)
+echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "none → spot (not the lowest tier)" || fail "13c2: none on a non-lowest row kept none: $out"
+# ready.py: a shared family and Human none reports spot, exit unchanged
+n=5; fset "$T1" 2; FH=$(git -C "$F" rev-parse --short HEAD)
+fr() { m=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n' "$FH" "$m" "$FH" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" "$@" 2>&1; }
+rc=0; out=$(fr claude-opus-5-5) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (same family)" || fail "13c2: ready.py same family kept none (exit $rc): $out"
+rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && ! echo "$out" | grep -q "same family" && echo "$out" | grep -q "human: none" || fail "13c2: ready.py other family lost none (exit $rc): $out"
+js=$(fr claude-opus-5-5 --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]["human"]=="spot" and d["tier"]["human_why"]=="same family", d' || fail "13c2: ready --json same family: $js"
+# ready.py agrees with the label: evidence on hold bars none whatever the reviewer's family
+n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
+rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
+echo "13d. fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"
+fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
+rc=0; out=$(fk '- rounds: 3
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^- verdict: not ready" && echo "$out" | grep -q "not ready: fix-round cap" || fail "13c2: rounds 3 was not capped (exit $rc): $out"
+rc=0; out=$(fk '- rounds: 2
+') || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "^- verdict: ready" && ! echo "$out" | grep -q "rounds" || fail "13c2: rounds 2 not ready or warned (exit $rc): $out"
+rc=0; out=$(fk '') || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "warning: .*rounds" || fail "13c2: missing rounds gave no warning (exit $rc): $out"
+rc=0; out=$(fk '- rounds: two
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds" || fail "13c2: malformed rounds did not fail closed (exit $rc): $out"
+rc=0; out=$(fk '- rounds: 3
+- rounds: 1
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds.*repeated" || fail "13c2: a repeated rounds line overrode the cap (exit $rc): $out"
+js=$(fk '- rounds: 1
+' --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["review"]["rounds"]==1, d' || fail "13c2: --json review.rounds: $js"
+echo "13e. label and ready.py trust only the base: thresholds read at the base, no merged_ref fails closed, --auto-merge is the one exit code for none, a profile outside .specs/steering is guarded, rounds line variants, refs are branches or remotes only (no tag, no ambiguous name, no history holding the change), every warning bars auto-merge"
+X="$TMP/t13e"; mkdir -p "$X"
+xprof() { mkdir -p "$(dirname "$1")"; printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |\n|---|---|---|---|---|---|\n| routine | 30 | %s | - | - | - |\n' "$2" > "$1"; }
+# xmk <name> <spec-kit.json> <min merged> <profile path from the repo root> <merges on main>: the profile commit, then that many docs merges, trunk at the tip
+xmk() { R="$X/$1"; rm -rf "$R"; mkdir -p "$R/.specs/steering" "$R/.specs/kit" "$R/docs" "$R/src"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
+  printf '%s' "$2" > "$R/.specs/spec-kit.json"; xprof "$R/$4" "$3"; echo s > "$R/src/s.txt"
+  printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$R/.specs/steering/spec-rules.md"
+  gitq -C "$R" add -A; gitq -C "$R" commit -m profile
+  for i in $(seq 1 "${5:-0}"); do date +%s%N > "$R/docs/m$i"; gitq -C "$R" add -A; gitq -C "$R" commit -m "m$i"; done; gitq -C "$R" branch -f trunk; }
+xdoc() { date +%s%N > "$R/docs/new$1"; gitq -C "$R" add -A; gitq -C "$R" commit -m "new$1"; }
+xl() { python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" "$@" 2>&1; }
+# xrd <reviewer> <extra Review lines> [ready.py flags]: the PR text for trunk...HEAD, checked with ready.py
+xrd() { rv=$1; ex=$2; shift 2; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n%s' "$(git -C "$R" rev-parse --short HEAD)" "$rv" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD "$@" 2>&1; }
+TJ='{"merged_ref": "trunk"}'; AP=.specs/steering/autonomy.md
+
+# B2: Min merged lowered in the working tree only (never committed, never reviewed) must not earn none
+xmk b2 "$TJ" 20 $AP 2; sed -i.bak 's/| 30 | 20 |/| 30 | 1 |/' "$R/$AP"; rm -f "$R/$AP.bak"
+gitq -C "$R" checkout -q -b pr; echo n > "$R/docs/new"; gitq -C "$R" add docs/new
+out=$(xl); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: hold (merged 2 < min 20)" || fail "13e B2: staged label took the working-tree threshold: $out"
+gitq -C "$R" commit -m docs
+out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: hold (merged 2 < min 20)" || fail "13e B2: range label took the working-tree threshold: $out"
+rc=0; out=$(xrd gpt-5-1 '' --json) || rc=$?; printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]["human"]=="spot" and d["tier"]["human_why"].startswith("evidence: hold (merged 2 < min 20)"), d' || fail "13e B2: ready.py took the working-tree threshold: $out"
+gitq -C "$R" add -A; gitq -C "$R" commit -m "lower the bar"
+out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: required" || fail "13e B2: a committed threshold edit is not guarded: $out"
+
+# B3: merged_ref null and no origin/HEAD resolves to HEAD, the PR head: its own commits must not count
+xmk b3 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3
+out=$(xl --range main...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e B3: the change earned its own evidence: $out"
+out=$(printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" rev-parse --short main)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range main...HEAD 2>&1)
+echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e B3: ready.py let the change earn its own evidence: $out"
+
+# B1: --auto-merge exits 0 only for ready and none
+xmk b1 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "verdict: ready" || fail "13e B1: ready and none was refused (exit $rc): $out"
+rc=0; out=$(printf '### Review\n- rounds: 1\n' | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --auto-merge 2>&1) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (.*needs --range" || fail "13e B1: --auto-merge without --range was not refused (exit $rc): $out"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --json) || rc=$?; [ "$rc" = 0 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is True, d' || fail "13e B1: --json auto_merge true (exit $rc): $out"
+rc=0; out=$(xrd claude-opus-5-5 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: same family)" || fail "13e B1: spot (same family) was not refused (exit $rc): $out"
+rc=0; out=$(xrd claude-opus-5-5 '- rounds: 1
+') || rc=$?; [ "$rc" = 0 ] || fail "13e B1: without the flag the exit changed (exit $rc): $out"
+rc=0; out=$(xrd claude-opus-5-5 '- rounds: 1
+' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False, d' || fail "13e B1: --json auto_merge false (exit $rc): $out"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 3
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "^auto-merge: no (verdict not ready)" || fail "13e B1: none but not ready was not refused (exit $rc): $out"
+xmk b1h "$TJ" 20 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: hold" || fail "13e B1: spot (evidence hold) was not refused (exit $rc): $out"
+
+# A4: a profile kept outside .specs/steering through --file is guarded too
+xmk a4 "$TJ" 2 docs/autonomy.md 2; gitq -C "$R" checkout -q -b pr; echo "# edit" >> "$R/docs/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -m "edit the profile"
+out=$(xl --file "$R/docs/autonomy.md" --range trunk...HEAD); echo "$out" | grep -q "human: required" && echo "$out" | grep -q "set by: docs/autonomy.md" || fail "13e A4: --file profile edit is not guarded: $out"
+
+# A6: every list-item spelling of rounds is read; one that looks like a rounds line and does not parse fails closed
+xmk a6 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
+for v in '  - rounds: 3' '- Rounds: 3' '- rounds : 3' '* rounds: 3' '+ ROUNDS:3'; do
+  rc=0; out=$(xrd gpt-5-1 "$v
+") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: fix-round cap" || fail "13e A6: '$v' was not read as rounds 3 (exit $rc): $out"
+done
+for v in '* rounds: two' '- rounds 3' '- rounds; 1'; do
+  rc=0; out=$(xrd gpt-5-1 "$v
+") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: review rounds" || fail "13e A6: '$v' did not fail closed (exit $rc): $out"
+done
+rc=0; out=$(xrd gpt-5-1 '  * Rounds : 2
+') || rc=$?; [ "$rc" = 0 ] && ! echo "$out" | grep -q "rounds" || fail "13e A6: a valid variant was refused (exit $rc): $out"
+# N1: refs resolve to branches and remote-tracking refs only; a tag or an ambiguous name is never the evidence or a range end.
+# xci <pr ref>: a CI-style checkout of R (heads to refs/remotes/origin/*, tags fetched, no origin/HEAD), detached at the PR head
+xci() { C="$R-ci"; rm -rf "$C"; gitq init "$C"; gitq -C "$C" fetch -q "$R" '+refs/heads/*:refs/remotes/origin/*' '+refs/tags/*:refs/tags/*'; gitq -C "$C" checkout -q --detach "$(git -C "$R" rev-parse "$1")"; }
+cl() { python3 "$C/.specs/kit/scripts/tiers.py" --specs "$C/.specs" "$@" 2>&1; }
+# crd <range> [flags]: ready.py on the CI checkout, PR text for its HEAD, base main
+crd() { rng=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 0\n' "$(git -C "$C" rev-parse --short HEAD)" "$(git -C "$C" merge-base refs/remotes/origin/main HEAD | cut -c1-7)" | python3 "$C/.specs/kit/scripts/ready.py" --specs "$C/.specs" --range "$rng" "$@" 2>&1; }
+# a pushed tag origin/HEAD at the PR head, merged_ref null: the change is not its own history
+xmk n1a '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; gitq -C "$R" tag origin/HEAD; xci pr
+MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e N1: tag origin/HEAD at the PR head earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e N1: tag origin/HEAD gave auto-merge (exit $rc): $out"
+# a tag origin/main on a side chain the agent made, merged_ref "origin/main": ambiguous, refused
+xmk n1b '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b side; xdoc 1; xdoc 2; xdoc 3; gitq -C "$R" tag origin/main
+gitq -C "$R" checkout -q main; gitq -C "$R" branch -D side; gitq -C "$R" checkout -q -b pr; xdoc 4; xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: merged_ref origin/main is ambiguous" || fail "13e N1: tag origin/main on a side chain earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: merged_ref origin/main is ambiguous" || fail "13e N1: tag origin/main gave auto-merge (exit $rc): $out"
+rc=0; out=$(cl --evidence) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "merged_ref origin/main is ambiguous" || fail "13e N1: --evidence read a tag origin/main (exit $rc): $out"
+# a tag origin/main on a src/ commit inside the PR, the range given by name: the end is refused, not moved
+xmk n1c '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3
+echo t > "$R/src/t.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m src; gitq -C "$R" tag origin/main; xdoc 5; xci pr
+rc=0; out=$(cl --range origin/main...HEAD) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "origin/main is ambiguous" || fail "13e N1: a tag moved the range base (exit $rc): $out"
+rc=0; out=$(crd origin/main...HEAD --auto-merge) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "origin/main is ambiguous" || fail "13e N1: ready.py took a tag as the range base (exit $rc): $out"
+gitq -C "$C" tag v9 HEAD
+rc=0; out=$(cl --range "$(git -C "$C" rev-parse refs/remotes/origin/main)...v9") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "v9 is a tag" || fail "13e N1: a tag range end was read (exit $rc): $out"
+# origin/HEAD pointing at the PR branch: evidence that contains the change is refused
+xmk n1d '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b pr; xdoc 1; xdoc 2; xdoc 3; xci pr
+gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/pr
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: refs/remotes/origin/HEAD contains the change" || fail "13e N1: origin/HEAD at the PR branch earned none: $out"
+rc=0; out=$(crd origin/main...HEAD --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: refs/remotes/origin/HEAD contains the change" || fail "13e N1: origin/HEAD at the PR branch gave auto-merge (exit $rc): $out"
+# control: the real remote-tracking origin/HEAD, at main, still earns none
+gitq -C "$C" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/main
+out=$(cl --range origin/main...HEAD); echo "$out" | grep -q "evidence: hold (merged [0-9]* < min 3)" || fail "13e N1: control origin/HEAD at main: $out"
+# C1: a pushed branch named HEAD lands as a plain refs/remotes/origin/HEAD in CI: only a symref is the remote's HEAD
+xmk c1 '{"merged_ref": null}' 3 $AP 0; gitq -C "$R" checkout -q -b side; xdoc 1; xdoc 2; xdoc 3
+gitq -C "$R" checkout -q main; gitq -C "$R" checkout -q -b pr; xdoc 4; gitq -C "$R" update-ref refs/heads/HEAD side; gitq -C "$R" branch -D side
+xci pr; MB=$(git -C "$C" rev-parse refs/remotes/origin/main)
+out=$(cl --range "$MB...HEAD"); echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "evidence: no merged_ref" || fail "13e C1: a branch named HEAD earned none: $out"
+rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: no merged_ref" || fail "13e C1: a branch named HEAD gave auto-merge (exit $rc): $out"
+# C2: a short sha as a range end goes through git's ref lookup (a loose tag can shadow it on a case-insensitive disk): full ids only
+rc=0; out=$(cl --range "$(git -C "$C" rev-parse --short "$MB")...HEAD") || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "full commit id" || fail "13e C2: a short sha range end was read (exit $rc): $out"
+
+# N2: under --auto-merge every warning is a no: no human is there to read it
+xmk n2 "$TJ" 2 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
+for ex in '' '- **rounds**: 1' '1. rounds: 1'; do
+  rc=0; out=$(xrd gpt-5-1 "$ex
+" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "verdict: ready" && echo "$out" | grep -q "^auto-merge: no (" || fail "13e N2: a warning under --auto-merge merged ('$ex', exit $rc): $out"
+done
+rc=0; out=$(xrd gpt-5-1 '
+' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False and d["warnings"], d' || fail "13e N2: --json auto_merge with a warning (exit $rc): $out"
+rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (row 'G9 Extra' is not in the base" || fail "13e N2: an unknown Gates row under --auto-merge merged (exit $rc): $out"
 echo "13c. evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
 el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }
@@ -662,13 +826,29 @@ mk src -m s5 -m "Human-Findings: 0"
 out=$(el) && echo "$out" | grep -q "domain: eligible" || fail "13c evidence: domain not eligible: $out"
 js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]
 assert d["ref"]=="HEAD" and d["unprofiled"]==3, d
-assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0}, t["routine"]
-assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2}, t["domain"]
+assert t["routine"]=={"verdict":"breach","why":"reverted 20.0% > 10%","window_days":90,"merged":5,"reverted":1,"escaped":0,"human_caught":0,"with_trailer":0,"demote":{"file":".specs/steering/autonomy.md","line":6,"from":"none","to":"spot"}}, t["routine"]
+assert t["domain"]=={"verdict":"eligible","why":None,"window_days":90,"merged":5,"reverted":0,"escaped":1,"human_caught":0,"with_trailer":2,"demote":None}, t["domain"]
 assert t["critical"]["verdict"]=="hold" and t["critical"]["why"]=="thresholds not set", t["critical"]' || fail "13c evidence: --json: $js"
 mk src -m s6 -m "Human-Findings: 2"
 out=$(el) && echo "$out" | grep -q "domain: breach (human-caught 33.3% > 10%)" || fail "13c evidence: human-caught breach: $out"
 ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n"
 out=$(el) && echo "$out" | grep -q "domain: hold (merged 6 < min 100)" || fail "13c evidence: min merged: $out"
+# demote: a breached tier names its profile row and one step stricter; eligible and hold print nothing; the profile is untouched
+mkdir -p "$D/src/security"; mk src/security -m k1; K1=$(sha | cut -c1-7); mk src/security -m k2 -m "Fixes: $K1"
+ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 2 | 10 | 50 | 10 |\n| critical | 90 | 1 | - | 10 | - |\n"; cp "$AP" "$TMP/ap.copy"
+AR=.specs/steering/autonomy.md; out=$(el); echo "$out" | grep -q "critical: breach (escaped 50.0% > 10%)" || fail "13c demote: critical fixture is not in breach: $out"
+echo "$out" | grep -qxF "  demote: $AR:6 Human none → spot (a human edit; tiers.py changes nothing)" || fail "13c demote: none → spot: $out"
+echo "$out" | grep -qxF "  demote: $AR:7 Human spot → required (a human edit; tiers.py changes nothing)" || fail "13c demote: spot → required: $out"
+echo "$out" | grep -qxF "  demote: $AR:8 Human required: already required" || fail "13c demote: required: $out"
+cmp -s "$AP" "$TMP/ap.copy" || fail "13c demote: the profile changed"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]
+assert t["routine"]["demote"]=={"file":".specs/steering/autonomy.md","line":6,"from":"none","to":"spot"}, t["routine"]
+assert t["domain"]["demote"]=={"file":".specs/steering/autonomy.md","line":7,"from":"spot","to":"required"}, t["domain"]
+assert t["critical"]["demote"]=={"file":".specs/steering/autonomy.md","line":8,"from":"required","to":None}, t["critical"]' || fail "13c demote: --json: $js"
+ev "${EVH}| routine | 90 | 3 | 10 | 20 | - |\n| domain | 90 | 100 | 10 | 50 | 10 |\n| critical | 90 | 1 | - | 100 | - |\n"
+out=$(el); echo "$out" | grep -q "domain: hold" && echo "$out" | grep -q "critical: eligible" && [ "$(echo "$out" | grep -c '^  demote:')" = 1 ] || fail "13c demote: eligible or hold got a demote line: $out"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]
+assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["routine"]["demote"] is not None, t' || fail "13c demote: --json null off breach: $js"
 # the parent's table labels, not the working tree: docs no longer match routine, the counts do not move
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}${EV1}"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["merged"]==5 and t["domain"]["merged"]==6, t' || fail "13c evidence: working-tree table relabelled history: $js"
@@ -745,7 +925,7 @@ printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a`
 echo a > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m base; RB=$(git -C "$R" rev-parse HEAD)
 echo b > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m head; RH=$(git -C "$R" rev-parse --short HEAD)
 rd() { python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range "$RB..HEAD" "$@" 2>&1; }
-RV() { printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n| Severity | Location | Evidence | Trigger | Consequence | Fix |\n|---|---|---|---|---|---|\n%b\n' "$(echo "$RB" | cut -c1-7)" "$1"; }
+RV() { printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n| Severity | Location | Evidence | Trigger | Consequence | Fix |\n|---|---|---|---|---|---|\n%b\n' "$(echo "$RB" | cut -c1-7)" "$1"; }
 blk() { printf 'Body text\n\n### Gates\n%b\n- commit: %s\n- verdict: %s\n\n%s\nafter\n' "$1" "$2" "$3" "$(RV '| advisory | a.txt:1 | | | | follow-up |')"; }
 OK='- G1 Lint: pass (a)\n- G2 Tests: pass (b)'
 blk "$OK" "$RH" "ready (2 passed)" > "$R/pr.md"
@@ -879,7 +1059,7 @@ assert len(a) == 8 and not any(r[4] for r in a), ("acme: eight declared rows", a
 assert "untrusted text" in t[6][0] and "clean clone" in t[7][0], "rows seven and eight"
 assert a[6][1].startswith("no such job, checked"), "acme row seven: no such job, dated"
 PY2
-chg orders-api/src/test/java/com/acme/shop/orders/order/rest/FooTest.java; et | grep -q "human: none" && et | grep -q "guardrails: 8 declared$" || fail "14b: acme declared rows did not keep none: $(et)"
+chg orders-api/src/test/java/com/acme/shop/orders/order/rest/FooTest.java; et | grep -q "human: spot" && et | grep -q "guardrails: 8 declared$" || fail "14b: acme declared rows (no earned evidence in a sandbox) did not give spot: $(et)"
 git -C "$E" reset -q --hard "$EB"
 python3 - "$E/.specs/steering/autonomy.md" <<'PY2'
 import sys; p = sys.argv[1]; s = open(p).read().splitlines(True)

@@ -56,7 +56,8 @@ How to use them:
 
 The rules are simple: a red gate gets one retry at the same tier, two reds escalate to the planner, and nothing
 escalates without a failed gate. Details: [`kit/docs/model-routing.md`](../kit/docs/model-routing.md) ·
-[`kit/docs/review-loop.md`](../kit/docs/review-loop.md).
+[`kit/docs/review-loop.md`](../kit/docs/review-loop.md). The stages, their hand-offs and when the human enters:
+[`kit/docs/pipeline.md`](../kit/docs/pipeline.md).
 
 ## The scripts (no AI, Python 3.8+, stdlib only)
 
@@ -68,7 +69,7 @@ python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progr
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
 python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
-python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric); edits nothing
+python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric, plus the demote: line); edits nothing
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -87,7 +88,7 @@ New `.specs/spec-kit.json` keys (all optional):
 | `decisions` | `{}` | `file` (default `steering/decisions.md`), `backlinks` (`false`, `"warn"` or `true`) and `enabled` (default `true`); any other value or key stops the lint; see below |
 | `unresolved_req` | `"warn"` | `"off"` silences the WARN for REQ ids cited in `.specs/` but defined nowhere |
 | `denylist_sha256` | `[]` | SHA-256 digests of terms that must not appear in `.specs/`; see below |
-| `merged_ref` | `null` | Ref searched for those commits (e.g. `"origin/develop"`), in the project and in every indexed child repo; a repo without it is skipped. Unset: `origin/HEAD`, then `HEAD`. Commits touching only `.specs/` never count. Since 0.7.0 it also sets the staged base of `tiers.py` and `ready.py`: with neither it nor `origin/HEAD`, every staged change takes the last tier |
+| `merged_ref` | `null` | Ref searched for those commits, in the project and in every indexed child repo: a full ref name (`"refs/remotes/origin/develop"`, the safe spelling) or a short name that names exactly one branch or remote-tracking ref. A tag or an ambiguous name (a tag `origin/develop` next to the remote) is refused: the lint skips that repo with a WARN (a repo without the ref is skipped quietly); `tiers.py` labels `spot` and `--evidence` exits 2. Unset: `refs/remotes/origin/HEAD` when it is a symbolic ref (a plain one, as a pushed branch named `HEAD` makes, is refused), then `HEAD`. Commits touching only `.specs/` never count. Since 0.7.0 it also sets the staged base of `tiers.py` and `ready.py`: with neither it nor `refs/remotes/origin/HEAD`, every staged change takes the last tier. A CI checkout (`actions/checkout`) has no `origin/HEAD`: set it |
 
 ### Decisions, names, deploy impact, gates
 
@@ -139,12 +140,17 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
   glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
-  Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
-  head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
-  Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base>`,
+  Nothing in the kit merges: every PR needs an approval; for Human `none` a non-required job runs
+  `ready.py --range <base sha>...<head sha> --pr <pr text> --auto-merge` (exit 0 only when ready, `none` and no warning)
+  from a trusted worktree of the base and, on exit 0 only, approves with a non-agent identity and enables the
+  platform's auto-merge; every other PR waits for a human approval. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
+  head commit, the Review block with its `rounds: <n>` line (above 2 or malformed is not ready, missing a warning),
+  Verification lines) and runs no command; exit 1 means not ready.
+  Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base sha>`,
   then `python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md` as a staged preflight
-  before the commit, and `… tiers.py --specs .specs --range <base>...HEAD` plus `… ready.py --specs .specs --range
-  <base>...HEAD --pr /tmp/pr.md` after it (the only binding check; steps in `kit/docs/review-loop.md`). The first
+  before the commit, and `… tiers.py --specs .specs --range <base sha>...HEAD` plus `… ready.py --specs .specs --range
+  <base sha>...HEAD --pr /tmp/pr.md` after it (a `--range` end is `HEAD`, a sha or one branch or remote-tracking ref: a
+  tag or an ambiguous name is exit 2) (the only binding check; steps in `kit/docs/review-loop.md`). The first
   upgrade to 0.7.0 has no kit at its base: run them from the specter release checkout. `ready` means the PR's
   declarations agree with the base's rules and the head commit; it does not prove the gates ran: rerun them, or run them in CI.
 - **Chores.** A `| # | Gate | Command |` table that a schedule runs with
@@ -152,9 +158,9 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   the same `### Gates` block on success and on failure. A chore that writes works on a branch. Schedule recipes for cron, launchd and CI
   are in [`kit/docs/chores.md`](../kit/docs/chores.md).
 - **Guardrails (0.8.0).** A `| Guardrail | Enforced by | Verified |` table of what the platform enforces. The template
-  lists eight rows: protected default branch, the Gates as required checks, human review on `required` paths,
-  agent credentials that cannot approve or merge, agent permissions from the host's configuration, history and review
-  records agents cannot edit, agent jobs triggered by untrusted text run read-only and without secrets, and chores
+  lists eight rows: protected default branch, the Gates as required checks, an approval on every PR (only the
+  `--auto-merge` job's identity approves a `none` PR), agent credentials that cannot approve or merge, agent
+  permissions from the host's configuration, history, tags and review records agents cannot edit, agent jobs triggered by untrusted text run read-only and without secrets, and chores
   from a clean clone. A row is declared when Enforced by names something (no `<placeholder>`, and not a word that
   names nothing: `-`, `—`, `–`, `?`, `tbd`, `todo`, `n/a`, `na`, `none`, `pending`, in any case, a trailing `.` ignored)
   and Verified is a `YYYY-MM-DD` date that is not in the future; "no such job, checked <how>" with a date counts. Until every row is declared, a tier whose Human
@@ -170,8 +176,22 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
   `hold (<why>)` or `breach (<metric>)`; a placeholder row, too few merges, fewer trailered merges than
   max(Min merged, 1) or a shallow clone is a hold, never a pass. A Max of `-` is not checked.
-  It edits nothing: raising a tier is a human edit of the profile, a guarded path. Still labels only: nothing merges
-  by itself until 0.9.0.
+  Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the working-tree
+  profile (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
+  (`{file, line, from, to}`, or null off breach). It edits nothing: demoting or raising a tier is a human edit of the
+  profile, a guarded path.
+- **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the
+  `### Gates` block and the tests, with the flagged files read in full; `none` is no human before merge, and the merge
+  is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
+  guardrail declared and that tier `eligible` in `tiers.py --evidence`; otherwise it says `spot` and
+  `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
+  the implementer's model family makes `ready.py` report `spot` too; `ready.py` applies the evidence rule as the label does, and the label reads the Evidence thresholds at the
+  base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
+  `spot`. `ready.py --auto-merge` exits 0 only when the verdict is `ready`, the reported human is `none` and there is no
+  warning. The platform recipe (one approval on every PR, dropped on a new commit; a non-required job that runs that
+  check from a trusted worktree of the base and, on exit 0 only, approves with a non-agent identity and enables
+  auto-merge; the merge queue re-runs the Gates, not `ready.py`), with a GitHub and a GitLab line, is in
+  `kit/docs/review-loop.md` step 5.
 - **In flight.** `spec_report.py` adds a card listing worktrees and unmerged branches, so you see work that no
   `Status:` line shows yet.
 

@@ -1,0 +1,7 @@
+$ python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --range main...HEAD --pr /tmp/pr.md
+### Readiness
+- gates: 2/2 pass at d1852a5
+- tier: domain (reviewer: standard, human: spot)
+- verdict: ready
+- verification: REQ-STB-01 orders-api/src/test/java/com/acme/shop/orders/order/rest/OrderControllerIT.java: ok
+[exit 0]

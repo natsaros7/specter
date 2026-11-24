@@ -75,7 +75,8 @@ Say these to your agent. With the skill installed, `/spec-first …` (Claude Cod
 
 Small changes (one file, no contract change) skip the spec and go straight to code. The rules behind all this are in
 [`PHILOSOPHY.md`](PHILOSOPHY.md), and [`kit/docs/spec-driven.md`](kit/docs/spec-driven.md) explains the method on one
-page. To run spec health on a schedule (cron, launchd or CI), see [`kit/docs/chores.md`](kit/docs/chores.md).
+page. To run spec health on a schedule (cron, launchd or CI), see [`kit/docs/chores.md`](kit/docs/chores.md). For the stages from triage to merge and when a human enters, see
+[`kit/docs/pipeline.md`](kit/docs/pipeline.md).
 
 ## Supported agents
 
