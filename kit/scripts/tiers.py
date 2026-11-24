@@ -509,9 +509,12 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     last = -1 if shallow else cut(longest)  # windows nest, so the longest one's cut is the max of the tier cuts
     # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).
     # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
-    log, unprofiled, inwin = [], 0, last + 1
+    ents, unprofiled = {}, 0
     where = (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
-    for sha, parents, _, body in recs[:last + 1]:
+    todo, k = list(range(last + 1)), 0
+    while k < len(todo):  # a commit enters the list at most once, so this ends
+        i, k = todo[k], k + 1
+        sha, parents, _, body = recs[i]
         parent = parents.split()[0] if parents else None
         try:
             c = classify(root, rel, parent + "..." + sha, specs, where) if parent else None
@@ -527,8 +530,21 @@ def evidence(root, rel, specs, profile, as_json, text=None):
                 return refuse("cannot read the change set of " + sha[:7])  # never the body alone: a missed revert passes
             cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
-        log.append((c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
-                    named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body))
+        ents[i] = (c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
+                   named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i)
+        # a commit below the cut that a revert or Fixes: in the window names joins it alone, not the commits between
+        todo += sorted({j for x in ents[i][2] + ents[i][3] for j in range(last + 1, len(recs)) if recs[j][0].startswith(x)} - set(todo[last + 1:]))
+    log = [ents[i] for i in sorted(ents)]  # newest first
+    inwin = len(log)
+    # shortcut: names are matched against first-parent shas only; a branch commit of a merge below the cut stays out, extend to change sets if a merge's date can be forged
+
+    def tier_log(win):  # the tier's own window, plus the commits below it that its entries name (the longest window bounds it)
+        mine = [e for e in log if e[5] <= cut(win)]
+        while True:
+            more = [e for e in log if e not in mine and any(recs[e[5]][0].startswith(x) for m in mine for x in m[2] + m[3])]
+            if not more:
+                return [e for e in log if e in mine]
+            mine += more
     out = {}
     for name in names:
         row = (ev or {}).get(name)
@@ -541,10 +557,11 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         if shallow:
             m["why"] = "shallow clone: fetch the full history"
             continue
-        mine = [(i, e) for i, e in enumerate(log[:cut(win) + 1]) if e[0] == name]
+        wlog = tier_log(win)
+        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == name]
         m.update(window_days=win, merged=len(mine))
-        for i, (_, shas, _, _, body) in mine:
-            later = log[:i]  # the log is newest first, so these came after this commit
+        for i, (_, shas, _, _, body, _) in mine:
+            later = wlog[:i]  # the log is newest first, so these came after this commit
             hit_ = lambda k: any(h.startswith(x) for e in later for x in e[k] for h in shas)
             m["reverted"] += hit_(2)
             m["escaped"] += hit_(3)

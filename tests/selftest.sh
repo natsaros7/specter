@@ -986,6 +986,19 @@ nr "t13e14"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; git
 CL=$(git -C "$R" -c user.name=t -c user.email=t@t commit-tree "$RV^{tree}" -p "$RV^" -m clean); gitq -C "$R" replace "$RV" "$CL"
 want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
 
+# an idle gap before backdated agent commits: the window cut sits above the agent commit, and its revert (dated now) must pull it in
+ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'
+export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e12 -b main; mr docs -m d0
+export GIT_COMMITTER_DATE=2025-06-01T00:05:00; mr docs -m agent; AG=$(git -C "$R" rev-parse HEAD); unset GIT_COMMITTER_DATE
+gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4 5; do mr docs -m "c$i"; done
+want "13e12 a revert above the cut pulls the commit it names into the window" "routine: breach (reverted 14.3% > 10%)"
+
+# the commits between the cut and the named one stay out: twenty old clean commits must not dilute the revert below the threshold
+export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e15 -b main; mr docs -m agent; AG=$(git -C "$R" rev-parse HEAD)
+for i in $(seq 20); do mr docs -m "old$i"; done; unset GIT_COMMITTER_DATE
+gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4; do mr docs -m "c$i"; done
+want "13e15 the window adds the named commit, not the commits between" "routine: breach (reverted 16.7% > 10%)"
+
 fi; if sect 11b "ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"; then
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
 printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n| G2 | Tests | `echo b` |\n' > "$R/.specs/steering/spec-rules.md"

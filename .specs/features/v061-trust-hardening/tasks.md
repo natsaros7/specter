@@ -19,7 +19,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 2 `section()` skips fenced code and HTML comments (v060 19b) (#4) — [REQ-V061-01]
 - [x] 3 Docs: evidence assumes squash or merge commits (v060 19c) (#5) — [REQ-V061-01]
 - [ ] 4 Count a commit only under its tier's current row; the rest on a `relabelled` line (v060 19d) (#6) — [REQ-V061-01]
-- [ ] 5 Window reaches every commit a revert or `Fixes:` above the cut names (v060 19e) (#7) — [REQ-V061-01]
+- [x] 5 Window reaches every commit a revert or `Fixes:` above the cut names (v060 19e) (#7) — [REQ-V061-01]
 - [x] 6 Unparseable commit date: exit 2 with its sha (v060 19f) (#8) — [REQ-V061-01]
 - [x] 7 `GIT_NO_REPLACE_OBJECTS=1` on every git call in `tiers.py`, with a selftest row (v060 19g) (#9) — [REQ-V061-01]
 - [ ] 8 Nobody writes `Human-Findings:` on an auto-merge: ignore a `0` on a `none` commit, no trailer hold on a `none` tier (v060 23a) (#10) — [REQ-V061-02]
