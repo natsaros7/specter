@@ -111,9 +111,10 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
   `ER='| routine | 90 | 1 | 10 | - | - |…'`, want `routine: breach (reverted 14.3% > 10%)`. Today it is
   `eligible — merged 6, reverted 0`.
 - **Fix:** after the date cut, look at every revert and `Fixes:` sha in `log[:cut + 1]`. When one prefixes a
-  first-parent sha below the cut, move the cut down to it, build the log entries in between, and repeat until it stops
-  moving. It only ever moves down, so it ends. Each tier's cut follows the same rule inside its own window; windows
-  nest, so the longest cut still bounds them. `shortcut: names are matched against first-parent shas only; a branch
+  first-parent sha below the cut, add **that commit only** (and, transitively, what it names). The commits between it
+  and the cut stay out: pulling the whole range in would let one revert of an ancient commit dilute the rates with old
+  clean history (lead review, 2026-11-25; row `t13e15`). Each commit enters at most once, so it ends. Each tier's log
+  follows the same rule inside its own window. `shortcut: names are matched against first-parent shas only; a branch
   commit of a merge below the cut stays out, extend to change sets if a merge's date can be forged`.
 - **Depends on:** task 1. Serial with tasks 4, 6 and 8 (task 6 guards the same `cut`).
 
