@@ -498,6 +498,9 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     # fast-forward that kept its date) cannot leave the window. A future date never sets the cut.
     # shortcut: a recently dated commit deep in history widens the window down to it (merged history is protected by
     # guardrail row one); cap the window by count if that is ever abused.
+    for r in recs:  # git prints an empty %ct for a date it cannot parse; fail closed before int()
+        if not re.fullmatch(r"[0-9]+", r[2], re.A):
+            return refuse("commit " + r[0][:7] + " has an unreadable committer date")
     cut = lambda win: max([i for i, r in enumerate(recs) if now - win * 86400 <= int(r[2]) <= now] or [-1])
     last = -1 if shallow else cut(longest)  # windows nest, so the longest one's cut is the max of the tier cuts
     # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).

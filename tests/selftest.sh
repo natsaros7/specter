@@ -941,6 +941,11 @@ B=$(git -C "$R" hash-object --literally -t commit -w "$TMP/orphan"); M=$(git -C 
 gitq -C "$R" update-ref refs/heads/main "$M"; rc=0; out=$(er) || rc=$?
 [ "$rc" = 2 ] && echo "$out" | grep -qF "cannot read the change set of $(echo "$M" | cut -c1-7)" || fail "13c evidence: an unreadable change set exits $rc, want 2: $out"
 for a in "--range a..b" "--check"; do rc=0; el $a >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "13c evidence: '--evidence $a' exits $rc, want 2"; done
+nr t13e13 -b main; mr docs -m c1; T=$(git -C "$R" rev-parse HEAD^{tree}); P=$(git -C "$R" rev-parse HEAD)
+printf 'tree %s\nparent %s\nauthor a <a@a> 1700000000 +0000\ncommitter a <a@a> notadate +0000\n\nbad date\n' "$T" "$P" > "$TMP/baddate"
+B=$(git -C "$R" hash-object --literally -t commit -w "$TMP/baddate"); gitq -C "$R" update-ref refs/heads/main "$B"; mr docs -m top
+rc=0; out=$(er) || rc=$?
+[ "$rc" = 2 ] && echo "$out" | grep -qF "tiers: commit $(echo "$B" | cut -c1-7) has an unreadable committer date" || fail "13e evidence: an unparseable commit date exits $rc, want 2 naming $B: $out"
 
 echo "11b. ready.py: Gates block vs the base's table and the head commit; no command run; --json; usage errors"
 R="$TMP/t11b"; mkdir -p "$R/.specs/steering" "$R/src" "$R/.specs/kit"; gitq -C "$R" init; cp -R "$KIT/kit/scripts" "$R/.specs/kit/scripts"
