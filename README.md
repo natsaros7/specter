@@ -23,11 +23,13 @@ match in a dated Drift Register instead of hiding it.
 ```bash
 git clone https://github.com/natsaros7/specter.git ~/tools/specter && cd ~/tools/specter
 python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs    # structure and REQ traceability
+python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites    # citations resolve: passes
+python3 kit/scripts/spec_lint.py --specs examples/cite-demo/.specs --cites    # fails on purpose, exit 1
 python3 kit/scripts/spec_report.py --specs examples/acme-shop/.specs --out /tmp/report.html && open /tmp/report.html
 ```
 
 [`examples/acme-shop/.specs/`](examples/acme-shop/.specs/README.md) is a full spec tree for a fictional shop. The
-example ships without its code, so its citation check fails on purpose. The report looks like this:
+citations resolve against its real code. [`examples/cite-demo/`](examples/cite-demo/) is a tiny fixture whose citations break, so you can see a failure. The report looks like this:
 
 <p align="center"><img src="docs/assets/report.png" alt="spec report: features with progress, open drift with age, lint and citation counts" width="80%"></p>
 

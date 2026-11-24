@@ -17,7 +17,7 @@ ticket reporter only at items marked DECISION.
 3. (A) Add `validateTimestamp` to `GrpcSecurityFilter`, copying the partner-id failure pattern.
 4. (A) Tests as listed in `design.md` § Tests.
 5. (B) Javadoc, flag and `SecurityHeaderTest` only.
-6. `./mvnw verify` from the root.
+6. Run the Gates table in `steering/spec-rules.md` from the root.
 
 ### Constraints
 - Conventional Commits, subject ≤ 72 chars, includes `ORD-142`.
@@ -25,7 +25,7 @@ ticket reporter only at items marked DECISION.
 - Out of scope: nonce cache, proto changes, ICD edits.
 
 ### Verification
-- `./mvnw verify` green; Sonar new-code coverage ≥ 80 %, 0 new blockers.
+- Every row of the Gates table exits 0.
 - (A) With `enforce=false` an out-of-window request succeeds and emits an event; with `true` it is denied.
 
 ### Deliverables

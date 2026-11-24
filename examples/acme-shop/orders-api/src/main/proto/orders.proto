@@ -1,0 +1,48 @@
+// Partner contract for orders-api, gRPC service acme.orders.v1.PartnerOrders.
+// proto2 on purpose: `required` is a presence check that protobuf itself enforces.
+syntax = "proto2";
+
+package acme.orders.v1;
+
+option java_multiple_files = true;
+option java_package = "com.acme.shop.orders.partner.proto";
+
+service PartnerOrders {
+  rpc PlaceOrder(PlaceOrderRequest) returns (OrderReply);
+  rpc GetOrder(GetOrderRequest) returns (OrderReply);
+  rpc CancelOrder(CancelOrderRequest) returns (OrderReply);
+}
+
+// partner_id must equal the common name of the client certificate (GrpcSecurityFilter).
+message PlaceOrderRequest {
+  required string partner_id = 1;
+  // Epoch seconds. Required means present; the value is not compared to the clock (drift D1, ORD-142).
+  required int64 timestamp = 2;
+  required string currency = 3;
+  repeated Line lines = 4;
+}
+
+message GetOrderRequest {
+  required string partner_id = 1;
+  required int64 timestamp = 2;
+  required string order_id = 3;
+}
+
+message CancelOrderRequest {
+  required string partner_id = 1;
+  required int64 timestamp = 2;
+  required string order_id = 3;
+}
+
+message Line {
+  required string sku = 1;
+  required int32 quantity = 2;
+  required int64 unit_price_cents = 3;
+}
+
+message OrderReply {
+  required string order_id = 1;
+  required string currency = 2;
+  required string status = 3;
+  repeated Line lines = 4;
+}

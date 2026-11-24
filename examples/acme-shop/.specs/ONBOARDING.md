@@ -7,9 +7,10 @@ specific to this project. Generated from `.specs/kit/templates/ONBOARDING.md` on
 ## What it is (1 minute)
 
 An online shop for partner retailers. `orders-api` takes orders over REST (web) and gRPC (partners) and publishes
-`order-events` to Kafka; `fulfilment-worker` consumes them and calls the carrier; `catalog-cache` proxies the catalogue;
-`web` is the UI; `shop-common` carries the security filter and event schemas. Requirements come from a supply contract
-(`CON-REQ-NNN`).
+`order-events` through a transactional outbox; `fulfilment-worker` consumes them and calls the carrier;
+`catalog-cache` proxies the catalogue; `web` is the UI; `shop-common` carries the security filter and event schemas.
+Requirements come from a supply contract (`CON-REQ-NNN`). In this example only `orders-api` and `shop-common` have
+code; the other three are spec-only, and the outbox ends in a logging sink, not a Kafka broker.
 
 ## Read in this order (15 minutes)
 
@@ -39,7 +40,7 @@ An online shop for partner retailers. `orders-api` takes orders over REST (web) 
 4. **Implement** the task's REQs, and nothing else (`.specs/kit/playbooks/next-task.md`).
 5. **Gates.** Run `python3 .specs/kit/scripts/gates.py` from the repo root and paste its `### Gates` block into the PR
    description. It executes the commands in the spec-rules Gates table through the shell: read that table before
-   running it on a branch you didn't write. Sonar runs in CI.
+   running it on a branch you didn't write.
 6. **Docs.** The spec ships with the code: `domains/` and `system/` updates per `.specs/kit/playbooks/sync.md`, and
    `CHANGELOG.md`, in the same PR.
 7. **Review.** Someone who did not write the change approves it; the tech lead for anything under `shop-common/security`.
@@ -49,10 +50,10 @@ An online shop for partner retailers. `orders-api` takes orders over REST (web) 
 
 ## Practical gotchas
 
-- **Local run:** `./mvnw -pl orders-api spring-boot:run` needs Docker for the Testcontainers-backed dev profile.
-- **Versions:** Java 21, Maven wrapper only; CI uses the same wrapper.
-- **Tests:** ITs start Kafka and PostgreSQL containers; the first run pulls images.
-- **Generated:** `openapi.yaml` is generated from the controllers. Change the code, not the file.
+- **Local run:** `./mvnw -B -DskipTests install`, then in `orders-api/` `../mvnw org.springframework.boot:spring-boot-maven-plugin:4.1.2:run`: REST on 8080, no Docker (H2 in memory, gRPC in-process).
+- **Versions:** Java 21 (`.sdkmanrc`), Maven wrapper only. The example ships no CI workflow.
+- **Tests:** ITs run on H2 and start no containers; the first Maven run needs network, later runs work offline (`-o`).
+- **Generated:** `openapi.yaml` is generated from the controllers; `OpenApiSnapshotTest` fails when it differs. Change the code, not the file.
 
 ## Starter prompts (any coding agent)
 

@@ -10,6 +10,13 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 echo "1. example specs lint clean"
 python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/acme-shop/.specs" >/dev/null || fail "example lint"
+python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/acme-shop/.specs" --cites >/dev/null || fail "acme citations"
+
+echo "1b. cite-demo: two citations fail on purpose, exit 1"
+out=$(python3 "$KIT/kit/scripts/spec_lint.py" --specs "$KIT/examples/cite-demo/.specs" --cites) && fail "cite-demo passed"
+echo "$out" | grep -q "OrderService.java:142.* past end of file (39 lines)" || fail "cite-demo past-end: $out"
+echo "$out" | grep -q "RateLimiter.java:12.* no such file" || fail "cite-demo no-such-file: $out"
+echo "$out" | grep -q "2 FAIL of 3 citation(s)" || fail "cite-demo count: $out"
 
 echo "2. single repo: install, re-install, compare"
 P="$TMP/single"; mkdir -p "$P/src" "$P/.cursor"; gitq -C "$P" init

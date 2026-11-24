@@ -5,6 +5,24 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.6.5] - 2026-11-22
+
+The acme-shop example gets real code, so the factory has a codebase to work on. The kit is unchanged: installed projects see no difference.
+
+### Added
+- `examples/acme-shop/`: a Java 21, Spring Boot 4 Maven reactor (`shop-common`, `orders-api` with Spring Modulith modules `order`, `partner`, `outbox`) on H2, in-process gRPC and a transactional outbox. Error Prone with NullAway, Spotless, ArchUnit and Modulith rules, an OpenAPI snapshot, jqwik properties and PIT. Its specs cite real lines and pass `--cites`.
+- A Gates table in the example (`G1`–`G5`, with `G3b` scanning the build log for text aimed at agents: jqwik 1.10.x prints such text, kept on an exact pin and allow-listed for that one clause), drift rows D5–D7, ADRs 007/012/013, chores for spec health and weekly PIT, and seed tasks S1–S8 across the routine, domain and critical tiers.
+- `examples/acme-shop/README.md`: build with JDK 21 (`.sdkmanrc`), run, and the factory sandbox recipe.
+- `examples/cite-demo/`: a small fixture whose citations fail on purpose; it reproduces `docs/assets/lint-demo.svg`.
+- `tests/acme-build.sh`, specter gate G5 (optional): builds the example. Without JDK 21 it prints `G5 SKIPPED` and exits 0; any build failure exits 1. It must run, not skip, when a change touches the example's code.
+
+### Changed
+- Specter G2 also checks the example's citations; the selftest covers that and the cite-demo failure.
+- README "Try it" runs the passing check on acme-shop and the failing one on cite-demo.
+
+### Known
+- `docs/assets/report.png` predates this release: its citation count shows the old failing state.
+
 ## [0.6.0] - 2026-11-21
 
 First slice of staged autonomy, set per repository. Without `steering/autonomy.md`, the lint and playbooks behave as in 0.5.0; the report always gains the In flight card.

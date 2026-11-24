@@ -30,8 +30,8 @@ option A puts its properties record and `Clock` bean in `shop-common`; seed S5 n
 
 | Option | For | Against | Ops impact |
 |---|---|---|---|
-| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter whose Boot 4.x line is UNKNOWN | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
-| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 4.x compatibility of the current lines UNKNOWN; more config to read | A listening port during tests |
+| **grpc-java with protoc codegen; an in-process server only; no starter** (chosen) | The filter is a real `ServerInterceptor`, so ORD-142 (seed S5) is real work; in-process transport opens no port; about 30 lines replace a starter (Boot 4.x support not checked, none needed) | No TLS listener, so the production subject path (`PeerSubjectResolver` reading the SSL session) is unit-tested with a stub, not end to end. `shortcut: in-process gRPC only, add a TLS listener with generated test certificates when a seed task needs a real partner client` | protoc is downloaded once per OS by the build plugin, then cached |
+| A gRPC starter (`grpc-spring-boot-starter` as the domain design names, or Spring gRPC) | Matches the domain design's stack line | Opens port 9090 by default; Boot 4.x compatibility not checked; more config to read | A listening port during tests |
 | Keep `orders.proto` as a contract file only; no gRPC code | Smallest | ORD-142, D-1 and requirement ORD-03 lose their code; the critical-tier seed tasks disappear | — |
 
 ### Events without a broker ([REQ-V065-02] [REQ-V065-03])
@@ -58,10 +58,21 @@ breaks the offline rule and the "protect the laptop" preference.
 - Dependencies only from Maven Central; the wrapper is the script-only type, with `distributionSha256Sum` pinned in
   `.mvn/wrapper/maven-wrapper.properties`. No `maven-wrapper.jar`, no binary file of any kind.
 - Versions are pinned in the root `pom.xml` properties, chosen in task 2 from Maven Central, each released at least two
-  weeks earlier: Spring Boot 4.x BOM, Spring Modulith 2.x BOM (decided 2026-11-21), grpc-java, protobuf, a protobuf Maven plugin,
-  ArchUnit, jqwik, Error Prone, NullAway, JSpecify, Spotless, the springdoc line that pairs with Boot 4.x, PIT and its JUnit 5 plugin. UNKNOWN until
-  task 2: the exact patch versions, and whether each library below has a Boot 4.x-compatible release (grpc-java
-  wiring, springdoc, jqwik, Error Prone and NullAway with JSpecify); a gap is a task-2 finding, not a guess.
+  weeks before 2026-11-21 (so 2026-11-07 or earlier). Pairing check done 2026-11-21 (details in tasks.md task 2):
+
+  | Library | Version | Pairing with Boot 4.1.2 |
+  |---|---|---|
+  | Spring Boot BOM | 4.1.2 (4.1.3 and 4.2.0 are from 2026-11-19, too new) | the base |
+  | Spring Modulith BOM | 2.1.2 | `spring-modulith-starter-test` and `ApplicationModules.verify()` run on Boot 4.1.2 |
+  | grpc-java, protobuf-java, protobuf-maven-plugin (`io.github.ascopes`) | 1.84.1, 4.36.2, 5.1.11 | the Boot 4.1.2 BOM manages exactly these three, so no clash; no gRPC starter, as chosen |
+  | springdoc-openapi | 3.2.0 | its own parent is Boot 4.1.2; `springdoc-openapi-starter-webmvc-api` resolves |
+  | jqwik | 1.10.2 | runs on JUnit Jupiter 6.0.3 (Boot's); its engine pom names platform 1.14.4, so keep it under the Boot-managed JUnit |
+  | ArchUnit | 1.5.1 | loads and imports classes on JDK 21 / JUnit 6 |
+  | Error Prone, NullAway, JSpecify | 2.51.0, 0.14.3, 1.0.1 | NullAway 0.14.3 builds on JSpecify 1.0.1; Spring Framework 7 is JSpecify-annotated |
+  | PIT, JUnit 5 plugin | 1.30.1, 1.2.3 | runs the jqwik property and the Jupiter tests |
+  | Spotless, Enforcer | 3.10.4, 3.7.0 | no pairing issue |
+
+  No gap found; the checks ran in a scratch build, not on the real code (tasks 7 and 8 confirm there).
 - No outbound call anywhere: no Kafka or HTTP client, no carrier client, no Testcontainers, no telemetry, no devtools.
   The app listens on 8080 for REST when run locally; tests use MockMvc and the in-process gRPC channel.
 - No secret: no keystore, certificate, private key or password beyond H2's default empty one. Partner subjects and ids
@@ -96,14 +107,16 @@ The example's Gates table (`examples/acme-shop/.specs/steering/spec-rules.md`), 
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Compile, Error Prone + NullAway, format | `./mvnw -B -q -DskipTests verify` |
+| G1 | Compile, Error Prone + NullAway, format | `./mvnw -B -DskipTests verify` |
 | G2 | Architecture: Modulith `verify()`, ArchUnit | `./mvnw -B -q test -Dgroups=architecture` |
-| G3 | Full build: unit, property, integration and architecture tests | `./mvnw -B verify` |
+| G3 | Full build: unit, property, integration and architecture tests; the log goes to `target/build.log` | `mkdir -p target && ./mvnw -B verify > target/build.log 2>&1` |
+| G3b | Agent-text scan of that log (jqwik fence) | `sh scripts/scan-agent-text.sh target/build.log` |
 | G4 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
 | G5 | Citations | `python3 .specs/kit/scripts/spec_lint.py --cites` |
 
-Architecture tests carry the JUnit tag `architecture`. UNKNOWN until task 7: whether Surefire's `groups` filter passes
-quietly in `shop-common`, which has no tagged test; if not, G2 adds `-pl orders-api`.
+G1 has no `-q` (task 10): quiet mode hid Error Prone's pattern name (`[EqualsIncompatibleType]`), and the unquiet output is about 100 lines, short enough to read. G2 keeps `-q`. G4 and G5 use the installed form (`.specs/kit/scripts/`), which is how the sandbox runs; the kit exists there only after `install.sh`, so the sandbox recipe installs first, and the example README says so and gives the bare-checkout form (`python3 ../../kit/scripts/spec_lint.py --specs .specs [--cites]`).
+
+Architecture tests carry the JUnit tag `architecture`. Settled in task 7: Surefire's `groups` filter passes quietly in `shop-common` (no tagged test, no report, exit 0), so G2 stays as written, run from the reactor root (`-pl orders-api` alone cannot resolve the unbuilt `shop-common` jars).
 
 ### Check map: lesson or decision → check
 
@@ -114,10 +127,10 @@ task 9 proves each row by breaking it once on a scratch branch.
 |---|---|---|---|
 | Lesson 2026-10-27 (`examples/acme-shop/.specs/steering/lessons.md:5`) | No real sleeps; time comes from a `Clock` | `CodingRulesTest`: no class, main or test, calls `Thread.sleep` or `TimeUnit.sleep` (`because`: "use MutableClock from shop-common's test jar"); the outbox resubmission test drives a `MutableClock` | G2 |
 | Lesson 2026-11-03 (`examples/acme-shop/.specs/steering/lessons.md:6`) | Unknown `currency` → 422, never 400 | jqwik `CurrencyPolicyProperties`: for any string outside the accepted set, the status is 422; malformed JSON stays 400 (one MockMvc example each) | G3 |
-| ADR-012, ord-120 STB-01 to STB-03 (`ServiceBoundaryTest` named in `examples/acme-shop/.specs/ONBOARDING.md:26-27`) | Adapters own no transaction and see no entity; services take and return DTOs; queries `readOnly` | `ServiceBoundaryTest` (ArchUnit, one global strict rule set: ord-120's end state) | G2 |
+| ADR-012, ord-120 STB-01 to STB-03 (`ServiceBoundaryTest` named in `examples/acme-shop/.specs/ONBOARDING.md:27-28`) | Adapters own no transaction and see no entity; services take and return DTOs; queries `readOnly` | `ServiceBoundaryTest` (ArchUnit, one global strict rule set: ord-120's end state) | G2 |
 | ADR-013 (new: Modulith modules) | Modules use each other's API package only; no cycles | `ModulesTest`: `ApplicationModules.of(...).verify()`; it also writes the module diagrams to `target/spring-modulith-docs/`, a verification artifact a reviewer can open | G2 |
 | D-1 (`examples/acme-shop/.specs/steering/decisions.md:10`) | A gRPC call commits before it answers | `PartnerOrdersCommitTest`: inside the test observer's `onNext`, no transaction is active and the order is readable from a new transaction | G3 |
-| ONBOARDING gotcha "Generated" (`examples/acme-shop/.specs/ONBOARDING.md:55`) | Change the controllers, not `openapi.yaml` | `OpenApiSnapshotTest`: the generated document equals the committed file; `-Dopenapi.record=true` rewrites it, like ord-120's `-Dsafetynet.record=true` | G3 |
+| ONBOARDING gotcha "Generated" (`examples/acme-shop/.specs/ONBOARDING.md:56`) | Change the controllers, not `openapi.yaml` | `OpenApiSnapshotTest`: the generated document equals the committed file; `-Dopenapi.record=true` rewrites it, like ord-120's `-Dsafetynet.record=true` | G3 |
 | AGENT_PROMPT constraints (`examples/acme-shop/.specs/features/ord-142-request-timestamp-validation/AGENT_PROMPT.md:24`) | Constructor injection | `CodingRulesTest`: no field injection (ArchUnit's general coding rule) | G2 |
 | Code standards (new row) | No unchecked null dereference | NullAway in compile | G1 |
 | Code standards (Spotless row) | One format | `spotless:check` | G1 |
@@ -125,10 +138,10 @@ task 9 proves each row by breaking it once on a scratch branch.
 | Lesson rule "a lesson seen twice becomes a check" | Tests that can't kill mutants don't count | PIT on `com.acme.shop.security` and `com.acme.shop.orders.order`, threshold = the first measured score, raised by hand only (ord-120's ratchet idea) | chore C2 |
 
 D-3 (timeouts at today's values) stays guidance with no check: a test that pins two numbers adds little. It shows
-that `Checked by` may be empty. `@Value` is deliberately not banned yet: that ban is seed S6.
+that `Checked by` may be empty. That cannot be shown yet: `decisions.md` has no `Checked by` column until v060 slice 2 adds it (task 9 finding). `@Value` is already banned in main code (Decided 2026-11-21, architecture-rule scope), so seed S6 targets a correction that has no check yet: reading time with `Instant.now()` instead of the injected `Clock`.
 
 PIT runs weekly as chore C2 (`./mvnw -B -Ppit verify`), not as a gate: it takes minutes and its score moves with the
-code, so it reports rather than blocks. UNKNOWN until task 8: whether PIT's JUnit 5 plugin runs jqwik properties; if
+code, so it reports rather than blocks. Task 2's scratch build showed PIT's JUnit 5 plugin runs jqwik properties; task 8 confirms it on the real tests, and if
 not, the `pit` profile excludes them.
 
 ## Citations stay true ([REQ-V065-06])
@@ -154,11 +167,11 @@ not, the `pit` profile excludes them.
 | `.specs/spec-kit.json` | `cite_ignore_globs` | REQ-V065-06 |
 | `.specs/steering/spec-rules.md` | §7 Gate row and the Gates table above; Sonar removed | REQ-V065-04 |
 | `.specs/steering/code-standards.md` | Rows point to the root `pom.xml` (Spotless, Error Prone, NullAway, Enforcer) and the architecture tests; CONTRIBUTING, CI workflow and Sonar rows removed (the example ships none) | REQ-V065-04 |
-| `.specs/steering/autonomy.md` | Knowledge rows: ADRs (`../../docs/adr/`), architecture tests; chore C2 (PIT) | REQ-V065-05 |
-| `.specs/steering/lessons.md` | One new line: 2026-11-12, config read with `@Value`; use a `@ConfigurationProperties` record. Seen once, so no check yet (seed S6) | REQ-V065-10 |
+| `.specs/steering/autonomy.md` | Knowledge rows: ADRs (`../../docs/adr/`), architecture tests; chores C1 (spec health) and C2 (weekly PIT); no CI claim | REQ-V065-05 |
+| `.specs/steering/lessons.md` | One new line: 2026-11-12, config read with `@Value`; use a `@ConfigurationProperties` record. Each lesson line now names its check (`CodingRulesTest`, `CurrencyPolicyProperties`). The `@Value` rule already exists in `CodingRulesTest` (Decided 2026-11-21, architecture-rule scope), so seed S6 was redefined to the `Clock` correction, which has no check yet | REQ-V065-10 |
 | `.specs/steering/project-profile.md` | Facts: two Maven modules plus three spec-only domains; topics are config for the outbox sink; three ADRs; the gate is the Gates table. The interview log stays as it is (history) | REQ-V065-07 |
 | `.specs/system/architecture.md` | Registry: orders-api is Java 21, Boot 4.x, Spring Modulith 2.x, H2, in-process gRPC, logging event sink; the diagram marks PostgreSQL, Kafka and the three spec-only components as "not in the example code" | REQ-V065-07 |
-| `.specs/system/data-flows.md` | §2 notes OrderPaid is not implemented; new drift D5 (🟡, OrderPaid named in the docs, not in the code, resolved by seed S4); D4's ground truth drops "and chart" | REQ-V065-07, REQ-V065-10 |
+| `.specs/system/data-flows.md` | §2 notes OrderPaid is not implemented; new drift D5 (🟡, OrderPaid named in the docs, not in the code, resolved by seed S4) and D6 (🔴, partner gRPC path skips the currency rule, resolved by seed S7); D4's ground truth now says the 9090 port lives in the deployed chart, because the example's `application.yml` holds no gRPC port | REQ-V065-07, REQ-V065-10 |
 | `.specs/system/traceability.md` | Line numbers only | REQ-V065-06 |
 | `.specs/domains/orders-api/design.md` | Stack line (grpc-java in-process, Modulith registry, no Kafka client), Behaviour adds the three modules, events `OrderPlaced` and `OrderCancelled` (OrderPaid → D5), Data H2 with V1–V2, Config: no deploy charts in the example | REQ-V065-07 |
 | `.specs/domains/orders-api/requirements.md` | Requirement ORD-02 wording: never lost, at least once, events carry an id; line numbers | Outbox semantics above |
@@ -186,17 +199,15 @@ README "Try it" block: lint the example (passes), check its citations (passes), 
 
 ## Specter's gates ([REQ-V065-09])
 
-| Option for G5 | For | Against | Ops impact |
+| Decided for G5 (2026-11-21; losing options removed) | For | Against | Ops impact |
 |---|---|---|---|
 | **Optional G5, `sh tests/acme-build.sh`: no JDK 21 → `G5 SKIPPED: needs JDK 21+ (found: <version or none>)`, exit 0; a build or download failure → exit 1** (chosen) | Kit contributors need no JDK; the skip is visible as the last line, which is what a `### Gates` block shows; a broken pom or a bad version pin is never mistaken for "offline" | A skip exits 0, so only the rule below stops a change to example code going in unbuilt | First run downloads about 200 to 400 MB into `~/.m2`, then `-o` works |
-| Same, but skip exits 77 | Machine-readable skip | `gates.py` and the slice-2 readiness verdict read any non-zero as FAIL; every non-JDK contributor sees red | — |
-| G5 fails without a JDK | Simple, strict | Breaks "G1 to G4 need no JDK" in spirit; Python contributors blocked | — |
-| No G5; build the example by hand at release | Nothing to maintain | Example code rots between releases; agents in the sandbox find a broken build first | — |
 
 Script behaviour, about fifteen lines of POSIX sh: find `java` (`JAVA_HOME` first, then `PATH`), read the major
 version, skip below 21; otherwise `cd examples/acme-shop && ./mvnw -B verify`, adding `-o` when `ACME_OFFLINE=1`.
 On a dependency resolution failure it prints one hint line ("the first run needs network to fill ~/.m2") before
-exiting 1.
+exiting 1. After a green build it runs `scripts/scan-agent-text.sh` on the log (the jqwik fence, gate G3b), so G5
+cannot pass on a build that printed agent-directed text (added in task 12).
 
 `AGENTS.md` table after the change:
 
@@ -217,9 +228,7 @@ cite-demo fixture (both FAIL lines, exit 1). It never calls `acme-build.sh`.
 
 | Option | For | Against | Ops impact |
 |---|---|---|---|
-| Branches of the specter repo | No setup | Agent merges pollute specter's history; evidence counting needs a `.git` at the example root (`kit/scripts/spec_lint.py:354-355`); seed tasks can be run once only | Reverts in specter's log |
 | **A disposable local copy with its own `git init`** (chosen until v060 slice 3) | Agents merge freely; evidence accrues in its own log; reset and re-run seeds as a benchmark; nothing leaves the machine | No platform guardrails (protected branch, required checks) to test | Re-copy to pick up example changes |
-| A private hosted repository | Guardrails and PR-based review become testable | Network, a host account, secrets for agent credentials; more to set up than slice 1 or 2 needs | Hosted CI minutes |
 
 Sandbox recipe (goes into `examples/acme-shop/README.md`, a new file for humans: build, run, sandbox):
 
@@ -259,7 +268,9 @@ in a fresh sandbox; nothing is merged into specter. A planted defect is listed h
 | S3 (ORD-153) | domain | refactor | "Move the entity-to-DTO mapping out of OrderService into its own class in the order module; no behaviour change." | Characterisation first (playbook), `ServiceBoundaryTest` and `verify()` hold | Safety-net commit before the refactor commit; nothing else changes |
 | S4 (ORD-154) | critical | feature | "Docs mention OrderPaid, but no order can be marked paid. Add it." | Spec first (contract change), `openapi.yaml` snapshot re-recorded, drift D5 resolved, deep review | New feature folder under `.specs/features/`; D5 RESOLVED; tier `critical` |
 | S5 (ORD-142) | critical | decision-gated | "Implement ORD-142." | The agent must stop at the decision gate (task 1) and ask; after the human records option A and `W`, a jqwik property ("rejected iff the offset exceeds W") and deep review | First run ends with a question, no code; second run green |
-| S6 (ORD-155) | critical | lesson → check | The human corrects the agent a second time: "don't use `@Value`, use a `@ConfigurationProperties` record". | Lesson recorded the same session; seen twice → a check first (`sync.md`), an ArchUnit rule with a `because` message, not prose | lessons.md line; a `CodingRulesTest` rule that fails on a planted `@Value` |
+| S6 (ORD-155) | critical | lesson → check | The human corrects the agent a second time: "don't call `Instant.now()`, read time from the injected `Clock`". | Lesson recorded the same session; seen twice → a check first (`sync.md`), an ArchUnit rule on main code with a `because` message, not prose | lessons.md line; a `CodingRulesTest` rule that fails on a planted `Instant.now()` in main code |
+| S7 (ORD-156) | domain | domain rule (drift D6) | "A partner can place an order with a currency the REST API rejects with 422." | Move the currency rule into the order API: 422 on REST, `INVALID_ARGUMENT` on gRPC; then an ArchUnit rule that keeps domain rules out of `rest`. A found gap becomes a check | Red test on the gRPC path first; D6 RESOLVED; new `ServiceBoundaryTest` or `CodingRulesTest` rule red on a planted rule in `rest`; tier `domain` |
+| S8 (ORD-157) | domain | rule | "Nothing stops a service query from opening a read-write transaction." | Service queries are `readOnly`; add the ArchUnit rule (the ord-120 spec implies it, the example does not enforce it yet) | A rule red on a planted query without `readOnly`; tier `domain` |
 
 Evidence per run, once the v060 scripts exist: the `### Risk tier`, `### Gates` and `### Review` blocks in the
 sandbox PR or commit text, and the `Fixes:` and `Human-Findings:` trailers slice 3 counts.
@@ -275,8 +286,6 @@ downloads; no Docker; no real company, person or partner names; no generated fil
 | Option | For | Against | Ops impact |
 |---|---|---|---|
 | **0.6.5, on its own, before slice 2** (chosen) | Slice 2's tiers, readiness verdict and `Checked by` can then be built and tried on real code; the kit is unchanged, so a patch-level number is honest | One more release to cut | Nothing for installed projects |
-| Folded into 0.7.0 | One release | Slice 2 would be built against a test project that does not exist yet; a bigger, slower review | Same |
-| Merged to main, no release | No release work | The README demo change ships unannounced; tags don't mark it | — |
 
 ## Tests
 

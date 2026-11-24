@@ -9,12 +9,12 @@ agent: Claude Code (deep tier) for setup; refreshed by Codex on 2026-11-03
 
 | Fact | Evidence | Confidence | Open question |
 |---|---|---|---|
-| Monorepo, 4 deployables + 1 lib | `pom.xml` modules; `deploy/charts/*` | high | — |
+| Monorepo, 4 deployables + 1 lib; this example builds two Maven modules (`orders-api`, `shop-common`), the other three are spec-only | `pom.xml` modules | high | — |
 | orders-api exposes REST + gRPC | `OrderController.java`, `orders.proto` | high | — |
-| Kafka topics `order-events`, `.retry`, `.dlt` | `application.yml:41-47` | high | — |
+| Topics `order-events`, `.retry`, `.dlt` are config for the outbox sink (no Kafka client in the example) | `application.yml:16-18` | high | — |
 | Requirements come from a supply contract | `docs/README.md` mentions "Annex B" | low → answered Q1 | — |
-| ADRs in `docs/adr/` (12, 3 Proposed) | folder listing | high | — |
-| CI gate = `./mvnw verify` + Sonar | `.github/workflows/ci.yml` | high | coverage threshold → Q5 |
+| ADRs in `docs/adr/`: the example ships ADR-007, ADR-012 and ADR-013 | folder listing | high | — |
+| Gate = the Gates table in `spec-rules.md`; the example ships no CI workflow and no Sonar | `steering/spec-rules.md` | high | — |
 | CI/CD consumes: pinned image tags (Argo CD, `deploy/`); the nightly `catalog-sync` job builds from `main` | answered Q9 | high | — |
 
 ## Domain map (approved 2026-10-20)
