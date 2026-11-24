@@ -636,6 +636,19 @@ gitq -C "$C" add -A; gitq -C "$C" commit -m badhead; gitq -C "$C" branch -f trun
 rc=0; out=$(cl) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "header must be" || fail "13c: bad Guardrails header label exits $rc: $out"
 cset "${GH}| A | <x> | 2026-01-02 |\n"; echo b > "$C/src/s.txt"; gitq -C "$C" add -A; out=$(cl)
 echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 1 undeclared$" && ! echo "$out" | grep -q "none → spot" || fail "13c: a spot change was touched by the downgrade: $out"
+# a fenced or commented example is not a section: a ```markdown block or <!-- --> holding a Guardrails section declares nothing, and a fenced ## Tiers does not join the real table
+EXG='## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n'
+cset "\n"'```markdown\n'"${EXG}"'```\n'; out=$(cl)
+echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: a fenced Guardrails example counted as a section: $out"
+cset "\n<!--\n${EXG}-->\n"; out=$(cl)
+echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: a commented Guardrails example counted as a section: $out"
+cset "\n<!--\n${GH}| Protected branch | branch rule main | 2026-01-02 |\n"; out=$(cl)
+echo "$out" | grep -q "guardrails: no Guardrails section, none → spot" || fail "13c: an unclosed comment still showed a Guardrails section: $out"
+cset "\n"'~~~\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | deep | required |\n~~~\n'"${GH}| Protected branch | branch rule main | 2026-01-02 |\n"; rc=0; out=$(cl) || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 declared$" || fail "13c: a fenced Tiers example changed the real table (exit $rc): $out"
+# Knowledge keeps reading raw lines: a link inside a comment stays guarded
+cset "\n## Knowledge\n"'<!-- [x](../../docs/d.md) -->\n'; out=$(cl)
+echo "$out" | grep -q "tier: critical" || fail "13c: a commented Knowledge link left docs/d.md unguarded: $out"
 echo "13c2. human none by tier: only the lowest row, guardrails declared and evidence eligible keep it; labels_only false; ready.py same family bars it"
 F="$TMP/t13f"; mkdir -p "$F/docs" "$F/src"; gitq -C "$F" init; "$KIT/install.sh" "$F" >/dev/null
 printf '{"merged_ref": "trunk"}' > "$F/.specs/spec-kit.json"; echo a > "$F/src/s.txt"

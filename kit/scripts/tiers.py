@@ -90,11 +90,19 @@ EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
 
-def section(text, name):
-    """[(lineno, line)] under `## name` up to the next `## `, or None when the heading is absent."""
-    out, inside = None, False
+def section(text, name, raw=False):
+    """[(lineno, line)] under `## name` up to the next `## `, or None when the heading is absent. Unless `raw`, HTML
+    comments (blanked, newlines kept) and fenced code (``` or ~~~, fences included) are not read: an example is no section.
+    An unclosed `<!--` hides the rest, as a renderer does. shortcut: a fence closes on any fence line, a marker mismatch needs a CommonMark parser."""
+    if not raw:
+        text = re.sub(r"<!--.*?(?:-->|\Z)", lambda m: "\n" * m.group().count("\n"), text, flags=re.S)
+    out, inside, fenced = None, False, False
     for n, line in enumerate(text.splitlines(), 1):
-        if line.startswith("## "):
+        if not raw and line.lstrip().startswith(("```", "~~~")):
+            fenced = not fenced
+        elif fenced:
+            continue
+        elif line.startswith("## "):
             inside = line[3:].strip().lower() == name.lower()
             out = [] if inside and out is None else out
         elif inside:
@@ -219,7 +227,7 @@ def guarded_globs(text, rel):
     """GUARDED, the profile itself (rel, its path from the repo root, which also resolves relative links; --file can put it
     outside GUARDED) and the in-repo link targets of the Knowledge table (a folder becomes folder/*)."""
     out = list(GUARDED) + [rel]
-    for _, line in section(text, "Knowledge") or []:
+    for _, line in section(text, "Knowledge", raw=True) or []:
         for target in re.findall(r"\]\(([^)\s]+)\)", line):
             target = target.split("#")[0]
             path = posixpath.normpath(posixpath.join(posixpath.dirname(rel), target)) if target else ""
