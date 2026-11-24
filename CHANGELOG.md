@@ -13,6 +13,9 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
   value, warns when the line is missing, and `--json` has `review.rounds`.
 - `tiers.py --evidence` prints `demote: <file>:<line> Human <cur> → <one step stricter>` under a tier in `breach`
   (`required` says already required) and `--json` has `demote` per tier. The profile is still a human edit.
+- `kit/docs/pipeline.md`: triage, implement, review, merge and evidence mapped to the playbooks and roles, what each hands
+  on, and when the human enters (spec approval, the fix-round cap, a disputed finding, the tier's Human value, a
+  guarded path, `Deploy impact`, a `demote:` line). The queue is the host's; the kit ships no orchestrator.
 
 ### Changed
 - `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier

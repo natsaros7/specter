@@ -56,7 +56,8 @@ How to use them:
 
 The rules are simple: a red gate gets one retry at the same tier, two reds escalate to the planner, and nothing
 escalates without a failed gate. Details: [`kit/docs/model-routing.md`](../kit/docs/model-routing.md) ·
-[`kit/docs/review-loop.md`](../kit/docs/review-loop.md).
+[`kit/docs/review-loop.md`](../kit/docs/review-loop.md). The stages, their hand-offs and when the human enters:
+[`kit/docs/pipeline.md`](../kit/docs/pipeline.md).
 
 ## The scripts (no AI, Python 3.8+, stdlib only)
 

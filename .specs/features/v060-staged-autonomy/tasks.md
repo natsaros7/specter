@@ -102,8 +102,9 @@ ones are already in).
   - Evidence: selftest rows after 13c2 red first (`rounds 3 was not capped (exit 0)`), then green: rounds 3 → not ready (fix-round cap), 2 → ready, missing → WARN, `two` → not ready, `--json` review.rounds. Lead fix, red then green: a second `rounds:` line overrode the cap (`- rounds: 3` then `- rounds: 1` was ready); now not ready. 11b fixture gains `- rounds: 1`. G1-G4 green.
 - [x] 21b `tiers.py --evidence`: the `demote:` line on a breach, profile untouched — [REQ-V060-16]
   - Evidence: case 13c demote block red first (`13c demote: none → spot`), then green: breach on none, spot and required prints `demote: <file>:<line> Human none → spot`, `spot → required`, `required: already required`; eligible and hold print none; `--json` demote {file, line, from, to} or null; the profile is byte-identical after the run (cmp). The 13c `--json` equality now includes `demote`. G1-G4 green.
-- [ ] 22 `kit/docs/pipeline.md`: stages, hand-offs, when the human enters (the fix-round cap, not "second red gate") —
+- [x] 22 `kit/docs/pipeline.md`: stages, hand-offs, when the human enters (the fix-round cap, not "second red gate") —
   [REQ-V060-10] [REQ-V060-15]
+  - Evidence: `kit/docs/pipeline.md`: stage table (triage, implement, review, merge, evidence) with each hand-off, the REQ-V060-10 human entry points with the fix-round cap (worker retry, planner, then the human), the queue is the host's; linked from review-loop, reference and README. Every cited script, block and trailer checked to exist. G1-G4 green.
 - [ ] 22a Selftest case 13d: fix-round cap, demotion line — [REQ-V060-11] [REQ-V060-15] [REQ-V060-16]
 - [ ] 23 Gate G1-G4 green; docs; release 0.9.0; close the feature out — [REQ-V060-09] [REQ-V060-10] [REQ-V060-11]
   [REQ-V060-15] [REQ-V060-16]

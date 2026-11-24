@@ -1,7 +1,8 @@
 # Review loop (optional)
 
 An agent reviewing its own work in the same context mostly confirms what it already believes. The loop below makes
-review independent and makes the feedback reach the implementer.
+review independent and makes the feedback reach the implementer. The stages around it and when the human enters are in
+[pipeline.md](pipeline.md).
 
 ```mermaid
 flowchart LR
