@@ -15,7 +15,8 @@ needs a `- <label>: pass (...)` row; a missing, `not run` or FAIL row, a repeate
 `- tree changed during gates` line, or a verdict other than `ready (N passed)` is not ready. A row whose label is not
 in the base's table is a warning, never trusted. The block's Risk tier (tiers.py) is printed.
 Exit 0 ready, 1 not ready, 2 bad argument or unreadable input (a bad spec-kit.json included).
-Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, one
+Review: both model ids (families = first `-` token, same family is a warning), `rules:` a prefix of the base, `- rounds: <n>` (at most 2
+fix rounds: more, or a value that is not a non-negative integer, is not ready; a missing line is a warning), one
 verdict table; a blocker with file:line, evidence, trigger and consequence is open and not ready; an empty cell makes
 it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
@@ -118,8 +119,8 @@ def family(model):
 
 
 def check_review(text, base, want="standard"):
-    """{implementer, reviewer, same_family, rules, blockers, advisories, problems, warnings} for the ### Review block."""
-    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "blockers": [], "advisories": [],
+    """{implementer, reviewer, same_family, rules, rounds, blockers, advisories, problems, warnings} for the ### Review block."""
+    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "blockers": [], "advisories": [],
          "problems": [], "warnings": []}
     lines, cur, n = [], False, 0
     for line in text.splitlines():
@@ -138,6 +139,14 @@ def check_review(text, base, want="standard"):
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None
+        elif line.startswith("- rounds:"):
+            v = line[len("- rounds:"):].strip()
+            if r["rounds"] is not None or any(x.startswith("review rounds") for x in r["problems"]):
+                r["problems"].append("review rounds repeated: one `rounds:` line per Review block")
+            elif re.fullmatch(r"[0-9]{1,6}", v):
+                r["rounds"] = int(v)
+            else:
+                r["problems"].append("review rounds '" + v[:20] + "' is not a non-negative integer")
         elif line.startswith("|"):
             c = gates.split_row(line) + [""] * 6
             if c[0].lower() == "severity" or set("".join(c)) <= set("-: "):
@@ -169,6 +178,11 @@ def check_review(text, base, want="standard"):
     # shortcut: warning only; slice 4 makes a reviewer below the label's reviewer blocking.
     if r["reviewer"] and want == "deep" and r["reviewer_tier"] != "deep":
         r["warnings"].append("reviewer tier below the label's reviewer (" + (r["reviewer_tier"] or "none") + " < " + want + ")")
+    # shortcut: rounds are declared by the lead, not counted; count them from the frozen patch files if the numbers prove wrong.
+    if r["rounds"] is None and not any(x.startswith("review rounds") for x in r["problems"]):
+        r["warnings"].append("review has no `rounds: <n>` line (fix rounds per task, at most 2)")
+    elif r["rounds"] is not None and r["rounds"] > 2:
+        r["problems"].append("fix-round cap: rounds " + str(r["rounds"]) + " > 2; the task goes to the human")
     rules = r["rules"] or ""
     if not re.fullmatch(r"[0-9a-f]{7,40}", rules) or not (base or "").startswith(rules):
         r["problems"].append("review rules " + (rules or "(none)") + " is not the base " + (base or "?")[:7])

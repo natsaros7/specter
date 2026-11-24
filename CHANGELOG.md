@@ -8,6 +8,9 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 ### Added
 - Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe
   (Gates as required checks, auto-merge on green, CODEOWNERS for `required` paths, a merge queue). Nothing in the kit merges.
+- Fix-round cap: at most 2 fix rounds per task (worker retry, then the planner), then the task goes to the human with
+  both outputs. The `### Review` block carries `rounds: <n>`; `ready.py` says `not ready` above 2 or for a malformed
+  value, warns when the line is missing, and `--json` has `review.rounds`.
 
 ### Changed
 - `tiers.py` label: Human `none` survives only on the lowest Tiers row with every guardrail declared and the tier

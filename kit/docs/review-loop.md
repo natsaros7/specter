@@ -6,12 +6,14 @@ review independent and makes the feedback reach the implementer.
 ```mermaid
 flowchart LR
   W[Worker<br/>standard tier] --> G{Gate<br/>script}
-  G -- red --> W
-  G -- red twice --> P[Planner<br/>deep tier]
-  G -- green --> R[Reviewer<br/>fresh context]
-  R -- findings --> W
-  R -- clean --> H[Human check<br/>+ commit]
+  G -- "red: round 1" --> W
+  G -- "red again: round 2" --> P[Planner<br/>deep tier]
   P --> G
+  G -- green --> R[Reviewer<br/>fresh context]
+  R -- "complete blockers: next round" --> W
+  R -- clean --> C[Human check<br/>+ commit]
+  G -- "red after round 2" --> H[Human, with both outputs]
+  R -- "blockers after round 2" --> H
 ```
 
 ## Steps
@@ -34,9 +36,15 @@ flowchart LR
 
    Its `reviewer:` is the reviewer's tier. No profile: security-sensitive paths (auth, crypto, input validation,
    permissions) get the deep tier.
-4. **Only complete blockers go back to the same worker** for one retry. The lead files each advisory as a follow-up
-   (a task in the feature's `tasks.md`, or an issue); advisories never block. After a second red gate or a disputed finding,
-   escalate to the planner (deep) with the spec, the diff and both outputs.
+4. **Only complete blockers go back to the worker.** The lead files each advisory as a follow-up (a task in the
+   feature's `tasks.md`, or an issue); advisories never block. **A task gets at most 2 fix rounds.** A round is one
+   attempt to fix a red gate or the complete blockers of a review: round 1 is the worker's retry, round 2 the
+   planner's (deep) with the spec, the diff and both outputs. A disputed finding goes to the planner too. When round 2
+   ends with a red gate or a complete blocker, the task goes to the human with both rounds' outputs (the gate output
+   or the verdict table), and no agent retries it until the human acts. The lead writes `rounds: <n>` in `### Review`;
+   `ready.py` says `not ready` above 2 and warns when the line is missing.
+   <!-- shortcut: the cap is fixed at 2; make it a profile value when a repository asks for another number. -->
+   <!-- shortcut: rounds are declared by the lead, not counted by a script; count them from the frozen patch files when the declared numbers prove wrong. -->
 5. **Human check, by the label's Human value** (`tiers.py`; `none` is kept only on the lowest tier with every
    guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so):
    - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
@@ -92,6 +100,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - implementer: <model id>
 - reviewer: <model id>
 - rules: <base sha>
+- rounds: <n>
 | Severity | Location | Evidence | Trigger | Consequence | Fix |
 |---|---|---|---|---|---|
 | blocker | src/shop/Order.java:42 | "if (total > 0)" | an order with total 0 | it ships unpaid | ">= 0", and a test |
@@ -103,7 +112,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 | `blocker` | A defect with all four cells filled | `ready.py` says `not ready`; goes back to the worker |
 | `advisory` | Anything else, including a blocker missing a cell | Filed as a follow-up; does not block |
 
-`rules:` is the base sha (a prefix of at least 7 characters). Verification lines are
+`rules:` is the base sha (a prefix of at least 7 characters). `rounds:` is the fix rounds this task used (0 to 2). Verification lines are
 `- [REQ-<FEAT>-NN] <path or URL>: <what it shows>`; a path must exist at the head, a URL is not fetched.
 
 ## Running parallel workers safely

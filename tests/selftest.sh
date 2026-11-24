@@ -663,6 +663,20 @@ js=$(fr claude-opus-5-5 --json); printf '%s' "$js" | python3 -c 'import json,sys
 # ready.py agrees with the label: evidence on hold bars none whatever the reviewer's family
 n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
+# fix-round cap (REQ-V060-15): rounds <= 2 ready, > 2 or malformed not ready, missing a warning
+fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
+rc=0; out=$(fk '- rounds: 3
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^- verdict: not ready" && echo "$out" | grep -q "not ready: fix-round cap" || fail "13c2: rounds 3 was not capped (exit $rc): $out"
+rc=0; out=$(fk '- rounds: 2
+') || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "^- verdict: ready" && ! echo "$out" | grep -q "rounds" || fail "13c2: rounds 2 not ready or warned (exit $rc): $out"
+rc=0; out=$(fk '') || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "warning: .*rounds" || fail "13c2: missing rounds gave no warning (exit $rc): $out"
+rc=0; out=$(fk '- rounds: two
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds" || fail "13c2: malformed rounds did not fail closed (exit $rc): $out"
+rc=0; out=$(fk '- rounds: 3
+- rounds: 1
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*rounds.*repeated" || fail "13c2: a repeated rounds line overrode the cap (exit $rc): $out"
+js=$(fk '- rounds: 1
+' --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["review"]["rounds"]==1, d' || fail "13c2: --json review.rounds: $js"
 echo "13c. evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
 el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }
@@ -774,7 +788,7 @@ printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a`
 echo a > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m base; RB=$(git -C "$R" rev-parse HEAD)
 echo b > "$R/src/a.txt"; gitq -C "$R" add -A; gitq -C "$R" commit -m head; RH=$(git -C "$R" rev-parse --short HEAD)
 rd() { python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range "$RB..HEAD" "$@" 2>&1; }
-RV() { printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n| Severity | Location | Evidence | Trigger | Consequence | Fix |\n|---|---|---|---|---|---|\n%b\n' "$(echo "$RB" | cut -c1-7)" "$1"; }
+RV() { printf '### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n| Severity | Location | Evidence | Trigger | Consequence | Fix |\n|---|---|---|---|---|---|\n%b\n' "$(echo "$RB" | cut -c1-7)" "$1"; }
 blk() { printf 'Body text\n\n### Gates\n%b\n- commit: %s\n- verdict: %s\n\n%s\nafter\n' "$1" "$2" "$3" "$(RV '| advisory | a.txt:1 | | | | follow-up |')"; }
 OK='- G1 Lint: pass (a)\n- G2 Tests: pass (b)'
 blk "$OK" "$RH" "ready (2 passed)" > "$R/pr.md"

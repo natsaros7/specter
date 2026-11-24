@@ -26,7 +26,7 @@ pass or fail everywhere else. This works with any vendor: map the tiers to whate
 
 1. Default to the tier in the table.
 2. Every standard-tier task ends with its gate. On failure, retry **once** at the same tier with the **full** error output.
-3. A second failure escalates to deep, with the spec, the diff and both error outputs.
+3. A second failure escalates to deep, with the spec, the diff and both error outputs. A failed deep round goes to the human with both outputs; no third round (two fix rounds per task, [review-loop.md](review-loop.md) step 4).
 4. Never escalate without a failed gate. Never skip the gate.
 5. **Pin full model IDs, not aliases.** Vendors and org admins remap aliases (`opus`, `sonnet`, `latest`), and an
    unavailable ID can silently fall back to another model. When you change a pin, check what a fresh session actually serves.

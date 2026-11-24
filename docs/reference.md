@@ -140,7 +140,8 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
   Labels only: nothing merges by itself. `ready.py` reads a PR text and prints a `### Readiness` verdict (Gates at the
-  head commit, the Review block, Verification lines) and runs no command; exit 1 means not ready.
+  head commit, the Review block with its `rounds: <n>` line (above 2 or malformed is not ready, missing a warning),
+  Verification lines) and runs no command; exit 1 means not ready.
   Run both from a trusted copy, never the PR's own `.specs/kit/`: `git worktree add --detach /tmp/specter-base <base>`,
   then `python3 /tmp/specter-base/.specs/kit/scripts/ready.py --specs .specs --pr /tmp/pr.md` as a staged preflight
   before the commit, and `… tiers.py --specs .specs --range <base>...HEAD` plus `… ready.py --specs .specs --range
