@@ -11,11 +11,11 @@ What agents may do on specter without a human. Editing this file is always a hum
 | trust | `kit/scripts/*` `install.sh` `tests/*` `.github/*` `.specs/steering/*` `AGENTS.md` | deep | required |
 
 ## Guardrails
-<!-- Only true rows. Branch protection is not set on main, and the Gates run in CI only from task 18 of v061. -->
+<!-- Only true rows. Branch protection is not set on main, and the Gates run in a local pre-push hook only (no CI). That row stays undeclared: a local hook is not platform enforcement. -->
 | Guardrail | Enforced by | Verified |
 |---|---|---|
 | No direct or force push to the default branch | <branch protection or ruleset> (not set on main) | <YYYY-MM-DD> |
-| The Gates run as required checks before a merge | <required status checks> (CI arrives with v061 task 18) | <YYYY-MM-DD> |
+| Gates run before every push (local pre-push hook) | local hook only, `--no-verify` skips it; <required status checks> (not set, no CI) | 2026-11-25 |
 | An agent job triggered by untrusted text runs read-only, without secrets | no such job, checked `.github/` (absent) | 2026-11-24 |
 | Scheduled chores run from a clean clone | no chores, checked this profile has no Chores section | 2026-11-24 |
 

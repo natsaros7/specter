@@ -29,7 +29,7 @@ gate() { # id command
   echo "$1 rc=$rc"
   [ "$first" != 0 ] || first=$rc
 }
-gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh'
+gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n .githooks/pre-push'
 # spec_lint exits 0 on a missing --specs dir ("0 FAIL of 0 citations"), so G2 also requires a non-zero citation count.
 gate G2 'python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && o=$(python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites) && echo "$o" && case $o in *" of 0 citation"*) exit 1;; esac'
 gate G3 'sh tests/selftest.sh'

@@ -34,9 +34,12 @@ Only when the user asks to change specter (not to install it). Spec non-trivial 
 A change is mergeable only if every gate exits 0. Run them from the repo root; they are non-interactive and G1 to G4 need no
 network or JDK, and the selftest works in a `mktemp` dir and leaves the tree untouched.
 
+Normal way to run them: `sh tests/gates.sh --docker` (host security scanners make a bare run slow). Once per clone, enable the
+pre-push hook that runs them: `git config core.hooksPath .githooks`. `SPECTER_SKIP_GATES=1` or `git push --no-verify` skips it.
+
 | # | Gate | Command |
 |---|---|---|
-| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh` |
+| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n .githooks/pre-push` |
 | G2 | Example specs lint and citations | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
 | G4 | Specter's own specs and README | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py` |

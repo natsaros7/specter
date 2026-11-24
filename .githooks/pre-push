@@ -1,0 +1,13 @@
+#!/bin/sh
+# Local guardrail, not a platform one: `git push --no-verify` skips it. Enable once per clone:
+#   git config core.hooksPath .githooks
+if [ "${SPECTER_SKIP_GATES:-}" = 1 ]; then
+  echo "pre-push: SPECTER_SKIP_GATES=1, gates SKIPPED" >&2
+  exit 0
+fi
+cd "$(git rev-parse --show-toplevel)" || exit 1
+if docker info >/dev/null 2>&1; then
+  exec sh tests/gates.sh --docker
+fi
+echo "pre-push: no Docker, running gates on the host (slow on scanned machines)" >&2
+exec sh tests/gates.sh
