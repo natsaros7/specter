@@ -1,7 +1,7 @@
 # v061 Trust-layer hardening — Requirements
 
 Status: In progress (started 2026-11-24)
-Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20. Branch `feat/0.10.0`. Size M.
+Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21. Branch `feat/0.10.0`. Size M.
 
 ## Why
 
@@ -75,6 +75,14 @@ they were filed. This feature collects them; v060 is closed.
 - Every claim in it SHALL be checkable in the repo. It SHALL say plainly that Human `none` is off until verified live.
 - A fresh-context reader who sees only the README SHALL be able to say what specter does, for whom, and how it is
   tested.
+
+### [REQ-V061-07] Bypasses are reported privately
+
+- The repo SHALL have a `SECURITY.md` that sends trust-layer bypasses to GitHub private vulnerability reporting, not
+  to public issues.
+- Before Human `none` is verified live, a review finding that reaches `none` or `auto-merge: yes` without a human
+  SHALL be filed as a draft advisory and published only after its fix ships. Findings that are already public stay
+  where they are.
 
 ## Out of scope
 

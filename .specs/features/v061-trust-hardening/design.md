@@ -2,7 +2,7 @@
 
 Security-sensitive: every task changes what can earn `human: none` or `auto-merge: yes`. Review on the deep tier.
 Stdlib only, Python 3.8+, offline, no new dependency. Each task names its source row in `docs/reviews/`; the row has
-the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27), red first: add the selftest row, run `sh tests/selftest.sh`,
+the probe. One task per dispatch (tasks 1 to 16 are issues #3 to #18; tasks 17 to 20 are issues #24 to #27; task 21 is #28), red first: add the selftest row, run `sh tests/selftest.sh`,
 see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 
 | Requirement | Source rows |
@@ -13,6 +13,7 @@ see it fail for the stated reason, then fix, then G1 to G4 (AGENTS.md).
 | [REQ-V061-04] | slice 4 final review D1 to D4, and its "not checked" case-folded branch names (probed below, task 15) |
 | [REQ-V061-05] | Nikos, 2026-11-24: specter should use its own trust layer (dogfooding) |
 | [REQ-V061-06] | Nikos, 2026-11-24: the README rewritten along Story, How, Output, Worth |
+| [REQ-V061-07] | Nikos, 2026-11-24: the issues are public, so future bypasses go to private advisories |
 
 ## Rules for every worker
 
@@ -327,6 +328,19 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
 - **Test reader:** a fresh-context reviewer sees only the rendered README and answers three questions: what it does,
   for whom, how it is tested. Fix any gap. Then run a humanizer pass.
 - **Not here:** pinning repos on the GitHub profile is Nikos's call, outside this repo.
+
+## [REQ-V061-07] Bypasses are reported privately
+
+### Task 21: SECURITY.md (#28)
+
+- **Touches:** a new `SECURITY.md` at the repo root (GitHub shows it on the Security tab), plus one line in
+  `kit/docs/review-loop.md` step 5: a finding that bypasses the human check goes to a draft advisory.
+- **Content, short:** supported version (the latest release); report privately via Security → Report a
+  vulnerability; what counts (any path to `human: none`, `auto-merge: yes` or a faked evidence verdict); response
+  target; past findings are public in `docs/reviews/` because `none` was never on.
+- **Nikos:** enable private vulnerability reporting in the repo settings. The lead can do it with
+  `gh api -X PUT repos/<owner>/<repo>/private-vulnerability-reporting`, with his OK.
+- **Check:** G1 to G4. The link from the README lands with task 20.
 
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
