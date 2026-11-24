@@ -10,8 +10,9 @@ and were filed as follow-ups instead of being fixed under the fix-round cap:
 
 - slice 3: `docs/reviews/2026-11-23-slice3-deep-review.md` (advisories 6, 7, 9, 10) and
   `docs/reviews/2026-11-23-slice3-confirmation-review.md` (C1 to C3);
-- slice 4: `docs/reviews/2026-11-24-slice4-deep-review.md` (advisories 5, 7, 9) and
-  `docs/reviews/2026-11-24-slice4-confirmation-review.md` (C3, C4).
+- slice 4: `docs/reviews/2026-11-24-slice4-deep-review.md` (advisories 5, 7, 9),
+  `docs/reviews/2026-11-24-slice4-confirmation-review.md` (C3, C4) and `docs/reviews/2026-11-24-slice4-final-review.md`
+  (D1 to D4).
 
 Each one is either a way for evidence to read wrong or a gap in the platform recipe for Human `none`. Since 0.9.0,
 anything that flips an evidence verdict to `eligible` can end in a merge with no human, so they matter more than when
@@ -43,6 +44,16 @@ they were filed. This feature collects them; v060 is closed.
 
 - The approver identity SHALL be out of reach of the PR's own jobs on GitHub and GitLab (v060 23d).
 - The job SHALL approve and merge the checked sha only, one job per PR at a time (v060 23e).
+
+### [REQ-V061-04] Refs resolve strictly
+
+- A symref SHALL be refused when its target is itself a `.../HEAD` ref; only a symref to a branch or remote-tracking
+  branch is a remote's default branch (final review D1).
+- A `--range` end SHALL be a full id only at the repository's own hash length (40 in a SHA-1 repo, 64 in SHA-256) (D2).
+- A refused `refs/remotes/origin/HEAD` fallback SHALL say why in the label and the lint, not "no merged_ref" (D3).
+- v060's evidence requirement (its 2026-11-24 amendment) SHALL state the symref condition, as the code and reference.md do (D4).
+- A branch name that differs from `main` only by case SHALL be checked on a case-insensitive runner, and refused if it
+  shadows the remote (final review, not checked).
 
 ## Out of scope
 

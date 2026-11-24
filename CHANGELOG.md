@@ -3,7 +3,7 @@
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
 The installed version is stamped into each project (`.specs/kit/VERSION`; a `spec-kit.json` the installer creates records the first-install version in `kit_version`, and is never rewritten).
 
-## [Unreleased]
+## [0.9.0] - 2026-11-24
 
 ### Added
 - Review-loop step 5 branches by the label's Human value: `required`, `spot`, and `none` as a platform recipe: branch
@@ -52,6 +52,15 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
   first, and a loose tag can shadow it on a case-insensitive disk): pass full commit ids.
 - The label and `ready.py` refuse evidence whose history holds any commit of the change (`evidence: <ref> contains the
   change`), so an `origin/HEAD` pointing at the PR branch earns nothing.
+
+### Known limits (open in `.specs/features/v061-trust-hardening/`)
+- `none` is earned from declarations and trailers: who writes `Human-Findings:` on an auto-merge is open (v061 task 8).
+- The step 5 recipe is written from the platforms' documented settings, not run live; keep the approver identity out of
+  reach of the PR's own jobs and approve the checked sha only (v061 tasks 11, 12).
+- A hand-made symref chain (`origin/HEAD` → another remote's plain `HEAD` ref) and a 64-hex range end in a SHA-1 repo
+  are still read; neither comes from a git command or a platform event (v061 task 13).
+- The slice 3 evidence advisories (thresholds at the working tree for plain `--evidence`, fenced sections, rebase
+  merges, renamed tiers, the idle-gap window, bad dates, `refs/replace`) are v061 tasks 1-7.
 
 ## [0.8.0] - 2026-11-23
 
