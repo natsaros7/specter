@@ -46,6 +46,9 @@ merges on its own yet (that is slice 4). Re-run `install.sh` to get the new scri
   `Human-Findings:` and `Fixes:` are read as written; their honesty is the human's and the platform's review record.
   `Fixes:` and reverts match any commit a merge brought in. A recently dated commit deep in history widens the window
   down to it (merged history is guardrail row one's to protect).
+- Open from the confirmation review (tasks 19e-19g): a `refs/replace` ref in the clone can hide a revert, so run
+  `--evidence` in a clone without `refs/replace/*`; a commit with an unparseable date crashes it (exit 1); after an idle
+  gap of a full window, the oldest backdated commits in the window can drop out with their reverts.
 
 ## [0.7.0] - 2026-11-22
 
