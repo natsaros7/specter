@@ -907,7 +907,12 @@ js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sy
 assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["routine"]["demote"] is not None, t' || fail "13c demote: --json null off breach: $js"
 # the parent's table labels, not the working tree: docs no longer match routine, the counts do not move
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
-ev "${EVH}${EV1}"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["merged"]==5 and t["domain"]["merged"]==6, t' || fail "13c evidence: working-tree table relabelled history: $js"
+ev "${EVH}${EV1}"; js=$(el --json)
+printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]; assert t["routine"]["merged"]==0 and t["domain"]["merged"]==6 and d["relabelled"]==5, d' || fail "13c evidence: a changed row kept its history (want routine 0, relabelled 5): $js"
+el | grep -q "^- relabelled: 5 commit(s) under a tier row renamed or changed in the window" || fail "13c evidence: no relabelled line: $(el)"
+# a rename with the same globs is a changed row too: the old commits count under no tier, docs included
+TD='| docs | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+ev "${EVH}| docs | 90 | 1 | - | - | - |\n"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tiers"]["docs"]["merged"]==0 and d["relabelled"]==5, d' || fail "13c evidence: a renamed tier inherited its old commits: $js"
 TD='| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 bad() { ev "$2"; rc=0; out=$(el) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: $3" || fail "13c evidence: $1 (exit $rc, want 2 and '$3'): $out"; }
 bad "bad header" '\n## Evidence\n| Tier | Days |\n|---|---|\n| routine | 90 |\n' "header must be"

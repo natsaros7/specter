@@ -378,7 +378,7 @@ def classify(root, rel, rng, specs=None, where=None):
         human = "spot" if no_low else human
     return {"base": base, "head": head, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
             "reasons": ["not the lowest tier"] if why is None and no_low else [],
-            "set_by": {"file": top[1], "glob": top[2]} if files else None,
+            "globs": rows[idx][1], "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
@@ -530,7 +530,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
                 return refuse("cannot read the change set of " + sha[:7])  # never the body alone: a missed revert passes
             cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
-        ents[i] = (c["tier"] if c and c["why"] is None else None, [h for h, _ in cs],
+        ents[i] = ((c["tier"], tuple(sorted(c["globs"]))) if c and c["why"] is None else None, [h for h, _ in cs],
                    named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i)
         # a commit below the cut that a revert or Fixes: in the window names joins it alone, not the commits between
         todo += sorted({j for x in ents[i][2] + ents[i][3] for j in range(last + 1, len(recs)) if recs[j][0].startswith(x)} - set(todo[last + 1:]))
@@ -545,8 +545,11 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             if not more:
                 return [e for e in log if e in mine]
             mine += more
+    # a commit counts for a tier only under the same (name, Paths globs) its parent's row had as the row read now; Reviewer and Human are not compared
+    cur = {(r[0], tuple(sorted(r[1]))) for r in tiers}
+    relabelled = sum(1 for e in log if e[0] and e[0] not in cur)
     out = {}
-    for name in names:
+    for name, globs in ((r[0], tuple(sorted(r[1]))) for r in tiers):
         row = (ev or {}).get(name)
         m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
                  window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=0)
@@ -558,7 +561,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             m["why"] = "shallow clone: fetch the full history"
             continue
         wlog = tier_log(win)
-        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == name]
+        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == (name, globs)]
         m.update(window_days=win, merged=len(mine))
         for i, (_, shas, _, _, body, _) in mine:
             later = wlog[:i]  # the log is newest first, so these came after this commit
@@ -587,7 +590,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             m["demote"] = {"file": rel, "line": r[4], "from": r[3],
                            "to": None if r[3] == "required" else HUMAN[HUMAN.index(r[3]) + 1]}
     if as_json:
-        print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "tiers": out}))
+        print(json.dumps({"ref": ref, "head": head, "unprofiled": unprofiled, "relabelled": relabelled, "tiers": out}))
         return 0
     print("### Evidence")
     print("- history: " + ref + " at " + head[:7] + ", first-parent, " + ("shallow clone, not read" if shallow else str(inwin) + " commit(s) in the longest window"))
@@ -602,6 +605,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         if d is not None:
             print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
                   + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
+    print("- relabelled: " + str(relabelled) + " commit(s) under a tier row renamed or changed in the window")
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: " + src + ", unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
