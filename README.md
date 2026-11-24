@@ -12,7 +12,9 @@
 AI agents write specs that sound right and cite code that doesn't exist. Specter makes them cite `path:line` for every
 claim, and a stdlib Python lint fails the build when a citation names a missing file or a line that isn't there. It is
 for codebases that already run: setup reads your code, writes as-built docs, and logs what doesn't match in a dated
-Drift Register. Since 0.7 it also labels each change by risk and says when a human must look.
+Drift Register. Since 0.7 it also labels each change by risk and says when a human must look. The direction is a
+code factory that works from a goal and a spec, with a human in the loop only where the rules say so: see
+[where it is going](#where-it-is-going).
 
 <p align="center"><img src="docs/assets/lint-demo.svg" alt="The lint checks three citations an agent wrote: one is valid, one points past the end of the file, one names a file that doesn't exist. Exit code 1." width="100%"></p>
 
@@ -64,7 +66,10 @@ Say these to your agent. With the skill installed, `/spec-first …` (Claude Cod
 | **"Sync specs, <feature> landed"** | Marks it done, folds the change into the as-built `domains/` docs, updates traceability and drift |
 | **"Refresh the specs"** | Re-reads the latest code and logs new drift |
 
-Small changes (one file, no contract change) skip the spec and go straight to code.
+Small changes (one file, no contract change) skip the spec and go straight to code. Each task runs as a
+planner → generator → reviewer loop: one agent plans, one writes the code and its failing test first, and a
+reviewer from a different model family checks it against the spec. A fix round is capped at two before a human
+decides.
 
 ### The trust layer
 
@@ -83,6 +88,21 @@ Real output from the acme-shop example, captured at 0.8.0 (the raw text sits bes
 <p align="center"><img src="docs/overview/screenshots/02-tiers-staged.png" alt="tiers.py labels a staged pom.xml change critical" width="80%"><br><a href="docs/overview/screenshots/02-tiers-staged.txt">raw text</a></p>
 <p align="center"><img src="docs/overview/screenshots/05-ready.png" alt="ready.py reads a PR text and prints a readiness verdict" width="80%"><br><a href="docs/overview/screenshots/05-ready.txt">raw text</a></p>
 <p align="center"><img src="docs/overview/screenshots/06-evidence.png" alt="tiers.py --evidence: routine eligible, domain breach, critical hold" width="80%"><br><a href="docs/overview/screenshots/06-evidence.txt">raw text</a></p>
+
+## Where it is going
+
+The goal is a code factory for any existing repository, driven by a goal and a spec. Humans set the goal, approve the
+spec and the rules, and decide only what the rules send them. Agents do the rest, and the checks above decide what
+merges. It gets there one stage at a time ([Kiro's five-stage ladder](docs/research/README.md)), and each stage is
+earned from evidence:
+
+| Stage | Who coordinates | Status |
+|---|---|---|
+| 3: memory, scheduled chores, the spec loop | a human reads every change | shipped, 0.6 to 0.9 |
+| 4: a pipeline; humans set goals and rules | the trust layer decides which changes need a human | built in 0.9; Human `none` stays off until it is verified live |
+| 5: an orchestrator runs the agents from the goal and spec | the orchestrator; humans approve specs and handle escalations | later, as a separate layer on top of the kit |
+
+<p align="center"><img src="docs/overview/roadmap.svg" alt="Roadmap: the shipped releases, the release in progress, stage 4 built but off, stage 5 later" width="100%"></p>
 
 ## Decisions
 

@@ -39,7 +39,7 @@ network or JDK, and the selftest works in a `mktemp` dir and leaves the tree unt
 | G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh` |
 | G2 | Example specs lint and citations | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
-| G4 | Specter's own specs | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites` |
+| G4 | Specter's own specs and README | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py` |
 | G5 | Example build (optional; needs JDK 21 and, on the first run, network; must run, not skip, when the diff touches `examples/acme-shop/` outside `.specs/`) | `sh tests/acme-build.sh` |
 
 A release also refreshes `docs/overview/`: the deck, the roadmap, and any screenshot whose output changed.

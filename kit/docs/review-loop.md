@@ -109,6 +109,10 @@ flowchart LR
    `tiers.py --evidence` can tell "no findings" from "no data": human-caught % counts only merges that carry the trailer,
    and a window with too few of them is a hold (see [sync.md](../playbooks/sync.md) § Trailers).
 
+A review finding that reaches `human: none` or `auto-merge: yes` without a human is a security finding. File it
+privately, through the project's `SECURITY.md` channel (on GitHub, a draft advisory), not as a public issue or
+review doc, and publish it after the fix ships.
+
 ## Reviewer prompt (works with any agent)
 
 ```text

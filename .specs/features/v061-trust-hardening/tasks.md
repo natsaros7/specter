@@ -35,7 +35,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [ ] 18 G1-G4 locally before every push (`tests/gates.sh`, a pre-push hook); CI only with Nikos's OK (#25) — [REQ-V061-05]
 - [ ] 19 The 0.10.0 PR carries Gates, Review and Verification blocks; `ready.py` says ready (#26) — [REQ-V061-05]
 - [ ] 20 README rewritten as Story, How, Output, Worth; roadmap and deck refreshed, with a gates check that the overview names the current VERSION (#27) — [REQ-V061-06]
-- [ ] 21 `SECURITY.md`: trust-layer bypasses go to private advisories (#28) — [REQ-V061-07]
+- [x] 21 `SECURITY.md`: trust-layer bypasses go to private advisories (#28) — [REQ-V061-07]
 - [x] 22 Faster, deterministic selftest: section timings, `SELFTEST_ONLY`, copied fixtures, no clock content (#29) — [REQ-V061-08]
 - [ ] 23 Human `none` only within a size cap (3 files, 50 lines), tests only added, reviewer `complexity: trivial` (#30) — [REQ-V061-09]
 - [ ] 24 Specter's own `lessons.md`, a kit playbook for parallel agent dispatch, a retro step in the review loop (#32) — [REQ-V061-10]
