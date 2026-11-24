@@ -105,6 +105,7 @@ ones are already in).
 - [x] 22 `kit/docs/pipeline.md`: stages, hand-offs, when the human enters (the fix-round cap, not "second red gate") —
   [REQ-V060-10] [REQ-V060-15]
   - Evidence: `kit/docs/pipeline.md`: stage table (triage, implement, review, merge, evidence) with each hand-off, the REQ-V060-10 human entry points with the fix-round cap (worker retry, planner, then the human), the queue is the host's; linked from review-loop, reference and README. Every cited script, block and trailer checked to exist. G1-G4 green.
-- [ ] 22a Selftest case 13d: fix-round cap, demotion line — [REQ-V060-11] [REQ-V060-15] [REQ-V060-16]
+- [x] 22a Selftest case 13d: fix-round cap, demotion line — [REQ-V060-11] [REQ-V060-15] [REQ-V060-16]
+  - Evidence: case 13d holds the fix-round cap rows (rounds 3, 2, missing, `two`, repeated, `--json`), written red first with 21a; the demotion rows stay in 13c on its evidence fixture (none → spot, spot → required, already required, profile cmp, `--json`), written red first with 21b. The human-check rows are 13c2 (task 21).
 - [ ] 23 Gate G1-G4 green; docs; release 0.9.0; close the feature out — [REQ-V060-09] [REQ-V060-10] [REQ-V060-11]
   [REQ-V060-15] [REQ-V060-16]

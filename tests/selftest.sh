@@ -663,7 +663,7 @@ js=$(fr claude-opus-5-5 --json); printf '%s' "$js" | python3 -c 'import json,sys
 # ready.py agrees with the label: evidence on hold bars none whatever the reviewer's family
 n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
-# fix-round cap (REQ-V060-15): rounds <= 2 ready, > 2 or malformed not ready, missing a warning
+echo "13d. fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3
 ') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^- verdict: not ready" && echo "$out" | grep -q "not ready: fix-round cap" || fail "13c2: rounds 3 was not capped (exit $rc): $out"
