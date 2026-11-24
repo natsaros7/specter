@@ -339,6 +339,7 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
   selftest, its row count, and the CI badge.
 - **Test reader:** a fresh-context reviewer sees only the rendered README and answers three questions: what it does,
   for whom, how it is tested. Fix any gap. Then run a humanizer pass.
+- **Overview kept current:** add a fast check to `tests/gates.sh`, with no extra process per row. It fails when `docs/overview/deck/specter-overview.html` or `roadmap.svg` does not name the version in `VERSION`. It runs only when `VERSION` changed against `origin/main`, so day-to-day pushes are not blocked.
 - **Not here:** pinning repos on the GitHub profile is Nikos's call, outside this repo.
 
 ## [REQ-V061-07] Bypasses are reported privately
@@ -445,6 +446,12 @@ After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a t
 `.specs/` (none plans to). Then a deep review of `main..feat/0.10.0` with the probes above re-run, and the CHANGELOG
 0.10.0 entry: Security bullets for tasks 7, 13 and 15, the Known limits list rewritten (the v061 items closed, the
 "not run live" recipe limit kept, the task 5 and task 15 shortcuts added), and the version bump.
+
+- **Release step, from 0.10.0 on:** refresh `docs/overview/` for the new version.
+  - Update the version line in `deck/specter-overview.html` and `deck/slides.md`, and the stage boxes in `roadmap.svg`.
+  - Re-capture any screenshot whose command output changed.
+  - Re-export the PDF.
+  - The fast check in `tests/gates.sh` (task 20) refuses a release whose overview still names an older version.
 
 ## Parallel lanes
 

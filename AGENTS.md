@@ -41,4 +41,6 @@ network or JDK, and the selftest works in a `mktemp` dir and leaves the tree unt
 | G4 | Specter's own specs | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites` |
 | G5 | Example build (optional; needs JDK 21 and, on the first run, network; must run, not skip, when the diff touches `examples/acme-shop/` outside `.specs/`) | `sh tests/acme-build.sh` |
 
+A release also refreshes `docs/overview/`: the deck, the roadmap, and any screenshot whose output changed.
+
 Don't invent features of the kit. If these files don't answer something, say so.
