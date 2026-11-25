@@ -41,7 +41,7 @@ and reads every change. Verified on `main` 2026-11-21 (`7c7f4f1`):
 Pieces this spec reuses rather than rebuilds: the Gates table runner (`kit/scripts/gates.py:33`, it already skips
 tables without Gate and Command columns), changed-file listing and fnmatch globs (`kit/scripts/spec_sync_check.py:18-27`),
 the relative-link check that already resolves paths outside `.specs/` (`kit/scripts/spec_lint.py:188-200`), the
-merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:234`) and
+merged-commit log (`kit/scripts/spec_lint.py:349`), the decisions table parser (`kit/scripts/spec_lint.py:237`) and
 the list of agent files the installer writes (`kit/scripts/install.py:20-26`).
 
 Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:

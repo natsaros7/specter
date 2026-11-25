@@ -8,7 +8,7 @@ Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range 
 --check reads the working-tree profile and validates its `## Tiers` table: unique tier names, at least one `glob`
 code span per Paths cell, Reviewer standard|deep, Human none|spot|required and never decreasing down the table, the
 last row `required`, no <placeholder> left in. It also fails when a tier above the last lists a guarded path (the
-profile itself, the installed kit, Knowledge targets, agent files): guarded paths always take the last row.
+profile itself, the installed kit, Knowledge targets, agent files, .gitattributes and .gitmodules): guarded paths always take the last row.
 Exit 0: valid, or no profile / no Tiers section (not configured: the human tier applies, as in 0.5.0).
 Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or argument, with `file:line`.
 
@@ -39,7 +39,7 @@ behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is 
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
 `Max files`, `Max lines` and `Max bytes`, defaults 3, 50 and 4000 changed bytes, `-` is the default; a Git LFS pointer line changed is over the cap; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
 (globs of an optional `## Tests` section, default: test directories, `*_test.*`, `*.test.*`, `test_*`, spec files, conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
-`tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file or a gitlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
+`tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file, a gitlink or a symlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the Tiers table at the merged_ref tip (never the working tree; it prints that commit), `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -80,7 +80,7 @@ import spec_lint  # noqa: E402
 
 # refs/replace, .git/info/grafts and a forged .git/objects/info/commit-graph can swap any commit body, rewrite the chain or
 # the profile blob, turning a breach into eligible; children (git) inherit these. The graft path never exists (a file
-# under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT, appended to any inherited entries, once.
+# under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT and GIT_CONFIG_PARAMETERS, appended to any inherited entries, once.
 os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
 # shortcut: git < 2.31 ignores GIT_CONFIG_COUNT; refuse older git if a job can run one
@@ -89,6 +89,9 @@ if os.environ.get(f"GIT_CONFIG_KEY_{_n - 1}") != "core.commitGraph" or os.enviro
     os.environ[f"GIT_CONFIG_KEY_{_n}"] = "core.commitGraph"  # appended last, so it wins; not twice when both modules import
     os.environ[f"GIT_CONFIG_VALUE_{_n}"] = "false"
     os.environ["GIT_CONFIG_COUNT"] = str(_n + 1)
+_p, _f = os.environ.get("GIT_CONFIG_PARAMETERS", ""), "'core.commitgraph'='false'"
+if not (" " + _p).endswith(" " + _f):  # git reads these after GIT_CONFIG_COUNT, so an inherited 'true' here would win
+    os.environ["GIT_CONFIG_PARAMETERS"] = (_p + " " if _p else "") + _f
 
 HEAD = ["Tier", "Paths", "Reviewer", "Human"]
 GHEAD = ["Guardrail", "Enforced by", "Verified"]
@@ -105,7 +108,7 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".github/instructions/*", ".github/prompts/*", ".github/agents/*", ".github/skills/*", "*/.github/*instructions*",
            ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
-           "docs/CODEOWNERS"]
+           "docs/CODEOWNERS", ".gitattributes", "*/.gitattributes", ".gitmodules"]  # attributes can turn a file into an LFS pointer or binary
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
 SIZE = ["Max files", "Max lines", "Max bytes"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3, 50, 4000)
 # Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
@@ -451,8 +454,8 @@ def small(root, rel, tier, base, head, staged):
     """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
     One `git diff --numstat`, one `--raw` and one `-U0` patch (the index against base when staged). Cap: Max files / Max lines / Max
     bytes of the tier's Evidence row at base (3, 50 and 4000 when absent or -); bytes are those of the + and - lines of the hunks, and a
-    changed Git LFS pointer line (version or oid) is over the cap whatever its size; tests: the `## Tests` globs at base (TESTS). A
-    binary file, a gitlink or a diff that cannot be read counts as over the cap.
+    changed Git LFS pointer line (version or oid, LF or CRLF, a git-lfs, hawser or git-media spec URL) is over the cap whatever its size; tests: the `## Tests` globs at base (TESTS). A
+    binary file, a gitlink, a symlink or a diff that cannot be read counts as over the cap.
     A profile that cannot be read says so: none is never kept on a guess."""
     try:
         text = profile_at(root, base, rel) or ""
@@ -479,12 +482,12 @@ def small(root, rel, tier, base, head, staged):
             hunk = True
         elif hunk and ln[:1] in (b"+", b"-"):
             nbytes += len(ln)  # marker stands in for the newline
-            if lfs is None and re.match(rb"[+-](version https://git-lfs\.github\.com/spec/|oid sha256:[0-9a-f]{64}$)", ln):
+            if lfs is None and re.match(rb"[+-](version \S*(git-lfs|hawser|git-media)|oid sha256:)", ln):  # no $: a CRLF pointer ends in \r
                 lfs = at
     ent = [e.split("\t", 2) for e in out]
     meta = [(m.split(), p) for m, p in zip(raw[::2], raw[1::2])]  # ":<old mode> <new mode> <old sha> <new sha> <status>", path
     lines = sum(int(a) + int(d) for a, d, _ in ent if a != "-")
-    binary = any(a == "-" for a, _, _ in ent) or any("160000" in (m[0][1:], m[1]) for m, _ in meta)
+    binary = any(a == "-" for a, _, _ in ent) or any(t in (m[0][1:], m[1]) for m, _ in meta for t in ("160000", "120000"))  # gitlink, symlink
     why = []
     if at + 1 != len(ent):
         return ["size: cannot read the diff"]

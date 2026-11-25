@@ -789,6 +789,21 @@ echo "$out" | grep -q "none → spot (bytes [0-9]* > cap 10)" || fail "13c2 t70b
 bset " Max files | Max lines | Max bytes |" "---|---|---|" " - | - | x |"
 rc=0; out=$(python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max bytes must be" || fail "13c2 t70b: a bad Max bytes was not exit 2 with file:line (exit $rc): $out"
 bc sh -c 'echo z > "$0/docs/z.md"' "$B"; out=$(bl); echo "$out" | grep -q "none → spot (.*Max bytes must be" || fail "13c2 t70b: a bad Max bytes did not label spot: $out"
+# v070 task 23b: CRLF and alias LFS pointers, a symlink, an attribute file and an inherited GIT_CONFIG_PARAMETERS (fixture t70b)
+bset "" "" ""
+bc sh -c 'printf "version https://hawser.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/x.bin"' "$B" "$OID"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/x.bin)" || fail "13c2 t70c: an added CRLF pointer kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/old.bin"' "$B" "$OID"; gitq -C "$B" branch -f trunk
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/old.bin"' "$B" "$OID2"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/old.bin)" || fail "13c2 t70c: an oid swap in a CRLF pointer kept none: $out"
+bc ln -s three.md "$B/docs/l"; out=$(bl)
+echo "$out" | grep -q "none → spot (size 1 files / 1+ lines" || fail "13c2 t70c: a symlink kept none: $out"
+bc sh -c 'echo "*.psd filter=lfs diff=lfs merge=lfs -text" > "$0/docs/.gitattributes"' "$B"; out=$(bl)
+echo "$out" | grep -q "tier: critical (reviewer: deep, human: required)" || fail "13c2 t70c: docs/.gitattributes did not take the last tier: $out"
+for m in spec_lint tiers; do
+  out=$(cd "$B" && GIT_CONFIG_PARAMETERS="'core.commitgraph'='true'" python3 -c 'import sys, os, subprocess; sys.path.insert(0, ".specs/kit/scripts"); __import__(sys.argv[1]); print(subprocess.check_output(["git", "config", "core.commitGraph"], text=True).strip(), os.environ["GIT_CONFIG_PARAMETERS"].count("false"))' "$m")
+  [ "$out" = "false 1" ] || fail "13c2 t70c: an inherited GIT_CONFIG_PARAMETERS turned the commit-graph on in $m (want 'false 1'): $out"
+done
 fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3

@@ -15,7 +15,7 @@ and `--json` print those dicts, and `spec_report.py` imports the same functions.
 
 ## Citations — [REQ-V020-01] [REQ-V020-02] [REQ-V020-03] [REQ-V020-04]
 
-Replace `CITE` (`kit/scripts/spec_lint.py:104`) with one pattern that has an optional prefix and two line notations:
+Replace `CITE` (`kit/scripts/spec_lint.py:107`) with one pattern that has an optional prefix and two line notations:
 
 ```text
 `  [prefix:]  path.ext  ( :A[-B][,C[-D]]...  |  #LA[-[L]B] )  `

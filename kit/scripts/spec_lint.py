@@ -55,8 +55,8 @@ import gates  # noqa: E402
 
 # Run standalone, this file's git calls (branch_ref, merged_commits) need the same protection as tiers.py's: refs/replace,
 # .git/info/grafts and a forged .git/objects/info/commit-graph can rewrite the chain or a blob; children (git) inherit
-# these. The graft path never exists (a file under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT,
-# appended to any inherited entries.
+# these. The graft path never exists (a file under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT
+# and GIT_CONFIG_PARAMETERS, appended to any inherited entries.
 os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
 # shortcut: git < 2.31 ignores GIT_CONFIG_COUNT; refuse older git if a job can run one
@@ -65,6 +65,9 @@ if os.environ.get(f"GIT_CONFIG_KEY_{_n - 1}") != "core.commitGraph" or os.enviro
     os.environ[f"GIT_CONFIG_KEY_{_n}"] = "core.commitGraph"  # appended last, so it wins; not twice when both modules import
     os.environ[f"GIT_CONFIG_VALUE_{_n}"] = "false"
     os.environ["GIT_CONFIG_COUNT"] = str(_n + 1)
+_p, _f = os.environ.get("GIT_CONFIG_PARAMETERS", ""), "'core.commitgraph'='false'"
+if not (" " + _p).endswith(" " + _f):  # git reads these after GIT_CONFIG_COUNT, so an inherited 'true' here would win
+    os.environ["GIT_CONFIG_PARAMETERS"] = (_p + " " if _p else "") + _f
 
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
