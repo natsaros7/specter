@@ -238,10 +238,32 @@ Afterwards, set `tracker_pattern` (your ticket key regex) and `merged_ref` in `.
 ## Upgrade, uninstall, versions
 
 ```bash
-cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: replaces .specs/kit/, keeps your specs and settings
+cd ~/tools/specter && git pull && ./install.sh ~/code/my-project --dry-run   # upgrade preview: the report, nothing written
+./install.sh ~/code/my-project                                     # upgrade: replaces .specs/kit/, keeps your specs and settings
 ./install.sh ~/code/my-project --uninstall                         # removes what specter wrote (only if still ours), marker blocks byte for byte; keeps .specs/ content
 ./install.sh ~/code/my-project --detect                            # which agents it would wire, and why
 ```
+
+### How an upgrade works
+
+Every install writes `.specs/kit/MANIFEST`: one line per file specter owns (`<git blob id> <path>`), covering the kit and the
+agent, skill and rule files it wrote outside it. On an upgrade the installer compares each file with what the old version
+shipped, taken from that MANIFEST, else from the `v<old>` tag of the specter checkout. A file you edited (not the recorded
+bytes, not the new ones) is copied to `.specs/kit.bak-<old>/` before it is replaced: kit files under their kit path, other
+files under `project/`. A second backup of the same version gets a `-2` suffix. If neither MANIFEST nor tag exists, the
+installer says it could not verify and backs up every file that differs from the new kit. It never refuses to upgrade.
+
+`--dry-run` prints every path it would create, modify or replace, the mode, and the upgrade report, and writes nothing.
+Run it first and read the report. It lists:
+
+- kit files added (`+`), changed (`~`) and removed (`-`);
+- `spec-kit.json` keys you can add, with their default. A missing key already acts as the default; the installer never
+  writes one;
+- steering templates that are not yet in `.specs/steering/`;
+- each `action` line from [`.specs/kit/docs/upgrading.md`](../kit/docs/upgrading.md) for the versions between yours and the
+  new one. That file is the one place for what the installer cannot do for you; every release has a block.
+
+A missing `steering/project-profile.md` is reported, not recreated: run setup to write it. Re-running an upgrade is a no-op.
 
 The installed version is in `.specs/kit/VERSION`. The `spec-kit.json` the installer creates records the first-install version in `kit_version`; it is never rewritten afterwards, and an existing config is never touched. Changes are listed in [`CHANGELOG.md`](../CHANGELOG.md).
 Self-test, run locally: `tests/selftest.sh`.

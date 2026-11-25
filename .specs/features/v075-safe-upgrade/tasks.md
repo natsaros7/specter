@@ -21,7 +21,7 @@ Deploy impact: none (installer and selftest only; projects see the change on the
   templates, action lines for the version range, in the run and in `--dry-run` (selftest 15b c to h) — [REQ-V075-02]
 - [x] 5 One step equals stepping, a re-run is a no-op, a dry run writes nothing, protected paths keep their bytes, no
   profile seed on upgrade, uninstall after an upgrade (selftest 15c) — [REQ-V075-03] [REQ-V075-04]
-- [ ] 6 Docs: `docs/reference.md` upgrade section, GO.md's upgrade step, the `install.sh` usage line, CHANGELOG
+- [x] 6 Docs: `docs/reference.md` upgrade section, GO.md's upgrade step, the `install.sh` usage line, CHANGELOG
   Unreleased — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03]
 - [ ] 7 Hand run of a real 0.4.1 install upgraded by this branch, G1 to G4 with rc per gate, deep review, PR with
   Gates, Review and Verification blocks — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03] [REQ-V075-04]

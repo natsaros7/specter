@@ -27,7 +27,9 @@ and that nothing changes until they say yes.
 At `PROJECT`, find out:
 
 1. **Layout:** a git repo? A folder of several repos (`ls -d */.git`)? Is `.specs/` already there?
-   (If `.specs/kit/` exists, this is an **upgrade**: say so, and the install step just refreshes the kit.
+   (If `.specs/kit/` exists, this is an **upgrade**: say so. Run `KIT/install.sh <path> --dry-run` first (it writes nothing) and show the user
+   its report. On their yes, run the upgrade, then walk the `action` lines with them, and any `.specs/kit.bak-<old>/`
+   backup it made of files they had edited.
    If `.specs/` already holds `features/`, `domains/`, `system/` or `steering/` and there is no kit, this is an
    **adopt**: the project already has a working spec system. Follow "Adopt branch" below.)
 2. **Agents in use:** run `KIT/install.sh <path> --detect`. It prints the agents it would wire (a skill for each, plus

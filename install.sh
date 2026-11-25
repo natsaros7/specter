@@ -1,8 +1,8 @@
 #!/bin/sh
 # specter installer. Copies the kit into <target>/.specs/kit/ and wires the agents it finds.
 #
-#   ./install.sh <target>                 install or upgrade (safe to re-run)
-#   ... --dry-run                         list every path it would create, modify or replace, and the mode; writes nothing
+#   ./install.sh <target>                 install or upgrade (safe to re-run; an upgrade backs up edited files to .specs/kit.bak-<old>/)
+#   ... --dry-run                         list every path it would create, modify or replace, and the mode, plus the upgrade report; writes nothing
 #   ... --fresh                           treat an existing .specs/ as new (default: keep it, "adopt mode")
 #   ... --hook                            adopt mode installs no git hook by default; this adds it
 #   ./install.sh --user                   add the spec-first skill at user level for every agent detected

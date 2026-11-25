@@ -5,6 +5,17 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+### Added
+- `.specs/kit/MANIFEST`: what specter wrote, as blob ids, so an upgrade knows what you edited.
+- `.specs/kit/docs/upgrading.md`: one block per release since 0.4.1 with the manual `action` and optional `key` lines.
+- An upgrade report (also in `install.sh --dry-run`): kit files added, changed and removed, config keys you can add,
+  missing steering templates, and the `action` lines for the versions crossed.
+
+### Changed
+- An upgrade backs up every file you edited to `.specs/kit.bak-<old>/` before replacing it; without a MANIFEST or a
+  `v<old>` tag it backs up everything that differs from the new kit.
+- New config keys are listed, never written. A missing `project-profile.md` is reported, not reseeded.
+
 ## [0.11.0] - 2026-11-25
 
 Live and eval (v070). Human `none` is still off in every known repository. This release closes the paths the 0.11.0
