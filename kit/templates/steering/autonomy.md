@@ -32,7 +32,7 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 |---|---|---|
 | No direct or force push to the default branch | <branch protection or ruleset> | <YYYY-MM-DD> |
 | The Gates run as required checks before a merge | <required status checks> | <YYYY-MM-DD> |
-| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | <required approvals and stale-approval dismissal; the job's App or bot identity, or "no such job, checked <how>"> | <YYYY-MM-DD> |
+| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | <the App or bot that approves, and where its key lives: a default-branch-only environment (GitHub) or a trusted project's protected variable (GitLab)> | <YYYY-MM-DD> |
 | Agent credentials cannot approve or merge | <bot account or token scope> | <YYYY-MM-DD> |
 | Agent permissions come from the host's configuration, not from a prompt | <agent settings file or CI permissions> | <YYYY-MM-DD> |
 | Agents cannot edit merged history or review records, or create tags or `refs/replace/` refs | <history protection, tag rules and the platform's review log> | <YYYY-MM-DD> |

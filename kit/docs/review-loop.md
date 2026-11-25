@@ -64,7 +64,7 @@ flowchart LR
         with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
         disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
-        or merge: the Guardrails row), and enables auto-merge; the platform merges when the Gates pass. Any other exit
+        or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform merges when the Gates pass. Any other exit
         does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never
         blocks a PR a human approved.
      4. The merge queue (GitHub merge queue, GitLab merge trains or the equivalent) re-runs the Gates on the merged
@@ -72,16 +72,29 @@ flowchart LR
         and rules-at-base checks are for the PR head and its base, and on the queue's merge commit they fail every PR.
         <!-- shortcut: the label is the one made at approval; a base that moves under the PR re-labels it only when the branch is updated (a new commit drops the approval and the job runs again); re-run ready.py in the queue against the PR head when evidence that moved must bar a queued merge. -->
 
-     - GitHub: a ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
-       "Dismiss stale pull request approvals when new commits are pushed"; the job is a `pull_request_target` workflow
-       (its definition comes from the base branch) that checks out the base, fetches the PR head as data without running
-       it, passes the PR body through an environment variable (never `${{ }}` in the script), and on exit 0 runs
-       `gh pr review --approve` and `gh pr merge --auto` with a GitHub App token (or `GITHUB_TOKEN` with "Allow GitHub
-       Actions to create and approve pull requests" on; a merge by `GITHUB_TOKEN` starts no workflow on the default branch).
-     - GitLab: an approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
-       commits are added to the source branch"; the job has `allow_failure: true` and comes from a CI/CD configuration the
-       MR cannot edit (a configuration file in another project); on exit 0 a project access token's bot user approves the
-       MR and sets auto-merge through the merge requests API.
+     - GitHub, in this order:
+       1. A ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
+          "Dismiss stale pull request approvals when new commits are pushed".
+       2. The approver is a GitHub App, never `GITHUB_TOKEN`: leave "Allow GitHub Actions to create and approve pull
+          requests" off. Its private key is a secret of an environment whose deployment branches allow only the default
+          branch.
+       3. The job is a `pull_request_target` workflow that uses that environment, so it runs from the base branch's
+          definition. It checks out the base, fetches the PR head as data without running it, passes the PR body through
+          an environment variable (never `${{ }}` in the script), and on exit 0 runs `gh pr review --approve` and
+          `gh pr merge --auto` with the App's token.
+       4. Every workflow that runs PR code (the Gates, an agent) has `permissions: contents: read` and checks out with
+          `persist-credentials: false`, so a `pull_request` run cannot reach the key.
+     - GitLab (a sketch, untested on a live instance; verify each setting when you declare the row):
+       1. An approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
+          commits are added to the source branch".
+       2. A trusted project (`<group>/specter-approver`; MR authors have Reporter at most) holds the bot's project
+          access token as a protected, masked variable. Never put that token in the MR's own project: there it is
+          either unprotected (the Gates jobs read it) or protected (an unprotected source branch never gets it).
+       3. The MR pipeline's last job (`allow_failure: true`, from a CI/CD configuration the MR cannot edit) starts the
+          trusted project's pipeline with a pipeline trigger token, passing only the MR iid.
+       4. The trusted job checks the project id against a fixed value, reads the base and head shas from the MR API
+          (never from the trigger's variables), and on exit 0 approves the MR and sets auto-merge through the merge
+          requests API as the bot.
 
    For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
