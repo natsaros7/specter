@@ -1,9 +1,11 @@
 $ python3 .specs/kit/scripts/tiers.py --evidence
 ### Evidence
-- history: main at 1d81586, first-parent, 10 commit(s) in the longest window
-- routine: eligible — merged 3, reverted 0 (0.0%), escaped 0 (0.0%), human-caught 1 of 3 (33.3%), 90 days
+- history: refs/heads/main at 0092f78, first-parent, 9 commit(s) in the longest window
+- routine: eligible — merged 3, reverted 0 (0.0%), escaped 0 (0.0%), human-caught 0 of 0, 90 days
 - domain: breach (reverted 25.0% > 2%) — merged 4, reverted 1 (25.0%), escaped 0 (0.0%), human-caught 0 of 3 (0.0%), 90 days
+  demote: .specs/steering/autonomy.md:20 Human spot → required (a human edit; tiers.py changes nothing)
 - critical: hold (no Evidence row)
+- relabelled: 0 commit(s) under a tier row renamed or changed in the window
 - unprofiled: 1 commit(s) left out
-- profile: unchanged; promotion and demotion are a human edit of .specs/steering/autonomy.md
+- profile: .specs/steering/autonomy.md at 0092f78, unchanged; promotion and demotion are a human edit of .specs/steering/autonomy.md
 [exit 0]

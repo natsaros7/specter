@@ -61,7 +61,7 @@ th { font-weight: 600; }
 <p class="eyebrow in" style="--i:0">Specter · overview · November 2026</p>
 <h1 class="in" style="--i:1">Specs that don’t go stale</h1>
 <p class="lead in" style="--i:2; color:#C9D2E3; width:1400px;">A spec-first workflow any AI coding agent can follow, and a trust layer that decides how much of each change a human still has to read.</p>
-<p class="foot">Release 0.9.0 shipped · 0.10.0 in progress · Python 3.8+, stdlib only, no service</p>
+<p class="foot">Release 0.10.0 shipped (Human none still off) · Python 3.8+, stdlib only, no service</p>
 <aside>Specter is a kit you copy into a repository. It keeps specs honest with lint and citations, and since 0.6 it adds a staged path toward agent autonomy: every change gets a risk tier, a readiness verdict, and after merge, evidence.</aside>
 </section>
 
@@ -213,41 +213,33 @@ th { font-weight: 600; }
 <section id="ladder" class="alt">
 <h2>Where it stands on the ladder</h2>
 <div class="figure" style="display:flex; justify-content:center; padding:12px;">
-<img src="../roadmap.svg" alt="Kiro five-stage ladder: stage 3 shipped across 0.6.0 to 0.8.0, stage 4 built in 0.9.0 but off, 0.10.0 in progress, v070 candidates, stage 5 later" style="width:1263px; height:680px; object-fit:contain;">
+<img src="../roadmap.svg" alt="Kiro five-stage ladder: stage 3 shipped across 0.6.0 to 0.8.0, stage 4 built in 0.9.0 and hardened in 0.10.0 but off, next candidates, stage 5 later" style="width:1263px; height:680px; object-fit:contain;">
 </div>
 <aside>The ladder is Kiro’s, classified by concurrent sessions. Specter sits at a solid stage 3 and has built the policy half of stage 4 (0.9.0), with the no-human setting off until it is verified live. Stage 5, a coordinating agent, comes later as a separate layer after stage 4 runs live.</aside>
 </section>
 
 <section id="next">
-<p class="eyebrow">0.9.0 · shipped</p>
-<h2>What 0.9.0 added</h2>
+<p class="eyebrow">0.10.0 · shipped</p>
+<h2>What 0.10.0 added</h2>
 <table>
 <tr><th style="width:26%">Piece</th><th style="width:56%">What it does</th><th>Status</th></tr>
-<tr><td>Human check by tier</td><td>required as today; spot approves on the verdict, gates and tests; none only on the lowest tier, guardrails declared, evidence eligible</td><td>shipped</td></tr>
-<tr><td>Platform recipe</td><td>required checks, auto-merge on green, CODEOWNERS, a merge queue; the kit merges nothing</td><td>shipped</td></tr>
-<tr><td>Fix-round cap</td><td>two fix rounds per task, then the human gets both outputs; ready.py checks rounds:</td><td>shipped</td></tr>
-<tr><td>Demotion on breach</td><td>--evidence prints the profile line to tighten; a human edits it</td><td>shipped</td></tr>
-<tr><td>pipeline.md</td><td>triage, implement, review, merge: what each stage hands on and when the human enters</td><td>shipped</td></tr>
+<tr><td>Size cap, trivial review</td><td>none only within 3 files and 50 lines, tests only added, reviewer writes complexity: trivial</td><td>shipped</td></tr>
+<tr><td>Base must be current</td><td>a PR behind the merged_ref tip is spot, so a demotion reaches PRs in flight</td><td>shipped</td></tr>
+<tr><td>Parallel playbook, lessons loop</td><td>batches of at most 3, a worktree base check, cherry-pick rc checked; a mistake becomes a lessons line</td><td>shipped</td></tr>
+<tr><td>Kit tools for any project</td><td>container gates (--docker), readme_check.py, a SECURITY.md template</td><td>shipped</td></tr>
+<tr><td>Ref and evidence fixes</td><td>case-folded refs refused, refs/replace ignored, relabelled commits counted apart</td><td>shipped</td></tr>
 </table>
-<aside>0.9.0 is released. The none setting is built but off until it is verified on a live host; 0.10.0 (v061 trust hardening) is in progress.</aside>
-</section>
-
-<section id="now">
-<p class="eyebrow">0.10.0 · in progress</p>
-<h2>Trust hardening</h2>
-<div class="two">
-<div class="card"><h3>Why</h3><p>Every deep review of the trust layer found a way to reach none without a human. This release closes the known paths and makes new ones reportable.</p></div>
-<div class="card"><h3>What</h3><ul><li>ref and evidence fixes</li><li>SECURITY.md: report a bypass privately</li><li>README rewrite with a mechanical check</li><li>a faster, deterministic selftest</li></ul></div>
-</div>
-<aside>v061 trust hardening. Nothing here is released yet.</aside>
+<aside>0.10.0 is released. The none setting is still off until it is verified on a live host; every change still gets a human check.</aside>
 </section>
 
 <section id="later" class="alt">
-<h2>What might come after, and what stays out</h2>
+<h2>What comes next, and what stays out</h2>
 <div class="two">
 <div class="card">
-<p class="eyebrow">Candidates · not decided</p>
+<p class="eyebrow">Next · not decided</p>
 <ul>
+<li><b>0.11</b> follow-ups (#40), then a live test of the recipe on a hosted repository</li>
+<li><b>Stage 5</b> an orchestrator proposal, not built</li>
 <li><b>E6</b> verification gates proposed by stack: property, contract and architecture tests</li>
 <li><b>E9</b> a Drift Register entry naming an anti-pattern gets a lint rule first, then cleanup tasks</li>
 <li><b>E10</b> task export to a tracker (GitHub, GitLab, Jira, Linear) through a small offline adapter</li>
@@ -272,7 +264,7 @@ th { font-weight: 600; }
 <div class="two">
 <div class="stack">
 <p class="big">off</p>
-<p>the no-human setting: built in 0.9.0, kept off until it is verified on a live host</p>
+<p>the no-human setting: built in 0.9.0, hardened in 0.10.0, kept off until it is verified on a live host</p>
 </div>
 <div class="stack">
 <p class="big">0</p>

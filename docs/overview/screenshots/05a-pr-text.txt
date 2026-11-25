@@ -5,13 +5,15 @@ Deploy impact: none
 ### Gates
 - G4 Spec lint: pass (spec-lint: 0 FAIL across 2 feature(s))
 - G5 Citations: pass (spec-lint --cites: 0 FAIL of 7 citation(s))
-- commit: d1852a5
+- commit: 6e4902f
 - verdict: ready (2 passed)
 
 ### Review
 - implementer: claude-sonnet-5-5
 - reviewer: gpt-5
-- rules: 1d81586
+- rules: 0092f78
+- rounds: 1
+- complexity: trivial
 | Severity | Location | Evidence | Trigger | Consequence | Fix |
 |---|---|---|---|---|---|
 | advisory | orders-api/src/main/java/com/acme/shop/orders/order/OrderService.java:10 | | | | follow-up: add a note-length test |
