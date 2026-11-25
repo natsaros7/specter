@@ -18,4 +18,5 @@ Check that:
 Output the table from `.specs/kit/docs/review-loop.md`: `| Severity | Location | Evidence | Trigger | Consequence | Fix |`,
 severity `blocker` or `advisory`. A blocker needs all four of Location (`path:line`), Evidence (a quote), Trigger and
 Consequence; a blocker missing any of them is advisory. Report real issues only: no style nits a linter already
-catches. **Do not edit code**; the only file you write is the review report you were asked for.
+catches. Add `- complexity: trivial` or `- complexity: non-trivial` to `### Review`: `trivial` only for a change a reader
+understands in one pass, with no new branch, no new dependency and no changed contract. **Do not edit code**; the only file you write is the review report you were asked for.

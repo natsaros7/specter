@@ -48,7 +48,7 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:
 
 - A red gate hides what did not run: `gates.py` stops at the first failure and writes only to stderr
   (`kit/scripts/gates.py:103-106`); the `### Gates` block exists only when every row passed (`kit/scripts/gates.py:109`).
-  The selftest pins today's block lines (`tests/selftest.sh:370`).
+  The selftest pins today's block lines (`tests/selftest.sh:373`).
 - The reviewer reads "the project rules" with no commit named, so in practice the working tree, which the diff may
   have edited (review-loop.md lines 23-25 at aabed8b). Its findings are `blocker/major/minor` with no evidence required
   (review-loop.md lines 38 at aabed8b, the 0.6 `kit/roles/reviewer.md` output line), and every finding goes back to the worker
@@ -168,7 +168,8 @@ Each slice ships and gives value on its own. A later slice never starts before t
 - Per tier it SHALL print `eligible`, `hold (<why>)` or `breach (<metric>)`. A metric with no data is a hold, never a pass.
 - Amended 2026-11-24 (slice 4 re-review N1): `merged_ref` and its fallback (`refs/remotes/origin/HEAD`) SHALL resolve
   to exactly one branch or remote-tracking ref; a tag or an ambiguous name SHALL be refused, and a label SHALL not
-  count a history that holds any commit of the change.
+  count a history that holds any commit of the change. The fallback SHALL count only as a symbolic ref to a branch or remote-tracking ref
+  that is not itself a `HEAD` ref (amended 2026-11-25, v061 task 14; a plain `origin/HEAD`, as a pushed branch named `HEAD` makes, is refused with its reason).
 - It SHALL never edit the profile. Promotion is a human edit of the profile, which is itself a guarded path.
 
 ### [REQ-V060-09] Human check by tier
@@ -337,4 +338,4 @@ Blocked on the auto-merge decision.
 
 ## Open decisions
 
-None. Platform-wide (multi-repository) specs are pinned until the CRRD split proves the model (2026-11-22).
+None. Platform-wide (multi-repository) specs are pinned until a multi-repo spec split on another project proves the model (2026-11-22).

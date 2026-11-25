@@ -3,6 +3,74 @@
 All notable changes to specter. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning: [SemVer](https://semver.org/).
 The installed version is stamped into each project (`.specs/kit/VERSION`; a `spec-kit.json` the installer creates records the first-install version in `kit_version`, and is never rewritten).
 
+## [Unreleased]
+
+## [0.10.0] - 2026-11-25
+
+Trust-layer hardening (v061). Human `none` is still off in every known repository; this release closes the ways the
+0.9.0 reviews found to reach it without a human, and makes it apply only to small changes.
+
+### Security
+- Human `none` holds only when the label's base is the `merged_ref` tip: a PR behind it is `spot (base <sha7> is behind
+  <ref>: update the branch)`, so a demotion or a tighter threshold on the trunk reaches PRs already in flight. Found by
+  the 0.10.0 deep review; the advisory is published with this release.
+- A ref is refused when another listed ref differs from it only by case (NFKC, casefold, upper, as NTFS and APFS fold),
+  or when a symref's target is not listed under its exact name: a pushed `MAIN` shadowed `origin/main`. The recipe
+  fetches `merged_ref` with an explicit refspec.
+- `--evidence` ignores `refs/replace` and grafts (`GIT_NO_REPLACE_OBJECTS=1`, `GIT_GRAFT_FILE` set to a path that never
+  exists), so a local object cannot hide a revert.
+- A symref to a `.../HEAD` ref is refused; a full commit id is accepted only at the repository's hash length.
+
+### Added
+- Human `none` only within a size cap and a trivial review: at most 3 files and 50 lines by default (optional `Max files`
+  and `Max lines` Evidence columns), tests only added (a deleted, edited, `chmod`ed or retyped test file, or any
+  `conftest.py` or `__init__.py` change, is `spot`; default test globs are the usual test folders and names
+  (`tests/`, `__tests__/`, `spec/`, `*_test.*`, `*.spec.*`, `test_*`, `conftest.py`…), or a `## Tests` section), a binary file or a gitlink counts as over the cap, and the reviewer writes `- complexity:
+  trivial` (anything else, a missing line or a repeated one bars it). `ready.py` runs the same check.
+- `kit/playbooks/parallel.md`: run several agents on one feature (batches of at most 3, a worktree base check, unique
+  temp files, red first, land with `cherry-pick` and check its exit code, one gate run on the tip, stop leftover runs,
+  no polling loops). A retro step in the review loop turns a mistake into a lessons line and the check that catches it.
+- `kit/scripts/readme_check.py`: a README check any project can run (links, images and anchors resolve, alt text, a
+  line cap, required sections in order, a word denylist; settings under `readme` in `spec-kit.json`).
+- `kit/templates/SECURITY.md`, offered by setup for a public repository without one.
+- Setup asks whether the machine inspects every process launch and, on yes, wraps heavy Gates rows in a container; the
+  note says some runtimes (Colima) share only `$HOME`.
+- "Pick up and continue" in `next-task.md`: read the `▶ Resume here` block and the pinned plan issue, run the next task.
+- Specter runs its own trust layer: `.specs/steering/autonomy.md` (trust-layer files on Human `required`),
+  `.specs/steering/lessons.md`, `SECURITY.md` with private vulnerability reporting, `tests/gates.sh` (G1 to G4,
+  `--docker` in a container) and a local `.githooks/pre-push` hook. No CI was added.
+
+### Changed
+- `--evidence` reads its thresholds from the profile at the `merged_ref` tip, counts a commit only under the tier row it
+  was labelled with (`- relabelled: <n>` for the rest), reaches every commit a revert or `Fixes:` names, and refuses a
+  commit with an unreadable date (exit 2 with its sha).
+- A `none` merge carries no `Human-Findings:` (nobody writes it for the human): a `0` on it is ignored, a value above 0
+  still counts, and a `none` tier no longer holds for missing trailers.
+- `section()` skips fenced code and HTML comments (an unclosed comment hides the rest of the file); Knowledge is read raw.
+- `ready.py`: model family variants (`claude-…`, `anthropic/…`) are one family; a repeated `implementer:`, `reviewer:`
+  or `complexity:` line is not ready. A profile that is not UTF-8 is refused with `<profile> at <sha7>: not UTF-8`.
+- Review-loop step 5: the GitHub approver is an App whose key lives in a default-branch-only environment, never
+  `GITHUB_TOKEN`; it approves with `commit_id=<head sha>`, merges with `--match-head-commit`, re-reads the head and
+  withdraws on a move, one job per PR (`cancel-in-progress: false`), fetches full history with the explicit refspec, and
+  names all five `none` conditions. The GitLab bullet is an untested sketch (a trusted project, `sha=`,
+  `resource_group`).
+- `spec_lint.py` exits 2 when `--specs` is not a directory (it printed `0 FAIL` and exited 0); a refused `origin/HEAD`
+  fallback says why.
+- `tests/selftest.sh`: section timings, `SELFTEST_ONLY` (an unknown name exits 2, a partial run is not a pass in
+  `gates.sh`), copied fixtures, no clock or locale in the output.
+- README rewritten: the problem first, the trust layer, where specter is going, decisions and limits.
+
+### Known limits (follow-ups in #40)
+- The step 5 recipe is written from the platforms' documented settings, not run live. Human `none` stays off until it
+  is verified on a live host.
+- "Small" is files and lines, not bytes: a one-line minified file or an LFS pointer passes the cap. An added line can
+  still disable a test; the reviewer's `complexity:` is the backstop.
+- On a `none` row one human finding in the window is a breach whatever the threshold (human zeros on `spot` merges are
+  dropped). A stricter row narrowed by a human leaves its files on the lowest tier with that tier's evidence.
+- Commit-graph files can carry parents the way grafts do (local `.git` write needed, as for grafts).
+- `.githooks/pre-push` is a local habit: `--no-verify` skips it, and it is on only after `git config core.hooksPath
+  .githooks`.
+
 ## [0.9.0] - 2026-11-24
 
 ### Added

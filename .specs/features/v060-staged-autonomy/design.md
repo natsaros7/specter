@@ -196,7 +196,7 @@ Review fix: the `commit:` line is read after the gates ran, and a run that chang
 HEAD adds `- tree changed during gates`, which `ready.py` refuses: a gate that rewrites a file (a formatter) would
 otherwise report a commit that is not what the gates checked.
 
-`tests/selftest.sh:370` pins `- G1 ok: one`; it becomes `- G1 ok: pass (one)`, and the case also checks the verdict
+`tests/selftest.sh:373` pins `- G1 ok: one`; it becomes `- G1 ok: pass (one)`, and the case also checks the verdict
 line. The spec-rules template §7.1 (`kit/templates/steering/spec-rules.md:48-49`) gains "put the cheapest rows first:
 the run stops at the first failure". No script reorders rows.
 

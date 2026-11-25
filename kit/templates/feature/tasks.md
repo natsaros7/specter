@@ -1,6 +1,6 @@
 # <ID> <Title> — Tasks
 
-<For long work, add a "## ▶ Resume here" block: goal, branch/PR, done, open decisions, gate commands.>
+<For long work, add a "## ▶ Resume here" block: goal, branch/PR, the pinned plan issue (if the project has a tracker), done, open decisions, gate commands.>
 
 Deploy impact: none | <job or env>: <what changes: new outbound calls, runtime, exit codes, output, a dependency>
 

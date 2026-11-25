@@ -16,7 +16,7 @@ Specs that don't go stale. A spec-first workflow for any AI coding agent.
 
 <div class="pt-6 opacity-70">
 
-Release 0.8.0 shipped · 0.9.0 in progress · Python 3.8+, stdlib only, no service
+Release 0.10.0 shipped (Human `none` still off) · Python 3.8+, stdlib only, no service
 
 </div>
 
@@ -96,7 +96,7 @@ Run on the acme-shop example at release 0.8.0.
 
 ---
 
-# The trust layer (0.8.0)
+# The trust layer (diagram drawn at 0.8.0)
 
 <img src="/diagrams/trust-layer.svg" class="mx-auto" style="width: 900px; margin-top: 6px" />
 
@@ -203,30 +203,33 @@ Demo history: ten commits with `Human-Findings:` trailers and one `git revert`. 
 
 <img src="/diagrams/roadmap.svg" class="mx-auto" style="height: 400px; margin-top: 6px" />
 
-<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.8.0. Planned: 0.9.0. Candidates: v070. Stage 5 is out of scope.</div>
+<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.10.0. Next: 0.11 follow-ups, a live test of the recipe, then a stage 5 orchestrator proposal (not built). Stage 4 is built, off until verified live.</div>
 
 ---
 
-# What 0.9.0 adds (planned, not shipped)
+# What 0.10.0 added (shipped; `none` is still off)
 
-Slice 4 of the staged-autonomy feature. Tasks 21 to 23 are open on the `feat/0.9.0` branch.
+Trust hardening: every deep review found a way to reach `none` without a human. This release closes the known paths.
 
 | Piece | What it does |
 |---|---|
-| Human check by tier | `required` as today; `spot` approves on the verdict, gates and tests; `none` only on the lowest tier, with guardrails declared and evidence `eligible` |
-| Platform recipe | required checks, auto-merge on green, CODEOWNERS, a merge queue; the kit merges nothing |
-| Fix-round cap | two fix rounds per task, then the human gets both outputs; `ready.py` checks `rounds:` |
-| Demotion on breach | `--evidence` prints the profile line to tighten; a human edits it |
-| `pipeline.md` | triage, implement, review, merge: what each hands on, when the human enters |
+| Size cap, trivial review | `none` only within 3 files and 50 lines, tests only added, reviewer writes `- complexity: trivial` |
+| Base must be current | a PR behind the `merged_ref` tip is `spot`, so a demotion reaches PRs in flight |
+| Parallel playbook, lessons loop | batches of at most 3, a worktree base check, `cherry-pick` rc checked; a mistake becomes a lessons line |
+| Kit tools for any project | container gates (`--docker`), `readme_check.py`, a `SECURITY.md` template |
+| Ref and evidence fixes | case-folded refs refused, `refs/replace` ignored, relabelled commits counted apart |
 
 ---
 
-# What v070 might add, and what stays out
+# What comes next, and what stays out
 
 <div class="grid grid-cols-2 gap-8 pt-2">
 <div>
 
-### Candidates (not decided)
+### Next (candidates, not decided)
+
+- **0.11** follow-ups (#40), then a live test of the recipe on a hosted repository
+- **Stage 5** an orchestrator proposal, not built
 
 - **E6** verification gates proposed by stack: property tests, contract tests, architecture tests
 - **E9** a Drift Register entry that names an anti-pattern gets a contain action: a lint rule first, then cleanup tasks
@@ -235,9 +238,9 @@ Slice 4 of the staged-autonomy feature. Tasks 21 to 23 are open on the `feat/0.9
 </div>
 <div>
 
-### Out of scope
+### Not in the kit
 
-- Kiro's stage 5, a coordinating agent
+- Kiro's stage 5, a coordinating agent: later, a separate layer after stage 4 runs live
 - a queue, scheduler, orchestrator or merge bot in the kit
 - classifying a change by content: tiers go by path
 - live platform APIs; specter stays offline

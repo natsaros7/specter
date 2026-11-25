@@ -1,3 +1,4 @@
 __pycache__/
 .DS_Store
 docs/research/sources/local/
+.claude/worktrees/

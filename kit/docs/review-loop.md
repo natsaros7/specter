@@ -49,7 +49,7 @@ flowchart LR
    <!-- shortcut: the cap is fixed at 2; make it a profile value when a repository asks for another number. -->
    <!-- shortcut: rounds are declared by the lead, not counted by a script; count them from the frozen patch files when the declared numbers prove wrong. -->
 5. **Human check, by the label's Human value** (`tiers.py`; `none` is kept only on the lowest tier with every
-   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so):
+   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so; so does a change over the size cap, an edited or deleted test line, and a reviewer `complexity:` line that is not `trivial`):
    - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
      reviewer's verdict table, as below.
    - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
@@ -58,28 +58,56 @@ flowchart LR
         commit is pushed. The required checks are the Gates, and only the Gates.
      2. A non-required job, defined where the PR cannot edit it, runs from a trusted worktree of the base (as step 3
         shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
-        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
-        when the verdict is `ready`, the reported human is `none` (evidence earned at the base, another model family)
-        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`).
+        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). `<base sha>` is the
+        `merged_ref` tip and must equal the merge base: a PR behind it is `spot` until the branch is updated. It exits 0
+        only when the verdict is `ready`, the reported human is `none` (the lowest tier, with evidence earned at the base,
+        every guardrail declared, another model family, a change within the size cap with tests only added, and
+        `complexity: trivial`)
+        and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`), and fetch it
+        with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
+        disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings. Fetch full
+        history too: when `git rev-parse --is-shallow-repository` prints `true`, `git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main <head sha>` (without
+        `--unshallow` otherwise; or `fetch-depth: 0` with that refspec overriding the default), because a shallow clone hides the merged history the
+        evidence windows read.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
-        or merge: the Guardrails row), and enables auto-merge; the platform merges when the Gates pass. Any other exit
-        does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never
-        blocks a PR a human approved.
+        or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform
+        merges when the Gates pass. The job passes the head sha it checked to every platform call, so a push after the
+        check is never approved or merged, and one job per PR runs at a time. Any other exit does nothing: the PR waits
+        for a human approval, as for `spot`. The job is not required, so its failure never blocks a PR a human approved.
      4. The merge queue (GitHub merge queue, GitLab merge trains or the equivalent) re-runs the Gates on the merged
         result, so changes that are green alone are gated together. It does not re-run `ready.py`: its block-commit
         and rules-at-base checks are for the PR head and its base, and on the queue's merge commit they fail every PR.
         <!-- shortcut: the label is the one made at approval; a base that moves under the PR re-labels it only when the branch is updated (a new commit drops the approval and the job runs again); re-run ready.py in the queue against the PR head when evidence that moved must bar a queued merge. -->
 
-     - GitHub: a ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
-       "Dismiss stale pull request approvals when new commits are pushed"; the job is a `pull_request_target` workflow
-       (its definition comes from the base branch) that checks out the base, fetches the PR head as data without running
-       it, passes the PR body through an environment variable (never `${{ }}` in the script), and on exit 0 runs
-       `gh pr review --approve` and `gh pr merge --auto` with a GitHub App token (or `GITHUB_TOKEN` with "Allow GitHub
-       Actions to create and approve pull requests" on; a merge by `GITHUB_TOKEN` starts no workflow on the default branch).
-     - GitLab: an approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
-       commits are added to the source branch"; the job has `allow_failure: true` and comes from a CI/CD configuration the
-       MR cannot edit (a configuration file in another project); on exit 0 a project access token's bot user approves the
-       MR and sets auto-merge through the merge requests API.
+     - GitHub, in this order:
+       1. A ruleset (or branch protection) with "Require a pull request before merging", 1 required approval,
+          "Dismiss stale pull request approvals when new commits are pushed" and "Require branches to be up to date
+          before merging".
+       2. The approver is a GitHub App, never `GITHUB_TOKEN`: leave "Allow GitHub Actions to create and approve pull
+          requests" off. Its private key is a secret of an environment whose deployment branches allow only the default
+          branch.
+       3. The job is a `pull_request_target` workflow that uses that environment, so it runs from the base branch's
+          definition. It checks out the base, fetches the PR head as data without running it (full history, with the explicit refspec of item 2), passes the PR body through
+          an environment variable (never `${{ }}` in the script), and on exit 0, with the App's token and the head sha
+          it checked: approves through `POST …/pulls/{n}/reviews` with `commit_id=<head sha>`, runs
+          `gh pr merge --auto --match-head-commit <head sha>`, then reads the head again. If it moved, it dismisses that
+          review and runs `gh pr merge --disable-auto`. The workflow has `concurrency: specter-auto-merge-<pr number>`
+          with `cancel-in-progress: false`: cancelling a job between its approval and its re-read would leave the
+          approval on the new head.
+       4. Every workflow that runs PR code (the Gates, an agent) has `permissions: contents: read` and checks out with
+          `persist-credentials: false`, so a `pull_request` run cannot reach the key.
+     - GitLab (a sketch, untested on a live instance; verify each setting when you declare the row):
+       1. An approval rule requiring 1 approval, with "Prevent approval by author" and "Remove all approvals when
+          commits are added to the source branch".
+       2. A trusted project (`<group>/specter-approver`; MR authors have Reporter at most) holds the bot's project
+          access token as a protected, masked variable. Never put that token in the MR's own project: there it is
+          either unprotected (the Gates jobs read it) or protected (an unprotected source branch never gets it).
+       3. The MR pipeline's last job (`allow_failure: true`, from a CI/CD configuration the MR cannot edit) starts the
+          trusted project's pipeline with a pipeline trigger token, passing only the MR iid.
+       4. The trusted job checks the project id against a fixed value, reads the base and head shas from the MR API
+          (never from the trigger's variables), and on exit 0 approves the MR (`POST …/approve`) and sets auto-merge
+          (`PUT …/merge`) through the merge requests API as the bot, both with `sha=<head sha>` (GitLab refuses a moved
+          head with 409). The job runs under `resource_group: mr-<iid>`.
 
    For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
@@ -105,7 +133,12 @@ flowchart LR
    At the merge, the human adds `Human-Findings: <n>` to the merge (or squash) commit message: the number of
    problems the human found that the gates and the reviewer missed, `0` when none. Write it on every merge, so
    `tiers.py --evidence` can tell "no findings" from "no data": human-caught % counts only merges that carry the trailer,
-   and a window with too few of them is a hold (see [sync.md](../playbooks/sync.md) § Trailers).
+   and a window with too few of them is a hold. A `none` merge carries no `Human-Findings:`: nobody writes it for the
+   human, so its `0` is ignored and a tier whose Human is `none` never holds on it (a value above 0 still counts; see [sync.md](../playbooks/sync.md) § Trailers).
+
+A review finding that reaches `human: none` or `auto-merge: yes` without a human is a security finding. File it
+privately, through the project's `SECURITY.md` channel (on GitHub, a draft advisory), not as a public issue or
+review doc, and publish it after the fix ships.
 
 ## Reviewer prompt (works with any agent)
 
@@ -128,6 +161,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - reviewer: <model id>
 - rules: <base sha>
 - rounds: <n>
+- complexity: <trivial|non-trivial>
 | Severity | Location | Evidence | Trigger | Consequence | Fix |
 |---|---|---|---|---|---|
 | blocker | src/shop/Order.java:42 | "if (total > 0)" | an order with total 0 | it ships unpaid | ">= 0", and a test |
@@ -147,6 +181,12 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - Never run two workers on the same files at once.
 - Two workers sharing one checkout must not use `git stash`, `reset`, `checkout` or `restore`: one worker's
   stash wipes the other's edits. Give each its own `git worktree`, or read old code with `git show HEAD:path`.
+
+## Retro after a merge
+
+After a merge, a mistake that got through becomes one line in `.specs/steering/lessons.md` plus the check that now
+catches it (a Gates row, a lint rule, a test or a playbook step). The agent proposes the line and the check; a human
+approves them before they land. Several agents at once: [parallel.md](../playbooks/parallel.md).
 
 ## Grill the artifact (optional, before implementation)
 

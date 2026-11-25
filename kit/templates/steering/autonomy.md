@@ -12,10 +12,10 @@ What agents may do here without a human, and on what evidence. Editing this file
 | Memory | [lessons](lessons.md) | start |
 
 ## Tiers
-<!-- Put the scripts your Gates commands run (test runners, lint scripts, CI config) in the last tier: ready.py compares Gates commands, not the scripts they call. -->
+<!-- Keep lockfiles out of a `none` row: two changed lines can point a dependency at another tarball. Put the scripts your Gates commands run (test runners, lint scripts, CI config) in the last tier: ready.py compares Gates commands, not the scripts they call. -->
 | Tier | Paths | Reviewer | Human |
 |---|---|---|---|
-| routine | `<tests glob>` `<docs glob>` `<lockfile>` | standard | none |
+| routine | `<tests glob>` `<docs glob>` | standard | none |
 | domain | `<source glob>` | standard | spot |
 | critical | `<security glob>` `<contracts glob>` `<migrations glob>` `<CI glob>` `CODEOWNERS` | deep | required |
 
@@ -32,7 +32,7 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 |---|---|---|
 | No direct or force push to the default branch | <branch protection or ruleset> | <YYYY-MM-DD> |
 | The Gates run as required checks before a merge | <required status checks> | <YYYY-MM-DD> |
-| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | <required approvals and stale-approval dismissal; the job's App or bot identity, or "no such job, checked <how>"> | <YYYY-MM-DD> |
+| Every PR needs an approval, dropped on a new commit; a human gives it, and only the `ready.py --auto-merge` job's identity (never an agent's) approves a PR labelled `none` | <the App or bot that approves, and where its key lives: a default-branch-only environment (GitHub) or a trusted project's protected variable (GitLab)> | <YYYY-MM-DD> |
 | Agent credentials cannot approve or merge | <bot account or token scope> | <YYYY-MM-DD> |
 | Agent permissions come from the host's configuration, not from a prompt | <agent settings file or CI permissions> | <YYYY-MM-DD> |
 | Agents cannot edit merged history or review records, or create tags or `refs/replace/` refs | <history protection, tag rules and the platform's review log> | <YYYY-MM-DD> |
@@ -40,8 +40,11 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | Scheduled chores run from a clean clone or the CI checkout of the default branch, never a working copy | <the scheduler entry, or "no chores, checked <how>"> | <YYYY-MM-DD> |
 
 ## Evidence
-<!-- tiers.py --evidence reads merged history on merged_ref and gives each tier eligible, hold (<why>) or breach (<metric>). A row that keeps a <placeholder> is a hold, so no tier is eligible until you set numbers. Suggested start: Window 90, Min merged 20, Max reverted 2, Max escaped 5, Max human-caught 10. A Max cell of - is not checked. -->
+<!-- tiers.py --evidence reads merged history on merged_ref and gives each tier eligible, hold (<why>) or breach (<metric>). A row that keeps a <placeholder> is a hold, so no tier is eligible until you set numbers. Suggested start: Window 90, Min merged 20, Max reverted 2, Max escaped 5, Max human-caught 10. A Max cell of - is not checked. Optional trailing columns `Max files` and `Max lines` cap a change in a tier whose Human is `none` (defaults 3 and 50; - is the default): a larger change is labelled `spot`. -->
 | Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |
 |---|---|---|---|---|---|
 | routine | <days> | <n> | <%> | <%> | <%> |
 | domain | <days> | <n> | <%> | <%> | <%> |
+
+## Tests
+<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`. A deleted or re-moded test file and an added or changed `conftest.py` or `__init__.py` are `spot` too. An added line can still switch a test off (a skip marker): the reviewer's `complexity:` is the backstop. -->

@@ -7,7 +7,8 @@ python3 .specs/kit/scripts/gates.py --file .specs/steering/autonomy.md
 ```
 
 It runs the rows in order, stops at the first failure and exits 1. The first chore is spec health: the citation check
-and the report page. It uses no model and no tokens. The regenerated `.specs/report.html` is the dashboard.
+and the report page. It uses no model and no tokens. A README check is one more row, `python3 .specs/kit/scripts/readme_check.py`
+(settings: `readme` in `spec-kit.json`); it works as a Gates row too. The regenerated `.specs/report.html` is the dashboard.
 
 Chore rows are code: run only reviewed rows.
 

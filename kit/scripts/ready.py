@@ -22,11 +22,15 @@ it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
-Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
-implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
+Human `none` is reported as `spot` when the tier's evidence is not eligible or, with --range, the base is not the
+merged_ref tip (as tiers.py labels it: `base <sha7> is behind <ref>: update the branch`), the change is over the
+size cap or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
+family, or its `- complexity: trivial|non-trivial` line is missing or not `trivial` (`reviewer: complexity <value or missing>`;
+a repeated complexity line is not ready): `- human: none → spot (<why>)`, --json tier.human_why; the exit code is unchanged.
 --auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
 is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
-non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha> (without
+non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha>, the base
+the merged_ref tip and the merge base of the two (without
 --range, `auto-merge: no`); on exit 0 only, it approves with a non-agent identity and enables auto-merge (review-loop.md
 step 5). --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
 --json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
@@ -116,16 +120,17 @@ def check_gates(text, labels, head, ranged, staged=False):
 
 
 def family(model):
-    # shortcut: a fixed prefix list and the first `-` token; o3 vs gpt-5 and unlisted regions are missed. A miss
+    # shortcut: fixed vendor and bare-name lists; unlisted regions or vendors and new bare names are missed. A miss
     # leaves Human none unbarred; replace with a profile table when a repo mixes providers behind one family name.
-    """First `-` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`) is dropped."""
-    m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)\.)?", "", model.lower().rsplit("/", 1)[-1])
-    return m.split("-")[0]
+    """First `-_.:@` token of a model id once a provider path or prefix (`bedrock/`, `us.anthropic.`, `anthropic:`) is dropped."""
+    m = re.sub(r"^(?:(?:us|eu|apac|global)\.)?(?:(?:anthropic|openai|google|meta|mistral|amazon|cohere)[.:])?", "", model.lower().rsplit("/", 1)[-1])
+    t = re.split(r"[-_.:@]", m)[0]
+    return {"opus": "claude", "sonnet": "claude", "haiku": "claude", "fable": "claude", "o1": "gpt", "o3": "gpt", "o4": "gpt", "codex": "gpt"}.get(t, t)
 
 
 def check_review(text, base, want="standard"):
-    """{implementer, reviewer, same_family, rules, rounds, blockers, advisories, problems, warnings} for the ### Review block."""
-    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "blockers": [], "advisories": [],
+    """{implementer, reviewer, same_family, rules, rounds, complexity, blockers, advisories, problems, warnings} for the ### Review block."""
+    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "complexity": None, "blockers": [], "advisories": [],
          "problems": [], "warnings": []}
     lines, cur, n = [], False, 0
     for line in text.splitlines():
@@ -138,12 +143,24 @@ def check_review(text, base, want="standard"):
     if n != 1:
         r["problems"].append("needs exactly one ### Review block, found " + str(n))
         return r
+    seen = set()
     for line in lines:
         m = re.fullmatch(r"- (implementer|reviewer|rules): *(\S*)(?: *\((\w+)\))?.*", line)
         if m:
+            if m.group(1) in seen:
+                r["problems"].append("review " + m.group(1) + " repeated: one line per Review block")
+            seen.add(m.group(1))
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None
+        elif re.match(r"- complexity\b", line, re.I):
+            m = re.fullmatch(r"- complexity: *(\S+) *", line, re.I)
+            if r["complexity"] is not None or any(x.startswith("review complexity") for x in r["problems"]):
+                r["problems"].append("review complexity repeated: one `complexity:` line per Review block")
+            elif m:
+                r["complexity"] = m.group(1).lower()
+            else:
+                r["problems"].append("review complexity line unreadable: " + line.strip()[:30])
         elif re.match(r"\s*[-*+]\s*rounds\b", line, re.I):
             m = re.fullmatch(r"\s*[-*+]\s*rounds\s*:(.*)", line, re.I)
             v = m.group(1).strip() if m else None
@@ -282,7 +299,10 @@ def main(argv):
         return refuse(str(err))
     base = change["base"]
     head = change["head"]  # resolved by tiers.end_commit: a tag or ambiguous name never stands in for the head
-    rules = tiers.profile_at(root, base, rel) if base else None
+    try:
+        rules = tiers.profile_at(root, base, rel) if base else None
+    except ValueError as err:
+        return refuse(str(err))
     try:
         rows = gates.gate_rows(rules) if rules else None
     except ValueError as err:
@@ -295,8 +315,8 @@ def main(argv):
     # command) changes what ran. Equal rows or not ready.
     # shortcut: equal commands do not mean equal scripts: a PR that edits a script a gate calls still passes; setup
     # puts gate scripts in the last tier; upgrade by comparing the files a command names.
-    hrules = tiers.profile_at(root, head if rng else "", rel)
     try:
+        hrules = tiers.profile_at(root, head if rng else "", rel)
         hrows = gates.gate_rows(hrules) if hrules else None
     except ValueError:
         hrows = None
@@ -313,9 +333,11 @@ def main(argv):
     why = []
     if tier["human"] == "none":
         prof = specs / "steering" / "autonomy.md"
-        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head)
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head, not rng)
                            if change["why"] is None else None,
-                           "same family" if review["same_family"] else None) if w]
+                           "same family" if review["same_family"] else None,
+                           "reviewer: complexity " + (review["complexity"] or "missing") if review["complexity"] != "trivial" else None,
+                           *(tiers.small(root, prof.relative_to(root).as_posix(), tier["tier"], base, head, not rng) if change["why"] is None else [])) if w]
     tier["human_why"] = "; ".join(why) or None
     tier["human"] = "spot" if tier["human_why"] else tier["human"]
     # the one merge-without-a-human test: a ready verdict and a reported human of none (a platform check runs it)

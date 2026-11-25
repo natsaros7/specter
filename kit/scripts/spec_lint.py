@@ -4,7 +4,7 @@
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
        python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
        python3 .specs/kit/scripts/spec_lint.py --hash-term <word>               digest to add to denylist_sha256
-       default DIR = the .specs/ this script is installed in; default features = all
+       default DIR = the .specs/ this script is installed in; default features = all; exit 0 clean, 1 FAIL, 2 DIR not a directory
 
 --json prints one JSON object instead of text (same exit code): default mode {features, links, refs, drift, warnings, fails},
       --cites {count, problems}.
@@ -42,6 +42,7 @@ import datetime
 import fnmatch
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -51,6 +52,11 @@ from pathlib import Path
 sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
+
+# Run standalone, this file's git calls (branch_ref, merged_commits) must not follow refs/replace or .git/info/grafts either
+# (tiers.py sets the same two before its own calls); the graft path never exists (a file under /dev/null).
+os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
+os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
 
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -353,20 +359,37 @@ def repos(root):
                    if not worktree(p) and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
 
 
+def fold(s):
+    """The one key paths, globs and ref names are compared under: NFKC, then a full case fold that also takes what APFS
+    and NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I, so
+    ref ma\u0131n is main's twin).
+    shortcut: the key folds more than APFS (NFKC) or a case-sensitive disk, so a file that matches no glob as spelled
+    (Docs/x on Linux) can take a lower row's tier; tighten when a project runs files by exact case-variant names."""
+    return unicodedata.normalize("NFKC", s).upper().casefold().replace("\u0307", "")
+
+
 def branch_ref(path, name):
     """(full ref name, None) when `name` names exactly one branch or remote-tracking ref (a symref only to one), else
     (None, why), why None when no ref has that name. Git's own lookup takes refs/tags/<name> before refs/heads/ and
     refs/remotes/, so a pushed tag `origin/main` would stand in for the remote: a tag or an ambiguous name is refused.
     Raises OSError or subprocess.TimeoutExpired when git is missing or hangs."""
     cand = [name] if name.startswith("refs/") else [p + name for p in ("refs/", "refs/tags/", "refs/heads/", "refs/remotes/")] + ["refs/remotes/" + name + "/HEAD"]
-    run = subprocess.run(["git", "-C", str(path), "for-each-ref", "--format=%(refname)%00%(symref)"] + cand, capture_output=True, text=True, timeout=60)
+    run = subprocess.run(["git", "-C", str(path), "for-each-ref", "--format=%(refname)%00%(symref)"], capture_output=True, text=True, timeout=60)
     found = dict(line.split("\0", 1) for line in run.stdout.splitlines() if "\0" in line) if run.returncode == 0 else {}
-    hits = [c for c in cand if c in found]  # for-each-ref also lists refs below a pattern: keep exact names only
+    hits = [c for c in cand if c in found]  # every ref is listed (no patterns): keep exact names only
+    # shortcut: one listed spelling holding another branch's sha is invisible locally; the recipe's explicit refspec closes it, probe the server with ls-remote if a job must fetch the wildcard
+    for r in hits[:1] + ([found[hits[0]]] if hits and found[hits[0]] else []):  # on a case-folding disk rev-parse opens the twin's file
+        twin = next((n for n in found if n != r and fold(n) == fold(r)), None)
+        who = name if r == hits[0] else "the target " + r
+        if twin or r not in found:
+            return None, who + (" differs only by case from " + twin if twin else " is not listed under its exact name")
     ok = lambda r: r.startswith(("refs/heads/", "refs/remotes/"))
     if len(hits) > 1:
         return None, name + " is ambiguous (" + ", ".join(hits) + ")"
     if hits and not (ok(hits[0]) and (not found[hits[0]] or ok(found[hits[0]]))):
         return None, name + " is " + ("a tag" if hits[0].startswith("refs/tags/") else "not a branch or remote-tracking ref") + " (" + hits[0] + ")"
+    if hits and found[hits[0]].endswith("/HEAD"):  # a symref to another HEAD ref is no remote's default branch
+        return None, name + " points at " + found[hits[0]] + ", another HEAD ref"
     # a pushed branch named HEAD lands as a plain refs/remotes/<remote>/HEAD: only a symref is the remote's default branch
     if hits and hits[0].startswith("refs/remotes/") and hits[0].endswith("/HEAD") and not found[hits[0]]:
         return None, name + " is not a symbolic ref (" + hits[0] + ": a branch named HEAD?)"
@@ -375,13 +398,15 @@ def branch_ref(path, name):
 
 def merged_ref(path, config):
     """(ref, why): merged_ref if set, else refs/remotes/origin/HEAD, then HEAD; the first that resolves in the repo at path,
-    as a full ref name (or HEAD), else None. why names a merged_ref refused as a tag or ambiguous (branch_ref), else None.
+    as a full ref name (or HEAD), else None. why names a merged_ref or the origin/HEAD fallback that branch_ref refused, else None.
     Raises OSError or subprocess.TimeoutExpired when git is missing or hangs."""
     want = config["merged_ref"]
     if want and want != "HEAD":
         ref, why = branch_ref(path, want)
         return ref, ("merged_ref " + why if why else None)
-    ref = None if want else branch_ref(path, "refs/remotes/origin/HEAD")[0]
+    ref, why = (None, None) if want else branch_ref(path, "refs/remotes/origin/HEAD")
+    if why:  # a refused fallback must not count HEAD, the change itself
+        return None, why
     head = ref or subprocess.run(["git", "-C", str(path), "rev-parse", "--verify", "--quiet", "HEAD"], capture_output=True, timeout=60).returncode == 0
     return (ref or ("HEAD" if head else None)), None
 
@@ -596,16 +621,20 @@ def cites(specs):
 
 
 def main(argv):
-    specs = Path(__file__).resolve().parents[2]
+    specs = given = Path(__file__).resolve().parents[2]
     if "--specs" in argv:
         i = argv.index("--specs")
-        specs, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
+        given, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+        specs = Path(given).resolve()
     if "--hash-term" in argv:
         toks = tokens(" ".join(a for a in argv[argv.index("--hash-term") + 1:] if not a.startswith("--")))
         if not 1 <= len(toks) <= 2:
             sys.exit("usage: --hash-term <term of one or two words>")
         print(hashlib.sha256("-".join(toks).encode()).hexdigest())
         return 0
+    if not specs.is_dir():  # a moved or misspelled path must not pass as "0 FAIL"
+        print("spec-lint: " + str(given) + ": not a directory", file=sys.stderr)
+        return 2
     as_json = "--json" in argv
     if "--cites" in argv:
         result = cites(specs)
