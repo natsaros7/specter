@@ -5,12 +5,12 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 ## ▶ Resume here (2026-11-25)
 
 - **Plan:** pinned issue #31 holds the batches, decisions and dispatch rules. Tick a batch there when it lands.
-- **Landed on `feat/0.10.0` (tip `bcf15a8`):** tasks 1 to 7, 9, 10, 13 to 15, 17, 18, 21, 22, and README pass 1
+- **Landed on `feat/0.10.0` (tip `0fa5139`):** tasks 1 to 15 except 16, plus 17, 18, 21, 22, 24 and README pass 1
   (task 20). G1 to G4 pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
-- **Next: batch 4.** Task 8 (#10), task 11 (#13), task 24 (#32); then task 12 (#14) and task 25 (#34). Task 25 also
-  takes the Colima lesson: `gates.sh --docker` must refuse loudly when the mounted dir is empty (Colima shares only
-  `$HOME`).
-- **Then** batch 5 (task 23, #30), bug #33, and the release (task 16, #18; task 19, #26; README pass 2).
+- **Next: batch 5.** Task 23 (#30, size cap and reviewer `complexity`), task 25 (#34, the lessons in kit for any
+  project: a container-gates form with a loud empty-mount check, and the playbook's gates line made generic), bug #33
+  (`spec_lint` exits 0 on a missing dir).
+- **Then** the release: task 16 (#18), task 19 (#26), README pass 2 (task 20, #27), docs/overview refresh.
 - **Rules:** 2 to 3 agents per batch. Reset each worktree to the tip. `PYTHONDONTWRITEBYTECODE=1`. Use
   `f=$(mktemp)` for every gate output. No polling loops. Gates in Docker. Land with `git cherry-pick`, check the rc,
   count the 24 task lines, then run the gates once on the tip.
