@@ -1176,6 +1176,10 @@ gitq -C "$E" commit -qam "row seven undeclared"; E7=$(git -C "$E" rev-parse HEAD
 mkdir -p "$E/docs"; echo x >> "$E/docs/x.md"; gitq -C "$E" add -A; gitq -C "$E" commit -qm docs
 out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range "$E7..HEAD" 2>&1) && echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -q "guardrails: 1 of 8 undeclared, none → spot" || fail "14b: undeclared row seven did not downgrade none: $out"
 out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1) && echo "$out" | grep -q "autonomy.md:[0-9]*: undeclared (placeholder in Enforced by)" || fail "14b: --check did not list row seven: $out"
+# the none recipe binds approve and merge to the checked sha (text only: no live platform here)
+RL="$KIT/kit/docs/review-loop.md"
+for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'resource_group'; do grep -qF -e "$k" "$RL" || fail "14b: review-loop.md does not name $k"; done
+! grep -F 'GITHUB_TOKEN' "$RL" | grep -vF 'never `GITHUB_TOKEN`' | grep -q . || fail "14b: review-loop.md offers GITHUB_TOKEN"
 
 fi; sect_end
 echo "selftest: OK"

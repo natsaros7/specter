@@ -64,9 +64,10 @@ flowchart LR
         with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
         disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
-        or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform merges when the Gates pass. Any other exit
-        does nothing: the PR waits for a human approval, as for `spot`. The job is not required, so its failure never
-        blocks a PR a human approved.
+        or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform
+        merges when the Gates pass. The job passes the head sha it checked to every platform call, so a push after the
+        check is never approved or merged, and one job per PR runs at a time. Any other exit does nothing: the PR waits
+        for a human approval, as for `spot`. The job is not required, so its failure never blocks a PR a human approved.
      4. The merge queue (GitHub merge queue, GitLab merge trains or the equivalent) re-runs the Gates on the merged
         result, so changes that are green alone are gated together. It does not re-run `ready.py`: its block-commit
         and rules-at-base checks are for the PR head and its base, and on the queue's merge commit they fail every PR.
@@ -80,8 +81,12 @@ flowchart LR
           branch.
        3. The job is a `pull_request_target` workflow that uses that environment, so it runs from the base branch's
           definition. It checks out the base, fetches the PR head as data without running it, passes the PR body through
-          an environment variable (never `${{ }}` in the script), and on exit 0 runs `gh pr review --approve` and
-          `gh pr merge --auto` with the App's token.
+          an environment variable (never `${{ }}` in the script), and on exit 0, with the App's token and the head sha
+          it checked: approves through `POST …/pulls/{n}/reviews` with `commit_id=<head sha>`, runs
+          `gh pr merge --auto --match-head-commit <head sha>`, then reads the head again. If it moved, it dismisses that
+          review and runs `gh pr merge --disable-auto`. The workflow has `concurrency: specter-auto-merge-<pr number>`
+          with `cancel-in-progress: false`: cancelling a job between its approval and its re-read would leave the
+          approval on the new head.
        4. Every workflow that runs PR code (the Gates, an agent) has `permissions: contents: read` and checks out with
           `persist-credentials: false`, so a `pull_request` run cannot reach the key.
      - GitLab (a sketch, untested on a live instance; verify each setting when you declare the row):
@@ -93,8 +98,9 @@ flowchart LR
        3. The MR pipeline's last job (`allow_failure: true`, from a CI/CD configuration the MR cannot edit) starts the
           trusted project's pipeline with a pipeline trigger token, passing only the MR iid.
        4. The trusted job checks the project id against a fixed value, reads the base and head shas from the MR API
-          (never from the trigger's variables), and on exit 0 approves the MR and sets auto-merge through the merge
-          requests API as the bot.
+          (never from the trigger's variables), and on exit 0 approves the MR (`POST …/approve`) and sets auto-merge
+          (`PUT …/merge`) through the merge requests API as the bot, both with `sha=<head sha>` (GitLab refuses a moved
+          head with 409). The job runs under `resource_group: mr-<iid>`.
 
    For `required` and `spot`, write the PR description to a file outside the repo (`/tmp/pr.md`): the `### Gates`
    block from `gates.py`, the `### Risk tier` block, the `### Review` block and, when there are artifacts, the
