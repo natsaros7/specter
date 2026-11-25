@@ -22,6 +22,7 @@ Copy the template. Keep the sections in this order:
    the first task in `tasks.md` is the gate that records the decision.
 4. **Requirements.** A table of `[REQ-<FEAT>-NN]`, requirement and acceptance. The acceptance must be testable:
    name the test or the observable behaviour. EARS phrasing ("When …, the system shall …") helps; see `.specs/kit/docs/spec-driven.md`.
+   On a platform root a bracketed id here still defines it: cite a member repo's id without brackets (`REQ-ORD-01`); design and tasks bracket it as usual.
 5. **Behaviour deltas** (refactors): every observable change, with who signed it off and when.
 6. **Out of scope**, then **Open decisions**.
 

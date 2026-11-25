@@ -27,6 +27,8 @@ As <role>, I want <capability>, so that <outcome>.
 
 ## Requirements
 
+<!-- Platform root: brackets define an id. Cite a member repo's id here without brackets; design.md and tasks.md bracket it. -->
+
 | ID | Requirement | Acceptance |
 |---|---|---|
 | [REQ-<FEAT>-01] | <one testable statement> | <named test or observable behaviour> |

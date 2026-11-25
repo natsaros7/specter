@@ -14,7 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27"
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27 27c:27"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
@@ -1634,5 +1634,27 @@ out=$(lintm "$P"); echo "$out" | tail -n 1 | grep -qF '; 2 not checked: orders, 
 mkdir -p "$P/platform/.specs/features/x"
 for a in "--cites" "x"; do rc=0; out=$(lintm "$P" $a) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): $a rc=$rc: $out"; done
 rc=0; out=$(python3 "$LINT" --specs "$TMP/elsewhere2/orders/.specs" --members 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): no layer rc=$rc: $out"
+fi; if sect 27c "platform layer: platform features resolve member REQ ids"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+P="$TMP/p27c"; p27 "$P"; S="$P/platform/.specs"; mkdir -p "$S/features/cross-a" "$P/billing/.specs/features/b"
+printf '# B\n\n[REQ-BIL-2] billing feature cap\n' > "$P/billing/.specs/features/b/requirements.md"
+printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on REQ-ORD-1\n' > "$S/features/cross-a/requirements.md"
+printf '# D\n\nREQ-PLT-1 uses [REQ-ORD-1] and [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
+printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+out=$(lintp "$P/platform") || fail "27c(a): member ids must resolve: $out"
+printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2] [REQ-NOPE-9]\n' > "$S/features/cross-a/tasks.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'referenced but never defined: REQ-NOPE-9' || fail "27c(b): undefined id rc=$rc: $out"
+printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+mv "$P/billing" "$TMP/billing.gone27c"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q 'WARN.*REQ-BIL-2.*not checked: billing$' && ! echo "$out" | grep -q 'WARN.*REQ-ORD-1' || fail "27c(c): unchecked member rc=$rc: $out"
+mv "$TMP/billing.gone27c" "$P/billing"
+printf '## Cap\n[REQ-ORD-1] dup\n' > "$P/billing/.specs/domains/d/requirements.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'REQ-ORD-1 is ambiguous: defined in billing, orders' || fail "27c(d): ambiguous rc=$rc: $out"
+printf '## Cap\n[REQ-BIL-1] billing cap\n' > "$P/billing/.specs/domains/d/requirements.md"
+printf 'Uses REQ-ORD-1 and REQ-BIL-2.\n' > "$S/system/architecture.md"
+out=$(lintp "$P/platform") || fail "27c(e): arch cite: $out"; ! echo "$out" | grep -q 'cited but defined in no' || fail "27c(e): arch WARN: $out"
+printf '# D\n\nREQ-PLT-1 uses [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
+printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on [REQ-ORD-1]\n' > "$S/features/cross-a/requirements.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'design.md does not trace REQ-ORD-1' || fail "27c(f): bracket defines rc=$rc: $out"
 fi; sect_end
 echo "selftest: OK"

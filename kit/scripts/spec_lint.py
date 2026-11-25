@@ -22,6 +22,9 @@ Platform layer: spec-kit.json "layer" is "platform", "member" or null (default n
       Repo and a Spec path column; a row whose repo is not a folder name, whose spec path is absolute or has a '..' part,
       or a repo listed twice, FAILs with file:line. Member lookup (members()) is <root>/<repo>/<spec path>, --members-root
       before members_root. A root without "layer": platform lints as before.
+      On a platform root a feature's cited REQ id also resolves from the checked-out members' domains/*/ and features/*/
+      requirements.md; an id the platform and a member, or two members, define FAILs as ambiguous; an id defined nowhere is a
+      WARN naming the members not checked out, a FAIL when all are checked out. Brackets in a platform requirements.md still define.
 
 History: a feature whose Status is Done or Dropped reports its structural FAILs below as WARN `history: <message>` (exit code unaffected);
       broken links and citations still FAIL everywhere.
@@ -202,7 +205,7 @@ def task_blocks(text):
     return blocks
 
 
-def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
+def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_ids=None, unchecked=()):
     fails, warns = [], []
     req = re.compile(config["req_id_pattern"])
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
@@ -226,8 +229,15 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset()):
             if untraced:
                 fails.append(name + ".md does not trace " + ", ".join(untraced))
     referenced = set().union(*(req.findall(text) for text in docs.values()))
-    dangling = sorted(referenced - defined - domain_reqs)
-    if dangling:
+    member_ids = member_ids or {}
+    for r in sorted(referenced - defined):  # platform root: ids of checked-out members (v080 decisions 5-7)
+        repos = sorted(member_ids.get(r, []) + (["platform"] if r in domain_reqs else []))
+        if len(repos) > 1:
+            fails.append(r + " is ambiguous: defined in " + ", ".join(repos))
+    dangling = sorted(referenced - defined - domain_reqs - member_ids.keys())
+    if dangling and unchecked:
+        warns.append(", ".join(dangling) + " referenced but defined in no checked-out repo; not checked: " + ", ".join(unchecked))
+    elif dangling:
         fails.append("referenced but never defined: " + ", ".join(dangling))
     if "tasks" in docs:
         bare = [first.strip()[:70] for first, block in task_blocks(docs["tasks"]) if not req.search(block)]
@@ -397,14 +407,14 @@ def landings(specs, config, req_defs, rows):
     return fails, warns
 
 
-def refs(specs, config, req_defs):
+def refs(specs, config, req_defs, known=()):
     """Checks across files: cited ids, decision landings and back-links, denylisted terms. Returns (fails, warns)."""
     dec = config["decisions"]
     dec_path = specs / dec["file"]
     # on only when the file holds at least one decision row: a decisions.md in another format lints as before
     rows = (decision_rows(unfenced(dec_path.read_text()).splitlines()) or None) if dec["enabled"] and dec_path.is_file() else None
     docs = spec_docs(specs)
-    id_fails, id_warns = cited_ids(docs, config, req_defs, rows)
+    id_fails, id_warns = cited_ids(docs, config, req_defs.keys() | set(known), rows)
     land_fails, land_warns = landings(specs, config, req_defs, rows)
     deny = {d.lower() for d in config["denylist_sha256"]}
     return id_fails + land_fails + (denylisted(docs, deny) if deny else []), id_warns + land_warns
@@ -527,7 +537,7 @@ def drift_rows(specs, max_age):
     return rows
 
 
-def lint_all(specs, names=(), members_root=None):  # members_root: read by --members (v080 task 3)
+def lint_all(specs, names=(), members_root=None):
     config = load_config(specs)
     features_dir = specs / "features"
     trace_path = specs / "system" / "traceability.md"
@@ -540,6 +550,17 @@ def lint_all(specs, names=(), members_root=None):  # members_root: read by --mem
         targets = []
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
     domain_reqs = frozenset(i for p in sorted(specs.glob("domains/*/requirements.md")) for i in defined_re.findall(p.read_text()))
+    member_ids, unchecked = {}, []
+    if config["layer"] == "platform":
+        for repo, d in members(specs, config, members_root):
+            if d is None:
+                unchecked.append(repo)
+                continue
+            for p in sorted(d.glob("domains/*/requirements.md")) + sorted(d.glob("features/*/requirements.md")):
+                for i in defined_re.findall(p.read_text()):
+                    member_ids.setdefault(i, [])
+                    if repo not in member_ids[i]:
+                        member_ids[i].append(repo)
     req_defs = {}
     for p in sorted(specs.glob("features/*/requirements.md")) + sorted(specs.glob("domains/*/requirements.md")):
         for no, line in enumerate(p.read_text().splitlines(), 1):
@@ -557,7 +578,7 @@ def lint_all(specs, names=(), members_root=None):  # members_root: read by --mem
             warnings.append("WARN merged-work check skipped: invalid tracker_pattern (" + str(err) + ")")
     for feature in targets:
         if feature.is_dir():
-            fails, warns = lint_feature(feature, config, traceability, domain_reqs)
+            fails, warns = lint_feature(feature, config, traceability, domain_reqs, member_ids, unchecked)
             req_path = feature / "requirements.md"
             status = feature_status(req_path.read_text()) if req_path.exists() else None
             if status and status["state"] in ("Done", "Dropped"):
@@ -587,7 +608,7 @@ def lint_all(specs, names=(), members_root=None):  # members_root: read by --mem
             fails, warns = ["no such feature directory"], []
         features.append({"name": feature.name, "ok": not fails, "fails": fails, "warns": warns})
     links = broken_links(specs)
-    ref_fails, ref_warns = refs(specs, config, req_defs)
+    ref_fails, ref_warns = refs(specs, config, req_defs, member_ids)
     warnings += ["WARN " + w for w in ref_warns]
     if config["layer"] == "platform":
         ref_fails += registry(specs)[1]
