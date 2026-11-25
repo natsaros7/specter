@@ -9,7 +9,7 @@ Deploy impact: none (installer and selftest only; projects see the change on the
   task 2; task 4 needs both; task 5 needs 2 and 4; task 6 after 5; task 7 last. Batches of at most 3
   (`kit/playbooks/parallel.md`).
 
-- [ ] 1 DECISION: Nikos approves or amends decisions 1 to 8 in design.md (manifest then tag; back up, never refuse;
+- [x] 1 DECISION: Nikos approves or amends decisions 1 to 8 in design.md (manifest then tag; back up, never refuse;
   `.specs/kit.bak-<old>/`; `kit/docs/upgrading.md`; keys listed, never written; no profile seed on upgrade; no
   migration code; synthesized fixtures plus a hand run). Amendments go in as dated rows; nothing below starts before
   this is ticked — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03] [REQ-V075-04]

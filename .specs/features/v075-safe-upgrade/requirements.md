@@ -1,6 +1,6 @@
 # v075 Safe incremental kit upgrades — Requirements
 
-Status: Proposed — awaiting approval
+Status: In progress (approved 2026-11-25, decisions 1 to 8 as recommended)
 Tracker: none yet (one issue per task once task 1 is ticked). Branch `feat/v075-safe-upgrade`. Size S to M.
 
 ## Why
