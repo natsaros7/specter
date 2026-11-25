@@ -32,7 +32,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 13 Refuse a symref to a `.../HEAD` ref; full ids at the repo's hash length only (final review D1, D2) (#15) — [REQ-V061-04]
 - [x] 14 A refused `origin/HEAD` fallback says why; v060's evidence amendment states the symref rule (D3, D4) (#16) — [REQ-V061-04]
 - [x] 15 Refuse a ref with a case-folded twin or an unlisted symref target (a pushed `MAIN` shadows `origin/main` on APFS) (#17) — [REQ-V061-04]
-- [ ] 16 Gate G1-G4, deep review, CHANGELOG, release, after 17, 18, 20 to 30 (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04] [REQ-V061-05] [REQ-V061-06] [REQ-V061-07] [REQ-V061-08] [REQ-V061-09]
+- [ ] 16 Gate G1-G4, deep review, CHANGELOG, release, after 17, 18, 20 to 31 (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04] [REQ-V061-05] [REQ-V061-06] [REQ-V061-07] [REQ-V061-08] [REQ-V061-09]
 - [x] 17 Specter's own `.specs/steering/autonomy.md`: trust-layer files on a Human `required` tier (#24) — [REQ-V061-05]
 - [x] 18 G1-G4 locally before every push (`tests/gates.sh`, a pre-push hook); CI only with Nikos's OK (#25) — [REQ-V061-05]
 - [ ] 19 The 0.10.0 PR carries Gates, Review and Verification blocks; `ready.py` says ready (#26) — [REQ-V061-05]
@@ -47,3 +47,4 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 28 The test and size checks fail closed: deleted or chmod test files, wider test globs, gitlinks (deep review 2, 3, 10) (#37) — [REQ-V061-09]
 - [x] 29 Grafts off; the NTFS fold in `branch_ref` (deep review 6, 7) (#38) — [REQ-V061-01] [REQ-V061-04]
 - [x] 30 The gates and the hook cannot report green without running; the recipe fetches full history (deep review 8, 9) (#39) — [REQ-V061-05] [REQ-V061-03]
+- [ ] 31 Second-review fixes: narrower test globs, hook checks the pushed sha and untracked files, selftest unsets git env, blank `SELFTEST_ONLY`, recipe fetch (#41) — [REQ-V061-05] [REQ-V061-09]

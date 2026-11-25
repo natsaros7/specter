@@ -568,6 +568,27 @@ The report is `docs/reviews/2026-11-25-v061-deep-review.md`. Finding 1 is handle
   - G1 to G4;
   - a scratch run that shows each refusal, from a clone under `$HOME`.
 
+### Task 31: second-review fixes (#41)
+
+The second review (2026-11-25) found no blocker, but these need fixing before the release:
+
+- **A1, `TESTS` too wide:** drop the bare `*spec*` and `*test*`. Use `tests/*`, `*/tests/*`, `test/*`, `*/test/*`,
+  `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`,
+  `*/test_*`, `conftest.py`, `*/conftest.py`. The rows to add:
+  - ticking a box in `.specs/features/f/tasks.md` keeps `none`;
+  - editing `docs/latest.md` keeps `none`;
+  - editing `pkg/tests/test_a.py` is still `spot`.
+- **A2, git variables leak into fixtures:** `selftest.sh` unsets `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+  `GIT_PREFIX` and `GIT_COMMON_DIR` next to its `GIT_CONFIG_*` exports.
+- **A3, the hook checks the wrong commits:** the hook reads its stdin and refuses (exit 1) when a pushed local sha that
+  is not all zeros differs from `HEAD`.
+- **A4, untracked files hidden by config:** the hook uses `git status --porcelain --untracked-files=normal`.
+- **A5, blank `SELFTEST_ONLY`:** a value that is only whitespace exits 2, as an unknown name does.
+- **A6, the recipe's fetch:** it runs `--unshallow` only when `git rev-parse --is-shallow-repository` prints `true`,
+  and it adds the platform setting "require branches to be up to date".
+- **A8:** remove the unused `import unicodedata` from `tiers.py`.
+- **A7, commit-graph parents:** moves to #40.
+
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
 After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a task touched `examples/acme-shop/` outside
