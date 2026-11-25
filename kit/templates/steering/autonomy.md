@@ -12,10 +12,10 @@ What agents may do here without a human, and on what evidence. Editing this file
 | Memory | [lessons](lessons.md) | start |
 
 ## Tiers
-<!-- Put the scripts your Gates commands run (test runners, lint scripts, CI config) in the last tier: ready.py compares Gates commands, not the scripts they call. -->
+<!-- Keep lockfiles out of a `none` row: two changed lines can point a dependency at another tarball. Put the scripts your Gates commands run (test runners, lint scripts, CI config) in the last tier: ready.py compares Gates commands, not the scripts they call. -->
 | Tier | Paths | Reviewer | Human |
 |---|---|---|---|
-| routine | `<tests glob>` `<docs glob>` `<lockfile>` | standard | none |
+| routine | `<tests glob>` `<docs glob>` | standard | none |
 | domain | `<source glob>` | standard | spot |
 | critical | `<security glob>` `<contracts glob>` `<migrations glob>` `<CI glob>` `CODEOWNERS` | deep | required |
 
@@ -47,4 +47,4 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | domain | <days> | <n> | <%> | <%> | <%> |
 
 ## Tests
-<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `tests/*`, `test/*`, `*/test/*`, `*_test.*`, `*.test.*`, `test_*`. -->
+<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `*test*`, `*spec*`, `conftest.py`. A deleted or re-moded test file and an added or changed `conftest.py` or `__init__.py` are `spot` too. An added line can still switch a test off (a skip marker): the reviewer's `complexity:` is the backstop. -->

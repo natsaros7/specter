@@ -74,7 +74,7 @@ are skipped when you have a confident default, which you then record as `assumed
 | Q7 | ask-if-unclear | Git hook when code changes without a spec update: warn or block? Code paths = `<detected globs>`? | `spec_sync`, `code_globs` |
 | Q8 | ask-if-unclear | Anything already known to be wrong or stale (docs vs reality)? | Seeds the Drift Register |
 | Q9 | must-ask | How does CI/CD consume this repository: a pinned artifact or image, or the default branch directly? Which jobs? | Whether a merge reaches a job before any release; the `Deploy impact` rule in spec-rules §7. Don't assume pinned: a job that clones the default branch runs every merge on its next run |
-| Q10 | ask-if-unclear | Set up an autonomy profile now? Knowledge: `<found ADR folder, arch tests>`; tiers: routine `<tests, docs, lockfiles>`, domain `<source>`, critical `<security, interfaces, migrations, CI>`; chores: spec health. [not now] | Whether `steering/autonomy.md` (with its Tiers: confirm the suggested paths) and `steering/lessons.md` exist. "Not now" writes neither and everything stays with the human |
+| Q10 | ask-if-unclear | Set up an autonomy profile now? Knowledge: `<found ADR folder, arch tests>`; tiers: routine `<tests, docs>`, domain `<source>`, critical `<security, interfaces, migrations, CI>`; chores: spec health. [not now] | Whether `steering/autonomy.md` (with its Tiers: confirm the suggested paths) and `steering/lessons.md` exist. "Not now" writes neither and everything stays with the human |
 | Q11 | ask-if-unclear | Does this machine inspect every process launch (endpoint security: Defender, BeyondTrust, a DLP agent)? | Step 6 wraps heavy Gates rows in a container (below) |
 | Q12 | ask-if-unclear | (Public repository without a `SECURITY.md` only) Offer a `SECURITY.md` from the template? | Whether `.specs/kit/templates/SECURITY.md` is filled and copied to the repo root, outside `.specs/` and only on a yes |
 
@@ -112,7 +112,7 @@ From `.specs/kit/templates/`:
    only `$HOME`, so a clone elsewhere mounts empty: have the wrapped command fail first when `/src` has no project file.
 7. `steering/code-standards.md`: link to the project's existing standards and CI gate. Don't restate them.
 8. `steering/autonomy.md` and `steering/lessons.md`: **only if Q10 was yes, and never in adopt mode.** Copy both
-   templates. In `autonomy.md` keep Knowledge, Tiers, Chores, Guardrails and Evidence. In Tiers put the real globs found in Phase 1 (tests, docs, lockfile; source; security, interfaces, migrations, CI, `CODEOWNERS`, and the scripts the Gates commands run in the last tier), as the user confirmed them in Q10; every tier keeps at least one glob, and run `python3 .specs/kit/scripts/tiers.py --check` after. Fill every placeholder from what Phase 1 found
+   templates. In `autonomy.md` keep Knowledge, Tiers, Chores, Guardrails and Evidence. In Tiers put the real globs found in Phase 1 (tests, docs; source; security, interfaces, migrations, CI, `CODEOWNERS`, and the scripts the Gates commands run in the last tier), as the user confirmed them in Q10; every tier keeps at least one glob, and run `python3 .specs/kit/scripts/tiers.py --check` after. Fill every placeholder from what Phase 1 found
    (ADR folder, architecture tests, the chore schedule and scheduler the user named), or delete the row. Never leave a
    `<…>` in Knowledge, Tiers or Chores. Guardrails and Evidence are the exception: fill a Guardrails row only with
    what the user names as enforcing it and today's date (never guess a platform setting), and keep the Evidence

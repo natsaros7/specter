@@ -38,8 +38,8 @@ A --range label keeps `none` only when its base is the merged_ref tip that --evi
 behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps its base.
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
 `Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
-(globs of an optional `## Tests` section, default tests/* test/* */test/* *_test.* *.test.* test_*): `size <f> files / <l> lines > cap <F>/<L>`,
-`tests changed, not only added: <path>`; a binary file counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
+(globs of an optional `## Tests` section, default *test* *spec* conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
+`tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file or a gitlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the Tiers table at the merged_ref tip (never the working tree; it prints that commit), `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -98,7 +98,8 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            "docs/CODEOWNERS"]
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
 SIZE = ["Max files", "Max lines"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3 and 50)
-TESTS = ["tests/*", "test/*", "*/test/*", "*_test.*", "*.test.*", "test_*"]  # default `## Tests` globs
+# Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
+TESTS = ["*test*", "*spec*", "conftest.py"]
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
 
@@ -433,8 +434,8 @@ def earned(root, rel, specs, profile, tier, base, head, staged=False):
 
 def small(root, rel, tier, base, head, staged):
     """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
-    One `git diff --numstat` (the index against base when staged). Cap: Max files / Max lines of the tier's Evidence row at
-    base (3 and 50 when absent or -); tests: the `## Tests` globs at base (TESTS). A binary file counts as over the cap.
+    One `git diff --numstat` and one `--raw` (the index against base when staged). Cap: Max files / Max lines of the tier's Evidence row at
+    base (3 and 50 when absent or -); tests: the `## Tests` globs at base (TESTS). A binary file or a gitlink counts as over the cap.
     A profile that cannot be read says so: none is never kept on a guess."""
     try:
         text = profile_at(root, base, rel) or ""
@@ -445,15 +446,20 @@ def small(root, rel, tier, base, head, staged):
     mf, ml = ((row[2][3:5] if row else []) + [None, None])[:2]
     mf, ml = int(mf if mf is not None else 3), int(ml if ml is not None else 50)
     globs = [g for _, ln in section(text, "Tests") or [] for g in re.findall(r"`([^`]+)`", ln)] or TESTS
-    out = gitz(git(root, "rev-parse", "--show-toplevel"), "diff", "--numstat", "-z", "--no-renames", *(["--cached", base] if staged else [base, head]))
-    if out is None:
+    top, spec = git(root, "rev-parse", "--show-toplevel"), (["--cached", base] if staged else [base, head])
+    out, raw = (gitz(top, "diff", f, "-z", "--no-renames", *spec) for f in ("--numstat", "--raw"))
+    if out is None or raw is None:
         return ["size: cannot read the diff"]
     ent = [e.split("\t", 2) for e in out]
-    lines, binary = sum(int(a) + int(d) for a, d, _ in ent if a != "-"), any(a == "-" for a, _, _ in ent)
+    meta = [(m.split(), p) for m, p in zip(raw[::2], raw[1::2])]  # ":<old mode> <new mode> <old sha> <new sha> <status>", path
+    lines = sum(int(a) + int(d) for a, d, _ in ent if a != "-")
+    binary = any(a == "-" for a, _, _ in ent) or any("160000" in (m[0][1:], m[1]) for m, _ in meta)
     why = []
     if len(ent) > mf or lines > ml or binary:
         why.append("size %d files / %d%s lines > cap %d/%d" % (len(ent), lines, "+" if binary else "", mf, ml))
-    changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None)
+    # numstat misses a deleted empty file, a mode change and an added skip line; `__init__.py` and conftest.py change what runs
+    changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None) or next((p for m, p in meta if (
+        hit(p, globs) and (m[4][0] in "DT" or m[4][0] == "M" and m[0][1:] != m[1])) or key(posixpath.basename(p)) in ("conftest.py", "__init__.py")), None)
     return why + (["tests changed, not only added: " + changed] if changed else [])
 
 

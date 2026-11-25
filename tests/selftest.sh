@@ -710,8 +710,9 @@ n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
 # v061 task 23: Human none only for a small change that adds tests only and that the reviewer calls trivial
 E="$TMP/t13e20"; mkdir -p "$E/docs" "$E/tests"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null; printf '{"merged_ref": "trunk"}' > "$E/.specs/spec-kit.json"
-F0=$F; F=$E; n=7; fset '| routine | `docs/*`, `tests/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |' 2; F=$F0
-printf 'a\nb\n' > "$E/tests/x_test.py"; gitq -C "$E" add -A; gitq -C "$E" commit -m t0; gitq -C "$E" branch -f trunk
+F0=$F; F=$E; n=7; fset '| routine | `docs/*`, `tests/*`, `pkg/*`, `spec/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |' 2; F=$F0
+printf 'a\nb\n' > "$E/tests/x_test.py"; : > "$E/tests/empty_test.py"; mkdir -p "$E/pkg/tests" "$E/spec"; printf 'assert 1\n' > "$E/pkg/tests/test_a.py"; : > "$E/pkg/__init__.py"; echo a > "$E/spec/a"
+gitq -C "$E" add -A; gitq -C "$E" commit -m t0; gitq -C "$E" branch -f trunk
 el() { python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range trunk...HEAD "$@" 2>&1; }
 ec() { gitq -C "$E" reset -q --hard trunk; "$@"; gitq -C "$E" add -A; gitq -C "$E" commit -qm c; }
 eq() { ex=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n%s' "$(git -C "$E" rev-parse --short HEAD)" "$(git -C "$E" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range trunk...HEAD --auto-merge "$@" 2>&1; }
@@ -733,6 +734,24 @@ rc=0; out=$(eq '') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "reviewer: c
 rc=0; out=$(eq '- complexity: trivial
 - complexity: non-trivial
 ') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*complexity.*repeated" || fail "13c2 t23: a repeated complexity line was ready (exit $rc): $out"
+# a test that was removed, re-moded or kept out of the defaults' layouts, a suite switched on or off by a conftest.py or an __init__.py, a gitlink, a binary file, the `## Tests` section and the staged size check all keep none from a human
+t23() { w=$1; shift; ec "$@"; out=$(el); echo "$out" | grep -q "none → spot ($w" || fail "13c2 t23: $w kept none: $out"; }
+t23 "tests changed, not only added: tests/empty_test.py" gitq -C "$E" rm tests/empty_test.py
+t23 "tests changed, not only added: tests/x_test.py" chmod +x "$E/tests/x_test.py"
+t23 "tests changed, not only added: pkg/tests/test_a.py" sh -c 'echo pass > "$0/pkg/tests/test_a.py"' "$E"
+t23 "tests changed, not only added: tests/conftest.py" sh -c 'echo a > "$0/tests/conftest.py"' "$E"
+t23 "tests changed, not only added: pkg/__init__.py" gitq -C "$E" rm pkg/__init__.py
+t23 "size 1 files / 0+ lines" sh -c 'printf "\0\1" > "$0/docs/b.bin"' "$E"
+t23 "size 1 files / 1+ lines" sh -c 'mkdir "$0/docs/vendor"; git -C "$0/docs/vendor" -c user.name=t -c user.email=t@t init -q; git -C "$0/docs/vendor" -c user.name=t -c user.email=t@t commit -q --allow-empty -m s' "$E"
+rm -rf "$E/docs/vendor"; ec sh -c 'echo a > "$0/docs/spec_notes.md"' "$E"; out=$(el)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t23: an added file named like a test lost none: $out"
+gitq -C "$E" reset -q --hard trunk; printf '\n## Tests\n`spec/*`\n' >> "$E/.specs/steering/autonomy.md"; gitq -C "$E" add -A; gitq -C "$E" commit -qm tests; gitq -C "$E" branch -f trunk
+t23 "tests changed, not only added: spec/a" sh -c 'echo a2 > "$0/spec/a"' "$E"
+ec sh -c 'echo b > "$0/tests/x_test.py"' "$E"; out=$(el)
+echo "$out" | grep -q "none → spot" && fail "13c2 t23: a test outside the custom ## Tests globs kept the default: $out"
+gitq -C "$E" reset -q --hard trunk; four; gitq -C "$E" add -A
+out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" 2>&1); echo "$out" | grep -q "none → spot (size 4 files" || fail "13c2 t23: staged four files kept none: $out"
+gitq -C "$E" reset -q --hard trunk
 # the caps are the profile's: Max lines 1 turns a 2-line change into spot, a bad cap is exit 2 with file:line in --evidence
 sed -i.bak 's/^| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |$/& Max files | Max lines |/; s/^|---|---|---|---|---|---|$/&---|---|/; s/^| routine | 30 | 2 | - | - | - |$/& - | 1 |/' "$E/.specs/steering/autonomy.md"; rm -f "$E/.specs/steering/autonomy.md.bak"
 gitq -C "$E" add -A; gitq -C "$E" commit -qm caps; gitq -C "$E" branch -f trunk; ec sh -c 'printf "1\n2\n" > "$0/docs/g"' "$E"; out=$(el)
@@ -1058,7 +1077,7 @@ want "13e15 the window adds the named commit, not the commits between" "routine:
 GR='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n'
 ER='| routine | 90 | 3 | - | - | 10 |\n| domain | 90 | 1 | - | - | - |\n'"$GR"
 nr t13e18 -b main; mr docs -m h1; mr docs -m h2; mr docs -m h3
-want "13e18 a none tier holds on a missing Human-Findings" "routine: eligible"
+want "13e18 a none tier does not hold on a missing Human-Findings" "routine: eligible"
 mr docs -m h4 -m "Human-Findings: 2"
 want "13e18 a caught Human-Findings on a none tier still counts" "routine: breach (human-caught 100.0% > 10%)"
 nr t13e19 -b main; mr docs -m h1 -m "Human-Findings: 0"; mr docs -m h2 -m "Human-Findings: 0"; mr docs -m h3 -m "Human-Findings: 0"

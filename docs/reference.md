@@ -141,7 +141,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   catch it (`sync.md`). After a merge, a mistake becomes one lessons line plus the check that catches it, proposed by
   the agent and approved by a human (`review-loop.md`). Several agents at once follow `kit/playbooks/parallel.md`.
 - **Tiers.** A `| Tier | Paths | Reviewer | Human |` table, rows from most to least autonomous (setup suggests routine: tests,
-  docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
+  docs; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
   glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
   Nothing in the kit merges: every PR needs an approval; for Human `none` a non-required job runs
@@ -193,10 +193,11 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   the implementer's model family makes `ready.py` report `spot` too, and so does a `complexity:` line that is missing or not
   `trivial` (`reviewer: complexity <value or missing>`; a repeated one is not ready). A change in a `none` tier is also
   `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over)
-  or deletes or edits a line of a test file (`tests changed, not only added: <path>`). The cap is two optional trailing
+  or deletes or edits a line of a test file, deletes or re-modes one, or adds or changes a `conftest.py` or `__init__.py`
+  (`tests changed, not only added: <path>`; a gitlink counts as over the cap). The cap is two optional trailing
   Evidence columns, `Max files` and `Max lines` (defaults 3 and 50; `-` is the default; any other non-number is exit 2 with
-  `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `test/*`, `*/test/*`,
-  `*_test.*`, `*.test.*`, `test_*`), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
+  `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `*test*`, `*spec*`, `conftest.py`,
+  matched case- and Unicode-folded), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
   `spot`. A `--range` label (and `ready.py`) also says `spot` when its base, the merge base, is not the `merged_ref`
   tip that `--evidence` reads: `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps
