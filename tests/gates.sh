@@ -37,7 +37,7 @@ gate() { # id command
   echo "$1 rc=$rc"
   [ "$first" != 0 ] || first=$rc
 }
-gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n tests/live/github/sandbox.sh && sh -n .githooks/pre-push'
+gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n examples/acme-shop/scripts/mvnw-docker.sh && sh -n tests/live/github/sandbox.sh && sh -n .githooks/pre-push'
 gate G2 'python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && o=$(python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites) && echo "$o" && case $o in *" of 0 citation"*) exit 1;; esac'
 gate G3 'sh tests/selftest.sh'
 gate G4 'python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py && v=$(cat VERSION) && { [ -z "$BASE_VERSION" ] || [ "$BASE_VERSION" = "$v" ] || { grep -q "Release $v shipped" docs/overview/deck/specter-overview.html && grep -q "today ($v)" docs/overview/roadmap.svg || { echo "overview: deck must say \"Release $v shipped\" and roadmap \"today ($v)\"" >&2; exit 1; }; }; }'
