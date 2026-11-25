@@ -891,6 +891,9 @@ xmk xci '{"merged_ref": "origin/main"}' 3 $AP 0; gitq -C "$R" checkout -q -b pr;
 gitq -C "$C" update-ref refs/remotes/origin/MAIN HEAD
 out=$(cl --range "$MB...HEAD"); echo "$out" | grep -qF "evidence: merged_ref origin/main differs only by case from refs/remotes/origin/MAIN" || fail "13e E1: a case twin of origin/main was accepted: $out"
 rc=0; out=$(crd "$MB...HEAD" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF "evidence: merged_ref origin/main differs only by case from refs/remotes/origin/MAIN" || fail "13e E1: a case twin gave auto-merge (exit $rc): $out"
+# E1b: the NTFS fold: a dotless i upcases to I, so ref maın is main's twin
+G="$TMP/t13e-ntfs"; mkdir -p "$G"; gitq -C "$G" init; gitq -C "$G" commit --allow-empty -m x; gitq -C "$G" branch "$(printf 'ma\304\261n')"
+python3 -B -I -c 'import sys; sys.path.insert(0, sys.argv[1]); import spec_lint; r, why = spec_lint.branch_ref(sys.argv[2], "main"); assert r is None and "differs only by case" in why, (r, why)' "$KIT/kit/scripts" "$G" || fail "13e E1b: maın was not main's twin"
 # E2: the CI shape, only on a disk that folds case: only MAIN is listed, origin/HEAD names main, which rev-parse opens as MAIN
 touch "$TMP/ci-a"
 if [ -e "$TMP/CI-A" ]; then
@@ -1060,6 +1063,10 @@ ER='| routine | 90 | 1 | 10 | - | -  |\n| domain | 90 | 1 | - | - | - |\n'
 nr "t13e14"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; gitq -C "$R" revert --no-edit "$A1"; RV=$(git -C "$R" rev-parse HEAD); mr docs -m a3
 CL=$(git -C "$R" -c user.name=t -c user.email=t@t commit-tree "$RV^{tree}" -p "$RV^" -m clean); gitq -C "$R" replace "$RV" "$CL"
 want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
+# .git/info/grafts can cut the revert out of the chain the same way: a3 is re-parented onto a2
+nr "t13e23"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; A2=$(git -C "$R" rev-parse HEAD); gitq -C "$R" revert --no-edit "$A1"; mr docs -m a3
+printf '%s %s\n' "$(git -C "$R" rev-parse HEAD)" "$A2" > "$R/.git/info/grafts"
+want "13e23 a grafts file hid a revert" "routine: breach (reverted 25.0% > 10%)"
 
 # an idle gap before backdated agent commits: the window cut sits above the agent commit, and its revert (dated now) must pull it in
 ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'

@@ -77,8 +77,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 import spec_lint  # noqa: E402
 
-# refs/replace can swap any commit body or the profile blob, turning a breach into eligible; children (git) inherit this
+# refs/replace and .git/info/grafts can swap any commit body, rewrite the chain or the profile blob, turning a breach into
+# eligible; children (git) inherit these. The graft path never exists (a file under /dev/null).
 os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
+os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
 
 HEAD = ["Tier", "Paths", "Reviewer", "Human"]
 GHEAD = ["Guardrail", "Enforced by", "Verified"]
@@ -253,12 +255,7 @@ def guarded_globs(text, rel):
     return out
 
 
-def key(s):
-    """The one key every path and glob is compared under: NFKC, then a full case fold that also takes what APFS and
-    NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I).
-    shortcut: the key folds more than APFS (NFKC) or a case-sensitive disk, so a file that matches no glob as spelled
-    (Docs/x on Linux) can take a lower row's tier; tighten when a project runs files by exact case-variant names."""
-    return unicodedata.normalize("NFKC", s).upper().casefold().replace("\u0307", "")
+key = spec_lint.fold  # one fold for paths, globs and ref names (see spec_lint.fold)
 
 
 def hit(path, globs):

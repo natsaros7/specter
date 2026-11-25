@@ -44,5 +44,5 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 26 `kit/scripts/readme_check.py`, a README check any project can run (#36) — [REQ-V061-10]
 - [x] 27 Human `none` only when the label's base is the `merged_ref` tip (deep review 1, private advisory) — [REQ-V061-04]
 - [x] 28 The test and size checks fail closed: deleted or chmod test files, wider test globs, gitlinks (deep review 2, 3, 10) (#37) — [REQ-V061-09]
-- [ ] 29 Grafts off; the NTFS fold in `branch_ref` (deep review 6, 7) (#38) — [REQ-V061-01] [REQ-V061-04]
+- [x] 29 Grafts off; the NTFS fold in `branch_ref` (deep review 6, 7) (#38) — [REQ-V061-01] [REQ-V061-04]
 - [x] 30 The gates and the hook cannot report green without running; the recipe fetches full history (deep review 8, 9) (#39) — [REQ-V061-05] [REQ-V061-03]

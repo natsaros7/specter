@@ -42,6 +42,7 @@ import datetime
 import fnmatch
 import hashlib
 import json
+import os
 import re
 import subprocess
 import sys
@@ -51,6 +52,11 @@ from pathlib import Path
 sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
+
+# Run standalone, this file's git calls (branch_ref, merged_commits) must not follow refs/replace or .git/info/grafts either
+# (tiers.py sets the same two before its own calls); the graft path never exists (a file under /dev/null).
+os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
+os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
 
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
@@ -353,6 +359,15 @@ def repos(root):
                    if not worktree(p) and not any(part.startswith(".") for part in p.parent.relative_to(root).parts)})
 
 
+def fold(s):
+    """The one key paths, globs and ref names are compared under: NFKC, then a full case fold that also takes what APFS
+    and NTFS fold (APFS opens AGENT\u017f.md as AGENTS.md, .\ufb06 as .st, NFD as NFC; NTFS upcases \u0131 to I, so
+    ref ma\u0131n is main's twin).
+    shortcut: the key folds more than APFS (NFKC) or a case-sensitive disk, so a file that matches no glob as spelled
+    (Docs/x on Linux) can take a lower row's tier; tighten when a project runs files by exact case-variant names."""
+    return unicodedata.normalize("NFKC", s).upper().casefold().replace("\u0307", "")
+
+
 def branch_ref(path, name):
     """(full ref name, None) when `name` names exactly one branch or remote-tracking ref (a symref only to one), else
     (None, why), why None when no ref has that name. Git's own lookup takes refs/tags/<name> before refs/heads/ and
@@ -363,7 +378,6 @@ def branch_ref(path, name):
     found = dict(line.split("\0", 1) for line in run.stdout.splitlines() if "\0" in line) if run.returncode == 0 else {}
     hits = [c for c in cand if c in found]  # every ref is listed (no patterns): keep exact names only
     # shortcut: one listed spelling holding another branch's sha is invisible locally; the recipe's explicit refspec closes it, probe the server with ls-remote if a job must fetch the wildcard
-    fold = lambda n: unicodedata.normalize("NFC", n).casefold()
     for r in hits[:1] + ([found[hits[0]]] if hits and found[hits[0]] else []):  # on a case-folding disk rev-parse opens the twin's file
         twin = next((n for n in found if n != r and fold(n) == fold(r)), None)
         who = name if r == hits[0] else "the target " + r
