@@ -765,6 +765,64 @@ gitq -C "$E" add -A; gitq -C "$E" commit -qm caps; gitq -C "$E" branch -f trunk;
 echo "$out" | grep -q "none → spot (size 1 files / 2 lines > cap 3/1)" || fail "13c2 t23: Max lines column was not read: $out"
 sed -i.bak 's/ - | 1 |$/ - | many |/' "$E/.specs/steering/autonomy.md"; rm -f "$E/.specs/steering/autonomy.md.bak"; gitq -C "$E" add -A; gitq -C "$E" commit -qm badcap; gitq -C "$E" branch -f trunk
 rc=0; out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max lines must be" || fail "13c2 t23: a bad Max lines was not exit 2 with file:line (exit $rc): $out"
+# v070 task 13: Human none counts changed bytes and refuses Git LFS pointers (fixture t70b)
+B="$TMP/t70b"; mkdir -p "$B/docs"; gitq -C "$B" init; "$KIT/install.sh" "$B" >/dev/null; printf '{"merged_ref": "trunk"}' > "$B/.specs/spec-kit.json"
+OID=$(printf '%064d' 7); OID2=$(printf '%064d' 8)
+bset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |%s\n|---|---|---|---|---|---|%s\n| routine | 30 | 2 | - | - | - |%s\n' "$1" "$2" "$3" > "$B/.specs/steering/autonomy.md"
+  printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$B/.specs/steering/spec-rules.md"; printf 'version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n' "$OID" > "$B/docs/old.bin"; printf 'a\nb\nc\n' > "$B/docs/three.md"
+  gitq -C "$B" add -A; gitq -C "$B" commit -qm p; for i in 1 2; do echo "$i$3" > "$B/docs/m$i"; gitq -C "$B" add -A; gitq -C "$B" commit -qm m$i; done; gitq -C "$B" branch -f trunk; }
+bl() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --range trunk...HEAD "$@" 2>&1; }
+bc() { gitq -C "$B" reset -q --hard trunk; "$@"; gitq -C "$B" add -A; gitq -C "$B" commit -qm c; }
+bset "" "" ""
+bc sh -c 'head -c 200000 /dev/zero | tr "\0" a > "$0/docs/big.md"; echo >> "$0/docs/big.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes " || fail "13c2 t70b: a one-line 200 KB file kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n" "$1" > "$0/docs/x.bin"' "$B" "$OID"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/x.bin)" || fail "13c2 t70b: an added LFS pointer kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n" "$1" > "$0/docs/old.bin"' "$B" "$OID2"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/old.bin)" || fail "13c2 t70b: an oid swap in a pointer kept none: $out"
+bc sh -c 'printf "++ %04500d\n" 1 > "$0/docs/h.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes " || fail "13c2 t70b: an added '++ x' line was read as a header: $out"
+bc sh -c 'printf "a1\nb2\nc3\n" > "$0/docs/three.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t70b: a three-line docs edit lost none: $out"
+bset " Max files | Max lines | Max bytes |" "---|---|---|" " - | - | 10 |"; bc sh -c 'printf "a1\nb2\nc3\n" > "$0/docs/three.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes [0-9]* > cap 10)" || fail "13c2 t70b: Max bytes 10 was not read: $out"
+bset " Max files | Max lines | Max bytes |" "---|---|---|" " - | - | x |"
+rc=0; out=$(python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max bytes must be" || fail "13c2 t70b: a bad Max bytes was not exit 2 with file:line (exit $rc): $out"
+bc sh -c 'echo z > "$0/docs/z.md"' "$B"; out=$(bl); echo "$out" | grep -q "none → spot (.*Max bytes must be" || fail "13c2 t70b: a bad Max bytes did not label spot: $out"
+# v070 task 23b: CRLF and alias LFS pointers, a symlink, an attribute file and an inherited GIT_CONFIG_PARAMETERS (fixture t70b)
+bset "" "" ""
+bc sh -c 'printf "version https://hawser.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/x.bin"' "$B" "$OID"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/x.bin)" || fail "13c2 t70c: an added CRLF pointer kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/old.bin"' "$B" "$OID"; gitq -C "$B" branch -f trunk
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\r\noid sha256:%s\r\nsize 5\r\n" "$1" > "$0/docs/old.bin"' "$B" "$OID2"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/old.bin)" || fail "13c2 t70c: an oid swap in a CRLF pointer kept none: $out"
+bc ln -s three.md "$B/docs/l"; out=$(bl)
+echo "$out" | grep -q "none → spot (size 1 files / 1+ lines" || fail "13c2 t70c: a symlink kept none: $out"
+bc sh -c 'echo "*.psd filter=lfs diff=lfs merge=lfs -text" > "$0/docs/.gitattributes"' "$B"; out=$(bl)
+echo "$out" | grep -q "tier: critical (reviewer: deep, human: required)" || fail "13c2 t70c: docs/.gitattributes did not take the last tier: $out"
+for m in spec_lint tiers; do
+  out=$(cd "$B" && GIT_CONFIG_PARAMETERS="'core.commitgraph'='true'" python3 -c 'import sys, os, subprocess; sys.path.insert(0, ".specs/kit/scripts"); __import__(sys.argv[1]); print(subprocess.check_output(["git", "config", "core.commitGraph"], text=True).strip(), os.environ["GIT_CONFIG_PARAMETERS"].count("false"))' "$m")
+  [ "$out" = "false 1" ] || fail "13c2 t70c: an inherited GIT_CONFIG_PARAMETERS turned the commit-graph on in $m (want 'false 1'): $out"
+done
+# v070 task 24a: the base's submodule ignore settings hide no gitlink; a filtered path is over the cap (fixture t70b)
+S1=$(printf '%040d' 1); S2=$(printf '%040d' 2); gitq -C "$B" reset -q --hard trunk; gitq -C "$B" config diff.ignoreSubmodules all
+printf '[submodule "a"]\n\tpath = src/security/mod\n\turl = ./a\n\tignore = all\n[submodule "b"]\n\tpath = docs/mod\n\turl = ./b\n\tignore = all\n' > "$B/.gitmodules"
+echo "docs/an.md filter=annex" > "$B/.gitattributes"; echo a > "$B/docs/an.md"; gitq -C "$B" add -A
+for p in src/security/mod docs/mod; do gitq -C "$B" update-index --add --cacheinfo "160000,$S1,$p"; done
+gitq -C "$B" -c core.autocrlf=false commit -qm sub; gitq -C "$B" branch -f trunk
+# bg <gitlink path or -> <docs/ file to edit or ->: one commit on trunk; the bump goes through the index, a work tree has no submodule
+bg() { gitq -C "$B" reset -q --hard trunk; [ "$1" = - ] || gitq -C "$B" update-index --cacheinfo "160000,$S2,$1"
+  [ "$2" = - ] || { echo b >> "$B/$2"; gitq -C "$B" add -- "$2"; }; gitq -C "$B" -c core.autocrlf=false commit -q --allow-empty -m g; }
+bq() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n- complexity: trivial\n' "$(git -C "$B" rev-parse --short HEAD)" "$(git -C "$B" merge-base trunk HEAD | cut -c1-7)" | python3 "$B/.specs/kit/scripts/ready.py" --specs "$B/.specs" --range trunk...HEAD --auto-merge 2>&1; }
+bg - docs/three.md; out=$(bl)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t70d: a docs edit next to the ignored gitlinks lost none: $out"
+bg src/security/mod docs/three.md; out=$(bl)
+echo "$out" | grep -q "tier: critical (reviewer: deep, human: required)" || fail "13c2 t70d: a gitlink bump under ignore = all in a critical path was not critical: $out"
+rc=0; out=$(bq) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human required" || fail "13c2 t70d: ready.py auto-merged a hidden gitlink bump (exit $rc): $out"
+bg docs/mod -; out=$(bl)
+echo "$out" | grep -q "none → spot (size 1 files / 2+ lines" || fail "13c2 t70d: a gitlink bump under ignore = all in a none path kept none: $out"
+bg - docs/an.md; out=$(bl)
+echo "$out" | grep -q "none → spot (filter annex on docs/an.md)" || fail "13c2 t70d: a one-line change to a filter=annex path kept none: $out"
 fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3
@@ -827,6 +885,15 @@ rc=0; out=$(xrd claude-opus-5-5 '- rounds: 1
 ' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False, d' || fail "13e B1: --json auto_merge false (exit $rc): $out"
 rc=0; out=$(xrd gpt-5-1 '- rounds: 3
 ' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "^auto-merge: no (verdict not ready)" || fail "13e B1: none but not ready was not refused (exit $rc): $out"
+# v070 task 14: the human writes Human-Findings at the merge, so a trailer in the PR text (read raw: a comment still lands in the squash body) or in a range commit bars auto-merge
+for hf in 'Human-Findings: 0' '<!--
+Human-Findings: 0
+-->' '  human-findings : 0'; do rc=0; out=$(xrd gpt-5-1 "- rounds: 1
+$hf
+" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "^auto-merge: no (.*Human-Findings" || fail "13e t14: PR text '$hf' gave auto-merge (exit $rc): $out"; done
+echo hf > "$R/docs/hf"; gitq -C "$R" add -A; gitq -C "$R" commit -m hf -m "Human-Findings: 0"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (.*Human-Findings" || fail "13e t14: a range commit with Human-Findings gave auto-merge (exit $rc): $out"
 xmk b1h "$TJ" 20 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
 rc=0; out=$(xrd gpt-5-1 '- rounds: 1
 ' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: hold" || fail "13e B1: spot (evidence hold) was not refused (exit $rc): $out"
@@ -989,7 +1056,7 @@ assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}${EV1}"; js=$(el --json)
 printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]; assert t["routine"]["merged"]==0 and t["domain"]["merged"]==6 and d["relabelled"]==5, d' || fail "13c evidence: a changed row kept its history (want routine 0, relabelled 5): $js"
-el | grep -q "^- relabelled: 5 commit(s) under a tier row renamed or changed in the window" || fail "13c evidence: no relabelled line: $(el)"
+el | grep -q "^- relabelled: 5 commit(s) whose tier, a stricter row or a guarded path changed in the window" || fail "13c evidence: no relabelled line: $(el)"
 # a rename with the same globs is a changed row too: the old commits count under no tier, docs included
 TD='| docs | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}| docs | 90 | 1 | - | - | - |\n"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tiers"]["docs"]["merged"]==0 and d["relabelled"]==5, d' || fail "13c evidence: a renamed tier inherited its old commits: $js"
@@ -1074,6 +1141,22 @@ want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
 nr "t13e23"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; A2=$(git -C "$R" rev-parse HEAD); gitq -C "$R" revert --no-edit "$A1"; mr docs -m a3
 printf '%s %s\n' "$(git -C "$R" rev-parse HEAD)" "$A2" > "$R/.git/info/grafts"
 want "13e23 a grafts file hid a revert" "routine: breach (reverted 25.0% > 10%)"
+# a forged .git/objects/info/commit-graph (a3's first parent rewritten to a2) drops the revert from --first-parent unless core.commitGraph is off
+nr "t13e26"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; A2=$(git -C "$R" rev-parse HEAD); gitq -C "$R" revert --no-edit "$A1"; mr docs -m a3
+gitq -C "$R" commit-graph write --reachable
+python3 - "$R/.git/objects/info/commit-graph" "$(git -C "$R" rev-parse HEAD)" "$A2" <<'PY' || fail "13e26: could not forge the commit-graph"
+import os, struct, sys
+p, a3, a2 = sys.argv[1:]
+b = bytearray(open(p, "rb").read())
+ch = {bytes(b[8 + 12 * i:12 + 12 * i]): struct.unpack(">Q", b[12 + 12 * i:20 + 12 * i])[0] for i in range(b[6] + 1)}
+n = struct.unpack(">I", b[ch[b"OIDF"] + 1020:ch[b"OIDF"] + 1024])[0]
+oids = [bytes(b[ch[b"OIDL"] + 20 * i:ch[b"OIDL"] + 20 * i + 20]).hex() for i in range(n)]
+o = ch[b"CDAT"] + 36 * oids.index(a3) + 20
+b[o:o + 4] = struct.pack(">I", oids.index(a2))
+os.unlink(p); open(p, "wb").write(b)  # git writes the graph 0444
+PY
+want "13e26 a forged commit-graph hid a revert" "routine: breach (reverted 25.0% > 10%)"
+out=$(cd "$R" && python3 -c 'import sys; sys.path.insert(0, ".specs/kit/scripts"); import tiers, subprocess; print(subprocess.check_output(["git", "config", "core.commitGraph"], text=True), end="")') && [ "$out" = false ] || fail "13e26: core.commitGraph not false in a tiers child: $out"
 
 # an idle gap before backdated agent commits: the window cut sits above the agent commit, and its revert (dated now) must pull it in
 ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'
@@ -1087,7 +1170,7 @@ export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e15 -b main; mr docs -m age
 for i in $(seq 20); do mr docs -m "old$i"; done; unset GIT_COMMITTER_DATE
 gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4; do mr docs -m "c$i"; done
 want "13e15 the window adds the named commit, not the commits between" "routine: breach (reverted 16.7% > 10%)"
-# Human-Findings on a none tier: nobody writes it for the human, so no trailer is no hold, and an agent-written 0 is no data (a caught value still counts)
+# Human-Findings on a none tier: no human check, so no trailer is no hold; ready.py keeps the trailer off auto-merges, so every value counts
 GR='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n'
 ER='| routine | 90 | 3 | - | - | 10 |\n| domain | 90 | 1 | - | - | - |\n'"$GR"
 nr t13e18 -b main; mr docs -m h1; mr docs -m h2; mr docs -m h3
@@ -1097,7 +1180,29 @@ want "13e18 a caught Human-Findings on a none tier still counts" "routine: breac
 nr t13e19 -b main; mr docs -m h1 -m "Human-Findings: 0"; mr docs -m h2 -m "Human-Findings: 0"; mr docs -m h3 -m "Human-Findings: 0"
 sed -i.bak 's/| standard | none |/| standard | spot |/' "$R/.specs/steering/autonomy.md"; rm -f "$R/.specs/steering/autonomy.md.bak"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm "routine is spot"
-want "13e19 agent-written zeros on a none tier are no data once it is spot" "routine: hold (Human-Findings on 0 of 3 merges)"
+# the zeros count now: ready.py refuses an auto-merge that carries one, so a 0 on a none merge is a human's
+want "13e19 zeros on a none tier count once it is spot" "routine: eligible"
+# finding 4: dropping the zeros made the one human finding in 20 merges read as 100%
+nr t13e24 -b main; for i in $(seq 19); do mr docs -m "z$i" -m "Human-Findings: 0"; done; mr docs -m z20 -m "Human-Findings: 1"
+want "13e24 human zeros on a none tier are the denominator" "routine: eligible"
+echo "$out" | grep -qF "human-caught 1 of 20 (5.0%)" || fail "13c evidence: 13e24 human-caught is over every trailered merge: $out"
+# finding 5: the key is the rows from the tier down plus the guarded globs, since a file takes the strictest row it matches
+TD='| routine | `docs/*` `*.md` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+ER='| routine | 90 | 2 | - | - | - |\n| domain | 90 | 1 | - | - | - |\n| critical | 90 | 1 | - | - | - |\n'"$GR"'\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Notes | [kb](../../kb/notes.md) | start |\n'
+pe() { sed -i.bak "$1" "$R/.specs/steering/autonomy.md"; rm -f "$R/.specs/steering/autonomy.md.bak"; gitq -C "$R" add -A; gitq -C "$R" commit -qm "$2"; }
+nr t13e25 -b main; for i in 1 2; do echo "$i" >> "$R/src/README.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm "readme $i"; done; mr docs -m d1; mr docs -m d2
+want "13e25 routine did not earn its two docs merges" "routine: eligible"
+# narrowing domain drops src/README.md into routine, so routine's two merges no longer speak for it
+pe 's#`src/\*` |#`src/*.py` |#' "domain narrowed"
+want "13e25 a narrowed stricter row kept routine's evidence" "routine: hold (merged 0 < min 2)"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["relabelled"]==4 and d["tiers"]["critical"]["merged"]==1, d' || fail "13e25 relabelled after the narrowing (want 4): $js"
+gitq -C "$R" checkout -q -b readme; echo 3 >> "$R/src/README.md"; gitq -C "$R" commit -qam readme3
+out=$(python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" --range main...HEAD 2>&1); echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -qF "none → spot (evidence: hold (merged 0 < min 2))" || fail "13e25 a src/README.md PR kept none after the narrowing: $out"
+gitq -C "$R" checkout -q main; mr docs -m d3; mr docs -m d4; echo x > "$R/src/a.py"; gitq -C "$R" add -A; gitq -C "$R" commit -qm py
+pe 's/| standard | spot |/| standard | required |/' "domain is required"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["verdict"]=="eligible" and [t[k]["merged"] for k in ("routine","domain","critical")]==[2,1,2], t' || fail "13e25 a Human-only edit reset a tier: $js"
+pe '/\[kb\]/d' "knowledge link removed"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]; assert [t[k]["merged"] for k in ("routine","domain","critical")]==[0,0,0] and d["relabelled"]==10, d' || fail "13e25 a removed Knowledge link kept evidence (want 0 0 0, relabelled 10): $js"
 # a profile that is not UTF-8 gets a readable reason, from the label's reader and from --check, never a traceback
 nr t13e17 -b main; mr docs -m d0; printf '\377\376' >> "$R/.specs/steering/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm bin
 rc=0; out=$(er) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF "not UTF-8" || fail "13e17 evidence: not-UTF-8 profile exits $rc, want 2 and 'not UTF-8': $out"
@@ -1264,6 +1369,15 @@ out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1)
 RL="$KIT/kit/docs/review-loop.md"
 for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'resource_group'; do grep -qF -e "$k" "$RL" || fail "14b: review-loop.md does not name $k"; done
 ! grep -F 'GITHUB_TOKEN' "$RL" | grep -vF 'never `GITHUB_TOKEN`' | grep -q . || fail "14b: review-loop.md offers GITHUB_TOKEN"
+# the shipped workflow is the recipe as a file: same keys as the prose, every action pinned by sha, a timeout, no push/schedule/workflow_run trigger, and no GITHUB_TOKEN outside comments
+AM="$KIT/kit/templates/github/specter-auto-merge.yml"
+for k in 'pull_request_target' 'environment:' 'persist-credentials: false' 'commit_id' '--match-head-commit' '--body-file' 'cancel-in-progress: false' '--disable-auto' 'timeout-minutes:'; do grep -qF -e "$k" "$AM" || fail "14b: specter-auto-merge.yml does not name $k"; done
+# a failed re-check (the body edited after a pass) revokes: the steps on rc != 0 dismiss the App's approvals and disable auto-merge
+awk "/if: steps.check.outputs.rc != '0'/{f=1} f" "$AM" | grep -qF -e 'dismissals' && awk "/if: steps.check.outputs.rc != '0'/{f=1} f" "$AM" | grep -qF -e '--disable-auto' || fail "14b: specter-auto-merge.yml has no failed-check path that dismisses and disables auto-merge"
+# a fork PR is a stranger's text: the job runs only for a same-repo head and a trusted author
+for k in 'head.repo.full_name' 'author_association'; do grep -E '^[[:space:]]*if:' "$AM" | grep -qF -e "$k" || fail "14b: specter-auto-merge.yml job if: does not name $k"; done
+! grep -E '^[[:space:]]*(- )?uses:' "$AM" | grep -vE '@[0-9a-f]{40}( |$)' | grep -q . || fail "14b: specter-auto-merge.yml has an action not pinned by sha"
+! grep -vE '^[[:space:]]*#' "$AM" | grep -E 'GITHUB_TOKEN|^[[:space:]]*(push|schedule|workflow_run):' | grep -q . || fail "14b: specter-auto-merge.yml uses GITHUB_TOKEN or a push/schedule/workflow_run trigger"
 # the lessons ship in the kit: setup.md names the container wrap and the empty-mount note
 for k in 'docker run --rm --memory 2g' 'Colima' 'only `$HOME`' 'SECURITY.md'; do grep -qF -e "$k" "$KIT/kit/playbooks/setup.md" || fail "14b: setup.md does not name $k"; done
 # an empty mount (gates.sh with no tests/ beside it) refuses with exit 2; needs Docker, which the gates container lacks

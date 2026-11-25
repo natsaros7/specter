@@ -117,6 +117,7 @@ All reads below are read-only. `pr N` is `gh pr view N --json state,reviews,auto
 | N5 | Branch `slow/…`, eligible. After the App approves, Nikos pushes a commit that adds 4 docs files | 1st run `yes`, 2nd `spot (size …)` | The approval is dismissed as stale, the 2nd run does nothing, and the PR is not merged | `gh api …/issues/<n>/timeline` (`review_dismissed`), `pr N` |
 | N6 | Repo variable `SANDBOX_DELAY=30`. Eligible PR; during the job's sleep, Nikos pushes an over-cap commit | 1st `yes` (old head), 2nd `spot` | Not merged. The report records which line caught it: the approval on an old commit id not counting, `--match-head-commit` refusing, or the re-read dismissing. This is the open platform question | 1st `log`, `pr N`, timeline. Delete the variable afterwards |
 | P2 | Branch `slow/…`, eligible. After approval, Nikos edits the PR body to add `Human-Findings: 0` | 1st `yes`; the `edited` run says `auto-merge: no (… Human-Findings …)` | The PR merges with the body that was checked, with no trailer (task 14, decision 5) | `body`, the 2nd `log` |
+| N7 | Branch `slow/…`, eligible. After approval, Nikos edits the PR body to `complexity: non-trivial` | 1st run `yes`; the `edited` run says `spot (reviewer: complexity non-trivial)` | The job's revoke step dismisses the App's approval and disables auto-merge; the PR is not merged (task 24b) | `gh api …/issues/<n>/timeline` (`review_dismissed`), `pr N` |
 
 **Cost.** Each PR event runs two jobs (Gates and auto-merge). K1 adds three. About 28 jobs, billed at most 2 minutes
 each, which is under an hour of runner time. GitHub-hosted runners are free on a public repository. A private one
@@ -403,6 +404,65 @@ queues, fork PRs.
 - Version bump, and the `docs/overview/` refresh (the deck "Release 0.11.0 shipped", the roadmap "today (0.11.0)").
 - The release PR carries `### Gates`, `### Review`, `### Verification` and the `ready.py --range` output.
 - A retro into `lessons.md`.
+
+### Task 23: security review round 1 fixes (#69, #70)
+
+Round 1 of the 0.11 deep review (2026-11-25) ran on `feat/0.11.0` at e5ef516. It found two blockers, both in code that
+is not released yet, and six advisories.
+
+- **23a, workflow and gates (#69):**
+  - **B1, fork PRs:** the template's job `if:` also requires `github.event.pull_request.head.repo.full_name ==
+    github.repository`, and `author_association` to be OWNER, MEMBER or COLLABORATOR. One header line says fork PRs
+    never reach the job.
+  - **A1, the title:** the Check step refuses a title that holds a control character, and runs the `Human-Findings`
+    check over the title plus the body.
+  - **A2, `BASE_VERSION`:** `tests/gates.sh` computes it only when the variable is unset, so `--docker` keeps the value
+    the host passes in.
+  - **A6, hidden local edits:** the pre-push hook refuses when `git ls-files -v` shows assume-unchanged or skip-worktree
+    entries.
+  - **Red rows:**
+    - 14b greps the template's `if:` for `head.repo.full_name`;
+    - a scratch run shows `--docker --only G4` failing on a stale overview.
+- **23b, `tiers.py` (#70, security):**
+  - **B2, CRLF LFS pointers:** the LFS match strips a trailing `\r`, drops the `$`, and also accepts the `hawser` and
+    `git-media` spec URLs.
+  - **A3, `GIT_CONFIG_PARAMETERS`:** `core.commitgraph=false` is also appended to `GIT_CONFIG_PARAMETERS`, in `tiers`
+    and in `spec_lint`.
+  - **A4, symlinks:** mode `120000` counts as over the cap, the same as a gitlink.
+  - **A5, attribute files:** `.gitattributes`, `*/.gitattributes` and `.gitmodules` go in GUARDED.
+  - **Red rows in 13c2 `t70c`:**
+    - a CRLF pointer is added;
+    - the oid of a CRLF pointer is swapped;
+    - a symlink is added;
+    - a `docs/.gitattributes` edit takes the last tier;
+    - an inherited `GIT_CONFIG_PARAMETERS` still leaves the commit-graph off.
+- **Round 2:** after 23a and 23b land, a fresh reviewer goes over the whole 0.11 trust-layer diff again.
+
+### Task 24: security review round 2 fixes (#71, #72)
+
+Round 2 (2026-11-25) found one blocker, which is also in 0.10.0. It went to a private draft advisory first, as
+SECURITY.md says. Round 2 also found three advisories.
+
+- **24a, `tiers.py` and `ready.py` (#71, security):**
+  - **The blocker:** every `git diff` that the label, the size cap or the staged check reads gets
+    `--ignore-submodules=none`, so the base's `submodule.<name>.ignore` or `diff.ignoreSubmodules` can't hide a
+    gitlink change.
+  - **A1:** a changed path whose `filter` attribute is set counts as over the cap. Read the attribute with
+    `git check-attr -z filter` at the base: the work tree in CI, or `--source=<base>` locally. This covers LFS,
+    git-annex and git-fat with one rule. Keep the LFS regex as a second line of defence.
+  - **Red rows in 13c2 `t70d`:**
+    - a gitlink bump under `ignore = all` in a critical path is critical and required, and auto-merge exits 1;
+    - the same bump under a `none` path is over the cap;
+    - a one-line change to a `filter=annex` path is over the cap.
+- **24b, template and scripts (#72):**
+  - **A2:** when a re-run's check fails, the job mints the token, dismisses this PR's App reviews and disables
+    auto-merge. The live test adds scenario N7: Nikos edits the body after a pass, and it must not merge.
+  - **A3:** `examples/acme-shop/eval/sandbox.sh` resolves its target with `pwd -P` before the `$HOME` check, and
+    refuses a folder that is not empty unless it is a previous sandbox.
+  - **Notes:**
+    - the hook unsets `BASE_VERSION`;
+    - the hook's refusal message names sparse checkouts.
+- **Round 3:** after 24a and 24b land, a third reviewer reads the 0.11 trust-layer diff.
 
 ## Parallel lanes
 

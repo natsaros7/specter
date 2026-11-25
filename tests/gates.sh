@@ -15,7 +15,7 @@ done
 
 # A release (VERSION differs from origin/main) must refresh docs/overview; empty when origin/main is unavailable (skip).
 # Computed here because the container copy may not carry a usable .git.
-BASE_VERSION=$(git -C "$(dirname "$0")/.." show origin/main:VERSION 2>/dev/null) || BASE_VERSION=
+[ -n "${BASE_VERSION+x}" ] || { BASE_VERSION=$(git -C "$(dirname "$0")/.." show origin/main:VERSION 2>/dev/null) || BASE_VERSION=; }
 export BASE_VERSION
 
 if [ "$docker" = 1 ]; then
@@ -23,9 +23,14 @@ if [ "$docker" = 1 ]; then
   # Colima and similar runtimes share only $HOME: a clone elsewhere mounts empty, which the first command catches.
   # shortcut: the image tag is not pinned by digest, pin it when CI uses this.
   here=$(cd "$(dirname "$0")/.." && pwd)
-  exec docker run --rm --memory 2g -e SELFTEST_ONLY="${SELFTEST_ONLY:-}" -e BASE_VERSION="$BASE_VERSION" -v "$here":/src:ro python:3.12 sh -c \
+  git -C "$here" rev-parse --git-dir >/dev/null 2>&1 || { echo "gates: --docker needs a git checkout" >&2; exit 2; }
+  # Only tracked and unignored files go in (a stray __pycache__ must not reach G3). The list is made on the host because a
+  # worktree's .git file points outside the mount; -z keeps odd names whole, --ignore-failed-read skips a tracked file
+  # deleted in the work tree. .git stays out: no gate reads it in the container (BASE_VERSION is passed in).
+  git -C "$here" ls-files -z --cached --others --exclude-standard | docker run --rm -i --memory 2g -e SELFTEST_ONLY="${SELFTEST_ONLY:-}" -e BASE_VERSION="$BASE_VERSION" -v "$here":/src:ro python:3.12 sh -c \
     '[ -f /src/tests/gates.sh ] || { echo "gates: /src is empty (does your container runtime share this path?)" >&2; exit 2; }
-     mkdir /tmp/s && cp -R /src/. /tmp/s/ && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
+     mkdir /tmp/s && cd /src && tar --null --ignore-failed-read -T - -cf - | tar -xf - -C /tmp/s && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
+  exit $?
 fi
 
 cd "$(dirname "$0")/.." || exit 2
@@ -37,7 +42,7 @@ gate() { # id command
   echo "$1 rc=$rc"
   [ "$first" != 0 ] || first=$rc
 }
-gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n .githooks/pre-push'
+gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n examples/acme-shop/scripts/mvnw-docker.sh && sh -n tests/live/github/sandbox.sh && sh -n examples/acme-shop/eval/sandbox.sh && sh -n .githooks/pre-push'
 gate G2 'python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && o=$(python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites) && echo "$o" && case $o in *" of 0 citation"*) exit 1;; esac'
 gate G3 'sh tests/selftest.sh'
 gate G4 'python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py && v=$(cat VERSION) && { [ -z "$BASE_VERSION" ] || [ "$BASE_VERSION" = "$v" ] || { grep -q "Release $v shipped" docs/overview/deck/specter-overview.html && grep -q "today ($v)" docs/overview/roadmap.svg || { echo "overview: deck must say \"Release $v shipped\" and roadmap \"today ($v)\"" >&2; exit 1; }; }; }'

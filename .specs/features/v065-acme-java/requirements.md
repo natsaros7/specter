@@ -43,7 +43,7 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`):
   (`docs/research/2026-11-21-software-factories.md:24`), and E6 names Spring Modulith `verify()` and property tests as
   the verification gates setup should propose (`docs/research/2026-11-21-software-factories.md:104`).
 - Evidence counting reads `git log` only where the folder holding `.specs/` has its own `.git`
-  (`kit/scripts/spec_lint.py:355-356`). Inside the specter repo the example has none, so factory evidence needs a
+  (`kit/scripts/spec_lint.py:363-364`). Inside the specter repo the example has none, so factory evidence needs a
   separate repository.
 
 ## User story

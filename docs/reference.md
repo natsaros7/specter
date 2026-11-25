@@ -142,7 +142,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   the agent and approved by a human (`review-loop.md`). Several agents at once follow `kit/playbooks/parallel.md`.
 - **Tiers.** A `| Tier | Paths | Reviewer | Human |` table, rows from most to least autonomous (setup suggests routine: tests,
   docs; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
-  glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
+  glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files, `.gitattributes` at any depth and `.gitmodules`) always take the last row.
   `tiers.py --check` validates the table; `tiers.py` prints the `### Risk tier` label for the staged change or `--range`.
   Nothing in the kit merges: every PR needs an approval; for Human `none` a non-required job runs
   `ready.py --range <base sha>...<head sha> --pr <pr text> --auto-merge` (exit 0 only when ready, `none` and no warning)
@@ -175,7 +175,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   that commit; it reads first-parent commits on `merged_ref` inside each tier's window, labels each with
   the profile as of its parent, and counts per tier: merged, reverted (a later commit whose change set has
   `This reverts commit <sha>` naming one of this commit's), escaped (the same with a `Fixes: <sha>` trailer) and
-  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; a merge labelled `none` carries none, so its `0` is ignored and its tier never holds on the trailer; see
+  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; every value counts, a `0` on a `none` merge included, because `ready.py --auto-merge` refuses a PR whose text or commits carry the trailer; a `none` tier never holds on a missing one; see
   `kit/playbooks/sync.md` § Trailers). The window is by position: it runs from the tip down to the oldest commit dated
   inside it, and every commit above that counts whatever its own date; a future date never sets it. Human-caught is a
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,
@@ -184,7 +184,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter>`, the tier's row in the profile
   at the `merged_ref` tip (`none` → `spot`, `spot` → `required`; `required` says already required); `--json` has `demote`
   (`{file, line, from, to}`, or null off breach). It edits nothing: demoting or raising a tier is a human edit of the
-  profile, a guarded path. A commit counts for a tier only if its parent's row has the same name and the same Paths globs as the row read now (Reviewer and Human are not compared, so a promotion keeps its evidence); the others are printed on `- relabelled: <n> commit(s) …` (`--json` `relabelled`), so a renamed or widened tier re-earns its evidence. Evidence counts first-parent commits, so it assumes squash or merge commits. A rebase merge or fast-forward puts each PR commit on the chain: Min merged is reached faster, and one revert is diluted over the PR's commits.
+  profile, a guarded path. A commit counts for a tier only if its parent's profile has the same rows, by name and Paths globs, from that tier down to the last row, and the same guarded globs (Knowledge links included), as the profile read now. A file takes the strictest row that matches it, so a stricter row narrowed or removed moves files into the lower tiers, and those tiers start over too. Reviewer and Human are not compared, so a promotion keeps its evidence. The others are printed on `- relabelled: <n> commit(s) …` (`--json` `relabelled`), so a renamed or widened tier re-earns its evidence. Evidence counts first-parent commits, so it assumes squash or merge commits. A rebase merge or fast-forward puts each PR commit on the chain: Min merged is reached faster, and one revert is diluted over the PR's commits.
 - **Human value by tier (0.9.0).** `required` is the human check; `spot` is approval on the readiness verdict, the
   `### Gates` block and the tests, with the flagged files read in full; `none` is no human before merge, and the merge
   is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
@@ -192,17 +192,21 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
   the implementer's model family makes `ready.py` report `spot` too, and so does a `complexity:` line that is missing or not
   `trivial` (`reviewer: complexity <value or missing>`; a repeated one is not ready). A change in a `none` tier is also
-  `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over)
+  `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over),
+  more changed bytes than `Max bytes` (`bytes <b> > cap <B>`; a diff that cannot be read counts as over), or changes a Git LFS pointer line, LF or CRLF (`LFS pointer: <path>`),
   or deletes or edits a line of a test file, deletes or re-modes one, or adds or changes a `conftest.py` or `__init__.py`
-  (`tests changed, not only added: <path>`; a gitlink counts as over the cap). The cap is two optional trailing
-  Evidence columns, `Max files` and `Max lines` (defaults 3 and 50; `-` is the default; any other non-number is exit 2 with
+  (`tests changed, not only added: <path>`; a gitlink or a symlink counts as over the cap), or changes a path whose `filter`
+  attribute is set at the base, as LFS, git-annex and git-fat set it (`filter <name> on <path>`; an attribute that cannot
+  be read, as on git older than 2.40, counts as over). Every diff the label, the cap and `ready.py` read passes
+  `--ignore-submodules=none`, so no `.gitmodules` `ignore` or `diff.ignoreSubmodules` setting hides a gitlink. The cap is three optional trailing
+  Evidence columns, `Max files`, `Max lines` and `Max bytes` (defaults 3, 50 and 4000; `-` is the default; any other non-number is exit 2 with
   `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`,
   matched case- and Unicode-folded), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
   `spot`. A `--range` label (and `ready.py`) also says `spot` when its base, the merge base, is not the `merged_ref`
   tip that `--evidence` reads: `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps
   its base. `ready.py --auto-merge` exits 0 only when the verdict is `ready`, the reported human is `none` and there is no
-  warning. The platform recipe (one approval on every PR, dropped on a new commit; a non-required job that runs that
+  warning; a `Human-Findings:` line in the raw PR text (comments and fences included) or a range commit message is one, in every mode. The platform recipe (one approval on every PR, dropped on a new commit; a non-required job that runs that
   check from a trusted worktree of the base and, on exit 0 only, approves with a non-agent identity and enables
   auto-merge; the merge queue re-runs the Gates, not `ready.py`), with a GitHub and a GitLab line, is in
   `kit/docs/review-loop.md` step 5.

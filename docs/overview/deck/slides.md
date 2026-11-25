@@ -16,7 +16,7 @@ Specs that don't go stale. A spec-first workflow for any AI coding agent.
 
 <div class="pt-6 opacity-70">
 
-Release 0.10.0 shipped (Human `none` still off) · Python 3.8+, stdlib only, no service
+Release 0.11.0 shipped (Human `none` still off) · Python 3.8+, stdlib only, no service
 
 </div>
 
@@ -203,21 +203,21 @@ Demo history: ten commits with `Human-Findings:` trailers and one `git revert`. 
 
 <img src="/diagrams/roadmap.svg" class="mx-auto" style="height: 400px; margin-top: 6px" />
 
-<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.10.0. Next: 0.11 follow-ups, a live test of the recipe, then a stage 5 orchestrator proposal (not built). Stage 4 is built, off until verified live.</div>
+<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.11.0. Next: a live test of the recipe, then a stage 5 orchestrator proposal (not built). Stage 4 is built, off until verified live.</div>
 
 ---
 
-# What 0.10.0 added (shipped; `none` is still off)
+# What 0.11.0 added (shipped; `none` is still off)
 
-Trust hardening: every deep review found a way to reach `none` without a human. This release closes the known paths.
+Live and eval: the kit to test the recipe on a hosted repository, an eval set, and the paths to `none` the reviews found.
 
 | Piece | What it does |
 |---|---|
-| Size cap, trivial review | `none` only within 3 files and 50 lines, tests only added, reviewer writes `- complexity: trivial` |
-| Base must be current | a PR behind the `merged_ref` tip is `spot`, so a demotion reaches PRs in flight |
-| Parallel playbook, lessons loop | batches of at most 3, a worktree base check, `cherry-pick` rc checked; a mistake becomes a lessons line |
-| Kit tools for any project | container gates (`--docker`), `readme_check.py`, a `SECURITY.md` template |
-| Ref and evidence fixes | case-folded refs refused, `refs/replace` ignored, relabelled commits counted apart |
+| Guards | commit-graph off, hidden submodule bumps seen, fork PRs kept out, LFS, symlinks and filtered paths guarded, `Human-Findings:` refused |
+| Byte cap | `Max bytes` (default 4000) beside files and lines |
+| Live kit | `specter-auto-merge.yml` template and the `tests/live/github/` sandbox (recipe still not run live) |
+| Eval set | acme-shop goals E1 to E5 in `examples/acme-shop/eval/` |
+| G5 in a container | `tests/acme-build.sh --docker` |
 
 ---
 
@@ -228,7 +228,7 @@ Trust hardening: every deep review found a way to reach `none` without a human. 
 
 ### Next (candidates, not decided)
 
-- **0.11** follow-ups (#40), then a live test of the recipe on a hosted repository
+- A live test of the recipe on a hosted repository, and the round 3 advisories (#73)
 - **Stage 5** an orchestrator proposal, not built
 
 - **E6** verification gates proposed by stack: property tests, contract tests, architecture tests

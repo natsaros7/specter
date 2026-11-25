@@ -16,9 +16,13 @@ while read -r lref lsha _; do
     exit 1
   fi
 done
-unset SELFTEST_ONLY  # an inherited filter would make G3 a partial run
+unset SELFTEST_ONLY BASE_VERSION  # an inherited filter would make G3 a partial run, an inherited base would move the upgrade checks
 if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
   echo "pre-push: uncommitted or untracked changes; the gates would test files you are not pushing. Commit or stash, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
+  exit 1
+fi
+if git ls-files -v | grep -q '^[a-zS]'; then
+  echo "pre-push: assume-unchanged or skip-worktree files (sparse checkouts set the latter) hide changes from the tree check; the gates would test files you are not pushing. Undo with git update-index --no-assume-unchanged / --no-skip-worktree, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
   exit 1
 fi
 if docker info >/dev/null 2>&1; then

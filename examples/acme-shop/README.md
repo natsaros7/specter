@@ -26,6 +26,11 @@ sdk env                  # reads .sdkmanrc (java=21.0.13.1+2-tem)
 ./mvnw -B verify         # first run downloads dependencies; later runs work offline with -o
 ```
 
+No JDK on the host? `sh tests/acme-build.sh --docker` (from the specter root) runs the same build in a JDK 21 container
+through `scripts/mvnw-docker.sh`: the source is mounted read-only and copied inside, and `~/.m2` lives in the Docker volume
+`specter-acme-m2`, so only the first run needs the network (`ACME_OFFLINE=1` and `ACME_NETWORK=none` for the rest). The
+image is `azul/zulu-openjdk:21`: protoc and its gRPC plugin are glibc binaries and fail on Alpine (musl).
+
 On JDK 17 the Maven Enforcer stops the build with a message naming Java 21. To start the app (REST on port 8080):
 
 ```sh
@@ -73,5 +78,7 @@ Each seed runs in a fresh sandbox. The tier is the risk tier a change should lan
 | S6 | ORD-155 | critical | lesson to check | Time read without the injected Clock |
 | S7 | ORD-156 | domain | domain rule | Currency rule into the order API, plus an ArchUnit rule (drift D6) |
 | S8 | ORD-157 | domain | rule | Service queries are read-only, plus an ArchUnit rule |
+
+[`eval/`](eval/README.md) turns S1, S2, S5, S6 and S7 into five scored goals (E1 to E5) with a run procedure.
 
 Some seeds rely on a planted defect or a known gap, so do not fix them in this folder.

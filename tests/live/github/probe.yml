@@ -1,0 +1,39 @@
+# Sandbox only, scenario K1: what can a `pull_request` run from a PR branch reach? Never merge this file.
+# Expected: (a) prints 0; (b) never starts, its branch may not deploy to the environment; (c) is refused.
+name: probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  a-secret-length:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      KEY: ${{ secrets.SPECTER_APP_KEY }}
+    steps:
+      - run: echo "length of SPECTER_APP_KEY seen here: ${#KEY}"
+
+  b-environment:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    environment: specter-approver
+    steps:
+      - run: echo "reached the environment from a PR branch"
+
+  c-approve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # write on purpose: the refusal must come from the repository setting, not from a missing scope
+    permissions:
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+    steps:
+      - run: gh pr review "$PR" --approve

@@ -24,15 +24,17 @@ that is a regular file at the head (index in staged mode; no `..`, no absolute p
 not fetched`. A missing block changes nothing.
 Human `none` is reported as `spot` when the tier's evidence is not eligible or, with --range, the base is not the
 merged_ref tip (as tiers.py labels it: `base <sha7> is behind <ref>: update the branch`), the change is over the
-size cap or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
+size cap (files, lines, changed bytes, or a Git LFS pointer) or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
 family, or its `- complexity: trivial|non-trivial` line is missing or not `trivial` (`reviewer: complexity <value or missing>`;
 a repeated complexity line is not ready): `- human: none → spot (<why>)`, --json tier.human_why; the exit code is unchanged.
 --auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
-is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
+is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`.
+A `Human-Findings:` line (any case, spaces around the colon) in the raw PR text, read before comments and fences are
+dropped, or, with --range, in a commit message of base..head, is a warning in every mode: the human writes it at the merge. A
 non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha>, the base
 the merged_ref tip and the merge base of the two (without
 --range, `auto-merge: no`); on exit 0 only, it approves with a non-agent identity and enables auto-merge (review-loop.md
-step 5). --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
+step 5), squashing with the PR text it checked as the body. --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
 --json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
 """
 import json
@@ -50,6 +52,12 @@ import tiers  # noqa: E402
 
 USAGE = "usage: ready.py [--specs DIR] [--range A...B] [--pr FILE] [--json] [--auto-merge] | --help"
 ROW = re.compile(r"- (.+?): (pass \(.*\)|FAIL \(exit -?\d+\)|not run)")
+
+
+def human_findings(text):
+    """True when any line carries a Human-Findings: trailer. Wider than tiers.findings() (leading or inner spaces, any
+    case, every line break splitlines knows, CR included): refusing more is the safe side."""
+    return any(re.match(r"\s*Human-Findings\s*:", line, re.I) for line in text.splitlines())
 
 
 def visible(text):
@@ -284,6 +292,8 @@ def main(argv):
         text = Path(pr).read_text(encoding="utf-8", errors="replace") if pr else sys.stdin.read()
     except OSError as err:
         return refuse("cannot read " + str(pr) + ": " + err.strerror)
+    # raw, before visible(): a trailer in a comment or a fence still lands in the squash body the job writes from this text
+    hf = ["PR text carries Human-Findings: the human writes it at the merge"] if human_findings(text) else []
     text = visible(text)
     root, rel = specs.parent, "x"
     try:
@@ -309,7 +319,7 @@ def main(argv):
         return refuse(rel + " at " + str(base)[:7] + ": " + str(err))
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
-    staged = not rng and subprocess.run(["git", "-C", str(root), "diff", "--cached", "--quiet"]).returncode == 1
+    staged = not rng and subprocess.run(["git", "-C", str(root), "diff", *tiers.SUBS, "--cached", "--quiet"]).returncode == 1
     g = check_gates(text, [r[0] for r in rows], head, bool(rng), staged)
     # gates.py runs the head's table in order, so any edit (a row added before a base row, a duplicate label, a changed
     # command) changes what ran. Equal rows or not ready.
@@ -326,7 +336,14 @@ def main(argv):
     review = check_review(text, base, change["reviewer"])
     verification = check_verification(text, root, head, bool(rng), pattern)
     problems = g["problems"] + review["problems"] + verification["problems"]
-    warnings = g["warnings"] + review["warnings"]
+    warnings = g["warnings"] + review["warnings"] + hf
+    if rng:  # a merge or rebase puts these messages on the merged chain, where tiers.py --evidence reads them
+        # one record per commit, sha on its own line: gitz drops empty tokens, so a sha/body pair split could shift
+        log = tiers.gitz(root, "log", "-z", "--format=%H%n%B", base + ".." + head)
+        if log is None:
+            warnings.append("cannot read the commit messages of " + base[:7] + ".." + head[:7])
+        warnings += ["commit " + c[:7] + " carries Human-Findings: the human writes it at the merge"
+                     for c in log or [] if human_findings(c)]
     verdict = "not ready" if problems else "ready"
     tier = {k: change[k] for k in ("tier", "reviewer", "human")}
     # none needs earned evidence, as in the label, and a reviewer of another family (REQ-V060-09, -13); exit code unchanged

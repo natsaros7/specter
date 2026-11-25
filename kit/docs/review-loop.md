@@ -90,10 +90,12 @@ flowchart LR
           definition. It checks out the base, fetches the PR head as data without running it (full history, with the explicit refspec of item 2), passes the PR body through
           an environment variable (never `${{ }}` in the script), and on exit 0, with the App's token and the head sha
           it checked: approves through `POST …/pulls/{n}/reviews` with `commit_id=<head sha>`, runs
-          `gh pr merge --auto --match-head-commit <head sha>`, then reads the head again. If it moved, it dismisses that
+          `gh pr merge --auto --squash --match-head-commit <head sha> --subject "<title> (#<n>)" --body-file <the PR text it
+          checked>`, so an edit after the check cannot add a trailer to the merged commit, then reads the head again. If it moved, it dismisses that
           review and runs `gh pr merge --disable-auto`. The workflow has `concurrency: specter-auto-merge-<pr number>`
           with `cancel-in-progress: false`: cancelling a job between its approval and its re-read would leave the
-          approval on the new head.
+          approval on the new head. The job runs only when the PR head is in the same repository and its author is an
+          OWNER, MEMBER or COLLABORATOR: `pull_request_target` also fires for fork PRs, whose text is a stranger's.
        4. Every workflow that runs PR code (the Gates, an agent) has `permissions: contents: read` and checks out with
           `persist-credentials: false`, so a `pull_request` run cannot reach the key.
      - GitLab (a sketch, untested on a live instance; verify each setting when you declare the row):
@@ -133,8 +135,10 @@ flowchart LR
    At the merge, the human adds `Human-Findings: <n>` to the merge (or squash) commit message: the number of
    problems the human found that the gates and the reviewer missed, `0` when none. Write it on every merge, so
    `tiers.py --evidence` can tell "no findings" from "no data": human-caught % counts only merges that carry the trailer,
-   and a window with too few of them is a hold. A `none` merge carries no `Human-Findings:`: nobody writes it for the
-   human, so its `0` is ignored and a tier whose Human is `none` never holds on it (a value above 0 still counts; see [sync.md](../playbooks/sync.md) § Trailers).
+   and a window with too few of them is a hold. A `none` merge carries no `Human-Findings:`. `ready.py --auto-merge`
+   refuses a PR whose text or commits carry one, and the job sets the squash message to the text it checked. So every
+   trailer on the merged history is a human's and counts, a `0` included; a tier whose Human is `none` never holds on a
+   missing one (see [sync.md](../playbooks/sync.md) § Trailers).
 
 A review finding that reaches `human: none` or `auto-merge: yes` without a human is a security finding. File it
 privately, through the project's `SECURITY.md` channel (on GitHub, a draft advisory), not as a public issue or

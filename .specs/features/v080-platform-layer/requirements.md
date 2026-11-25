@@ -1,6 +1,6 @@
 # v080 Platform layer for multi-repo systems — Requirements
 
-Status: Draft (unpinned 2026-11-25; not designed)
+Status: Proposed (unpinned 2026-11-25; not designed)
 
 ## Context
 

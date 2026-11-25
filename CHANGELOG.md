@@ -5,6 +5,44 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-11-25
+
+Live and eval (v070). Human `none` is still off in every known repository. This release closes the paths the 0.11.0
+security reviews found to reach it without a human, and adds the kit to test the recipe on a hosted repository and an
+eval set to measure the loop.
+
+### Security
+- The commit-graph is off for every repository call: a forged commit-graph file could hide a parent, as a graft does.
+  Found by the v070 reviews.
+- A hidden submodule bump could reach `none`; diffs now see every gitlink. Fixed; the advisory is published with this
+  release.
+- Fork PRs never reach the auto-merge job.
+- CRLF and aliased LFS pointers, symlinks, filtered paths (`filter=` attributes) and attribute files are guarded: each
+  counts as over the cap or is `spot`.
+- A PR title or a commit carrying `Human-Findings:` is refused for auto-merge.
+
+### Added
+- Byte cap: the optional `Max bytes` Evidence column (default 4000), with LFS pointer and filter detection.
+- `kit/templates/github/specter-auto-merge.yml`: the step 5 recipe as a workflow template.
+- `tests/live/github/`: a sandbox kit to run the recipe against a real GitHub repository.
+- `examples/acme-shop/eval/`: an eval set (goals E1 to E5 and the run procedure) for the acme-shop example.
+- G5 in a container: `tests/acme-build.sh --docker` builds acme-shop without Maven or a JDK on the host.
+
+### Changed
+- Evidence is keyed by the Tiers rows from the commit's tier down, plus the guarded globs.
+- Human zeros count again in evidence.
+- `tests/gates.sh --docker` copies tracked and unignored files only.
+- `AGENTS.md` carries a generic "pick up and continue" resume rule.
+- A failed re-check revokes a live approval; the eval sandbox is safe to run.
+
+### Known limits
+- The GitHub recipe is still not run live. Human `none` stays off until it is verified on a live host.
+- GitLab stays an untested sketch.
+- Switching off the commit-graph needs git 2.31 or newer (older git ignores the setting). The filter-attribute check
+  needs git 2.40 or newer; older git marks every `none` change `spot`.
+- The eval's reviewer is of the same model family as the implementer, so its findings are correlated.
+- Round 3 of the security review left four advisories, which must be fixed before any repository turns `none` on (#73).
+
 ## [0.10.0] - 2026-11-25
 
 Trust-layer hardening (v061). Human `none` is still off in every known repository; this release closes the ways the

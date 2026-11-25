@@ -8,7 +8,7 @@ Usage: python3 .specs/kit/scripts/tiers.py [--specs DIR] [--file PATH] [--range 
 --check reads the working-tree profile and validates its `## Tiers` table: unique tier names, at least one `glob`
 code span per Paths cell, Reviewer standard|deep, Human none|spot|required and never decreasing down the table, the
 last row `required`, no <placeholder> left in. It also fails when a tier above the last lists a guarded path (the
-profile itself, the installed kit, Knowledge targets, agent files): guarded paths always take the last row.
+profile itself, the installed kit, Knowledge targets, agent files, .gitattributes and .gitmodules): guarded paths always take the last row.
 Exit 0: valid, or no profile / no Tiers section (not configured: the human tier applies, as in 0.5.0).
 Exit 1: a guarded path sits in a tier above the last. Exit 2: bad profile or argument, with `file:line`.
 
@@ -37,9 +37,9 @@ merged_ref …`), and so it does when that history holds any commit of the chang
 A --range label keeps `none` only when its base is the merged_ref tip that --evidence reads (full shas compared): a base
 behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps its base.
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
-`Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
+`Max files`, `Max lines` and `Max bytes`, defaults 3, 50 and 4000 changed bytes, `-` is the default; a Git LFS pointer line changed is over the cap; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
 (globs of an optional `## Tests` section, default: test directories, `*_test.*`, `*.test.*`, `test_*`, spec files, conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
-`tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file or a gitlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
+`tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file, a gitlink or a symlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the Tiers table at the merged_ref tip (never the working tree; it prints that commit), `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -49,10 +49,12 @@ commits on merged_ref (as the label's staged mode finds it) inside each tier's w
 the oldest commit dated inside the window, whatever the dates above it (a future date sets no window; a shallow clone
 holds every tier with a row; an unreadable change set is exit 2), labels each with the profile as of
 its first parent (a parent with no profile or Tiers, and the root commit, are `unprofiled`: left out and counted), and
-counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
+counts it for a tier only when that profile's rows from the tier down to the last (name and Paths globs) and its guarded
+globs equal those of the profile read now (Reviewer and Human are not compared); the others are `- relabelled: <n>`
+(--json `relabelled`). It counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
 human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
-share of the merges that carry one; a merge labelled `none` carries none unless its value is above 0 (nobody writes the trailer for the human).
+share of the merges that carry one, a `0` on a `none` merge included (ready.py --auto-merge refuses a PR whose text or commits carry the trailer, so it is a human's).
 With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold, except for a tier whose Human is `none`. It never edits the profile.
 Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter> (a human edit; tiers.py changes nothing)` for that tier's
 row (none → spot, spot → required; `required` says already required); --json: per tier `demote` {file, line, from, to} or null.
@@ -76,10 +78,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 import spec_lint  # noqa: E402
 
-# refs/replace and .git/info/grafts can swap any commit body, rewrite the chain or the profile blob, turning a breach into
-# eligible; children (git) inherit these. The graft path never exists (a file under /dev/null).
+# refs/replace, .git/info/grafts and a forged .git/objects/info/commit-graph can swap any commit body, rewrite the chain or
+# the profile blob, turning a breach into eligible; children (git) inherit these. The graft path never exists (a file
+# under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT and GIT_CONFIG_PARAMETERS, appended to any inherited entries, once.
 os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
+# shortcut: git < 2.31 ignores GIT_CONFIG_COUNT; refuse older git if a job can run one
+_n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+if os.environ.get(f"GIT_CONFIG_KEY_{_n - 1}") != "core.commitGraph" or os.environ.get(f"GIT_CONFIG_VALUE_{_n - 1}") != "false":
+    os.environ[f"GIT_CONFIG_KEY_{_n}"] = "core.commitGraph"  # appended last, so it wins; not twice when both modules import
+    os.environ[f"GIT_CONFIG_VALUE_{_n}"] = "false"
+    os.environ["GIT_CONFIG_COUNT"] = str(_n + 1)
+_p, _f = os.environ.get("GIT_CONFIG_PARAMETERS", ""), "'core.commitgraph'='false'"
+if not (" " + _p).endswith(" " + _f):  # git reads these after GIT_CONFIG_COUNT, so an inherited 'true' here would win
+    os.environ["GIT_CONFIG_PARAMETERS"] = (_p + " " if _p else "") + _f
 
 HEAD = ["Tier", "Paths", "Reviewer", "Human"]
 GHEAD = ["Guardrail", "Enforced by", "Verified"]
@@ -96,9 +108,11 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".github/instructions/*", ".github/prompts/*", ".github/agents/*", ".github/skills/*", "*/.github/*instructions*",
            ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
-           "docs/CODEOWNERS"]
+           "docs/CODEOWNERS", ".gitattributes", "*/.gitattributes", ".gitmodules"]  # attributes can turn a file into an LFS pointer or binary
+# every diff the label, the size cap and ready.py read: the base's .gitmodules `ignore` and diff.ignoreSubmodules hide no gitlink
+SUBS = ("--ignore-submodules=none",)
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
-SIZE = ["Max files", "Max lines"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3 and 50)
+SIZE = ["Max files", "Max lines", "Max bytes"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3, 50, 4000)
 # Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
 TESTS = ["tests/*", "*/tests/*", "test/*", "*/test/*", "__tests__/*", "*/__tests__/*", "spec/*", "*/spec/*", "*_test.*",
          "*.test.*", "*_spec.*", "*.spec.*", "test_*", "*/test_*", "conftest.py", "*/conftest.py"]  # fnmatch: * crosses /
@@ -199,7 +213,7 @@ def parse_guardrails(text):
 
 
 def parse_evidence(text, tiers):
-    """{tier: (window, min_merged, [max reverted, escaped, human-caught, files, lines; None for -], lineno)} or None when there is no
+    """{tier: (window, min_merged, [max reverted, escaped, human-caught, files, lines, bytes; None for -], lineno)} or None when there is no
     Evidence section; a row that keeps a <placeholder> maps to None (thresholds not set, a hold, not an error).
     Raises ValueError((lineno, message)) on a bad header, a bad cell, an unknown or duplicate tier."""
     lines = section(text, "Evidence")
@@ -212,7 +226,7 @@ def parse_evidence(text, tiers):
         cells = gates.split_row(line)
         if head is None:
             head = [c.lower() for c in cells]
-            if head not in ([h.lower() for h in EHEAD], [h.lower() for h in EHEAD + SIZE]):
+            if head not in [[h.lower() for h in EHEAD + SIZE[:k]] for k in (0, 2, 3)]:  # Max bytes is the optional third
                 raise ValueError((n, "header must be | " + " | ".join(EHEAD) + " | (then optionally " + " | ".join(SIZE) + " |)"))
             continue
         if set("".join(cells)) <= set("-: "):
@@ -253,6 +267,13 @@ def guarded_globs(text, rel):
                 continue
             out.append(path + "/*" if target.endswith("/") else path)
     return out
+
+
+def row_keys(rows, guarded):
+    """One evidence key per row index: (name, sorted globs) of that row and every stricter row below it, and the sorted
+    guarded globs. classify() tries the strictest row first, so these decide which files the row's tier gets."""
+    g = tuple(sorted(guarded))
+    return [(tuple((r[0], tuple(sorted(r[1]))) for r in rows[i:]), g) for i in range(len(rows))]
 
 
 key = spec_lint.fold  # one fold for paths, globs and ref names (see spec_lint.fold)
@@ -334,11 +355,12 @@ def end_commit(root, end):
 
 
 def classify(root, rel, rng, specs=None, where=None):
-    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
+    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note, globs, key}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
-    ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
-    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. where: (top-level, prefix) of
+    ready.py reuses it. The diff takes SUBS: no submodule ignore setting hides a gitlink. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
+    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. key is the tier's row_keys()
+    entry (evidence compares it). where: (top-level, prefix) of
     root when the caller already has them (evidence calls this once per commit)."""
     top, prefix = where or (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
     closed = False
@@ -346,7 +368,7 @@ def classify(root, rel, rng, specs=None, where=None):
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
         a, head = end_commit(root, a), end_commit(root, b)
         base = git(root, "merge-base", a, head) if a and head else None
-        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, head) if base else None
+        files = gitz(top, "diff", *SUBS, "--no-renames", "--name-only", "-z", base, head) if base else None
         note = str(base)[:7] + " (merge base of " + rng + ")"
     else:
         head = git(root, "rev-parse", "--verify", "-q", "HEAD")
@@ -355,7 +377,7 @@ def classify(root, rel, rng, specs=None, where=None):
         # No merge base (or a merged_ref refused as a tag or ambiguous): fail closed, every file takes the last row.
         base, closed = merge or head, not merge
         note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (" + (rwhy or "no merge base") + ": last tier)"
-        files = gitz(top, "diff", "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
+        files = gitz(top, "diff", *SUBS, "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
     if files is None:
         raise ValueError("cannot resolve " + (("--range " + rng) if rng else "the staged change") + " in " + str(root))
     text = profile_at(root, base, rel) if base else None
@@ -372,6 +394,7 @@ def classify(root, rel, rng, specs=None, where=None):
     else:
         why = None
     guarded = guarded_globs(text, rel)
+    keys = row_keys(rows, guarded)
     guarded += [prefix + g for g in guarded] if prefix else []
     last, counts, top = len(rows) - 1, {}, (-1, None, None)
     for f in files:
@@ -393,7 +416,7 @@ def classify(root, rel, rng, specs=None, where=None):
         human = "spot" if no_low else human
     return {"base": base, "head": head, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
             "reasons": ["not the lowest tier"] if why is None and no_low else [],
-            "globs": rows[idx][1], "set_by": {"file": top[1], "glob": top[2]} if files else None,
+            "globs": rows[idx][1], "key": keys[idx], "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
@@ -431,8 +454,12 @@ def earned(root, rel, specs, profile, tier, base, head, staged=False):
 
 def small(root, rel, tier, base, head, staged):
     """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
-    One `git diff --numstat` and one `--raw` (the index against base when staged). Cap: Max files / Max lines of the tier's Evidence row at
-    base (3 and 50 when absent or -); tests: the `## Tests` globs at base (TESTS). A binary file or a gitlink counts as over the cap.
+    One `git diff --numstat`, one `--raw` and one `-U0` patch (the index against base when staged; SUBS, so every gitlink shows)
+    and one `git check-attr filter` at base. Cap: Max files / Max lines / Max
+    bytes of the tier's Evidence row at base (3, 50 and 4000 when absent or -); bytes are those of the + and - lines of the hunks, and a
+    changed Git LFS pointer line (version or oid, LF or CRLF, a git-lfs, hawser or git-media spec URL) is over the cap whatever its size; tests: the `## Tests` globs at base (TESTS). A
+    binary file, a gitlink, a symlink, a path whose `filter` attribute is set at base (`filter <name> on <path>`: LFS, git-annex,
+    git-fat store content the diff never shows) or a diff or attribute that cannot be read counts as over the cap.
     A profile that cannot be read says so: none is never kept on a guess."""
     try:
         text = profile_at(root, base, rel) or ""
@@ -440,20 +467,49 @@ def small(root, rel, tier, base, head, staged):
         row = (parse_evidence(text, [r[0] for r in rows or []]) or {}).get(tier)
     except ValueError as err:
         return ["size: " + (err.args[0][1] if isinstance(err.args[0], tuple) else str(err))]
-    mf, ml = ((row[2][3:5] if row else []) + [None, None])[:2]
-    mf, ml = int(mf if mf is not None else 3), int(ml if ml is not None else 50)
+    mf, ml, mb = ((row[2][3:6] if row else []) + [None] * 3)[:3]
+    mf, ml, mb = (int(v if v is not None else d) for v, d in ((mf, 3), (ml, 50), (mb, 4000)))
     globs = [g for _, ln in section(text, "Tests") or [] for g in re.findall(r"`([^`]+)`", ln)] or TESTS
     top, spec = git(root, "rev-parse", "--show-toplevel"), (["--cached", base] if staged else [base, head])
-    out, raw = (gitz(top, "diff", f, "-z", "--no-renames", *spec) for f in ("--numstat", "--raw"))
-    if out is None or raw is None:
+    quiet = (*SUBS, "--no-renames", "--no-ext-diff", "--no-textconv")  # no configured driver runs on the change
+    out, raw = (gitz(top, "diff", f, "-z", *quiet, *spec) for f in ("--numstat", "--raw"))
+    run = subprocess.run(["git", "-C", str(top), "diff", "-U0", "--no-color", *quiet, *spec], capture_output=True)
+    if out is None or raw is None or run.returncode:
         return ["size: cannot read the diff"]
+    # Walk the patch as bytes: a line counts only inside a hunk, so an added `++ x` is content, not a `+++` header.
+    # shortcut: the whole patch is held in memory, upgrade when a none tier takes diffs of hundreds of MB.
+    nbytes, lfs, at, hunk = 0, None, -1, False
+    for ln in run.stdout.split(b"\n"):
+        if ln.startswith(b"diff --git "):
+            at, hunk = at + 1, False
+        elif ln.startswith(b"@@"):
+            hunk = True
+        elif hunk and ln[:1] in (b"+", b"-"):
+            nbytes += len(ln)  # marker stands in for the newline
+            if lfs is None and re.match(rb"[+-](version \S*(git-lfs|hawser|git-media)|oid sha256:)", ln):  # no $: a CRLF pointer ends in \r
+                lfs = at
     ent = [e.split("\t", 2) for e in out]
     meta = [(m.split(), p) for m, p in zip(raw[::2], raw[1::2])]  # ":<old mode> <new mode> <old sha> <new sha> <status>", path
     lines = sum(int(a) + int(d) for a, d, _ in ent if a != "-")
-    binary = any(a == "-" for a, _, _ in ent) or any("160000" in (m[0][1:], m[1]) for m, _ in meta)
+    binary = any(a == "-" for a, _, _ in ent) or any(t in (m[0][1:], m[1]) for m, _ in meta for t in ("160000", "120000"))  # gitlink, symlink
     why = []
+    if at + 1 != len(ent):
+        return ["size: cannot read the diff"]
     if len(ent) > mf or lines > ml or binary:
         why.append("size %d files / %d%s lines > cap %d/%d" % (len(ent), lines, "+" if binary else "", mf, ml))
+    if nbytes > mb:
+        why.append("bytes %d > cap %d" % (nbytes, mb))
+    if lfs is not None:
+        why.append("LFS pointer: " + ent[lfs][2])
+    # A filter (LFS, git-annex, git-fat) stores content the diff never shows; attributes as of base, .gitattributes is guarded.
+    # shortcut: --source needs git 2.40+; older git fails closed (every none change is spot), upgrade git on such a runner
+    att = subprocess.run(["git", "-C", str(top), "check-attr", "--stdin", "-z", "--source=" + base, "filter"], capture_output=True,
+                         input=b"\0".join(p.encode("utf-8", "surrogateescape") for _, _, p in ent))
+    av = att.stdout.split(b"\0")[:-1]
+    if att.returncode or len(av) != 3 * len(ent):
+        return why + ["size: cannot read the filter attribute"]
+    why += ["filter %s on %s" % (v.decode("utf-8", "surrogateescape"), p.decode("utf-8", "surrogateescape"))
+            for p, v in zip(av[::3], av[2::3]) if v not in (b"unspecified", b"unset")][:1]
     # numstat misses a deleted empty file, a mode change and an added skip line; `__init__.py` and conftest.py change what runs
     changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None) or next((p for m, p in meta if (
         hit(p, globs) and (m[4][0] in "DT" or m[4][0] == "M" and m[0][1:] != m[1])) or key(posixpath.basename(p)) in ("conftest.py", "__init__.py")), None)
@@ -559,7 +615,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             return refuse("commit " + r[0][:7] + " has an unreadable committer date")
     cut = lambda win: max([i for i, r in enumerate(recs) if now - win * 86400 <= int(r[2]) <= now] or [-1])
     last = -1 if shallow else cut(longest)  # windows nest, so the longest one's cut is the max of the tier cuts
-    # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body, position, the label's Human).
+    # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body, position).
     # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
     ents, unprofiled = {}, 0
     where = (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
@@ -582,8 +638,8 @@ def evidence(root, rel, specs, profile, as_json, text=None):
                 return refuse("cannot read the change set of " + sha[:7])  # never the body alone: a missed revert passes
             cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
-        ents[i] = ((c["tier"], tuple(sorted(c["globs"]))) if c and c["why"] is None else None, [h for h, _ in cs],
-                   named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i, c["human"] if c and c["why"] is None else None)
+        ents[i] = (c["key"] if c and c["why"] is None else None, [h for h, _ in cs],
+                   named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i)
         # a commit below the cut that a revert or Fixes: in the window names joins it alone, not the commits between
         todo += sorted({j for x in ents[i][2] + ents[i][3] for j in range(last + 1, len(recs)) if recs[j][0].startswith(x)} - set(todo[last + 1:]))
     log = [ents[i] for i in sorted(ents)]  # newest first
@@ -597,11 +653,13 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             if not more:
                 return [e for e in log if e in mine]
             mine += more
-    # a commit counts for a tier only under the same (name, Paths globs) its parent's row had as the row read now; Reviewer and Human are not compared
-    cur = {(r[0], tuple(sorted(r[1]))) for r in tiers}
-    relabelled = sum(1 for e in log if e[0] and e[0] not in cur)
+    # a commit counts for a tier only when its parent's profile had the same rows from that tier down to the last (name,
+    # Paths globs) and guarded globs as the profile read now: a stricter row narrowed moves files into the lower tiers.
+    # Reviewer and Human are not compared, so a promotion keeps its evidence.
+    keys = row_keys(tiers, guarded_globs(text, rel))
+    relabelled = sum(1 for e in log if e[0] and e[0] not in keys)
     out, rows_h = {}, {r[0]: r[3] for r in tiers}
-    for name, globs in ((r[0], tuple(sorted(r[1]))) for r in tiers):
+    for name, k in zip(names, keys):
         row = (ev or {}).get(name)
         m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
                  window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=0)
@@ -613,15 +671,14 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             m["why"] = "shallow clone: fetch the full history"
             continue
         wlog = tier_log(win)
-        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == (name, globs)]
+        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == k]
         m.update(window_days=win, merged=len(mine))
-        for i, (_, shas, _, _, body, _, human) in mine:
+        for i, (_, shas, _, _, body, _) in mine:
             later = wlog[:i]  # the log is newest first, so these came after this commit
             hit_ = lambda k: any(h.startswith(x) for e in later for x in e[k] for h in shas)
             m["reverted"] += hit_(2)
             m["escaped"] += hit_(3)
-            carries, caught = findings(body)
-            carries = carries and (caught or human != "none")  # nobody writes the trailer for a none merge: its 0 is no data
+            carries, caught = findings(body)  # every value counts: ready.py --auto-merge refuses a PR that carries one
             m["human_caught"] += caught
             m["with_trailer"] += carries
         den = {"reverted": m["merged"], "escaped": m["merged"], "human_caught": m["with_trailer"]}
@@ -658,7 +715,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         if d is not None:
             print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
                   + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
-    print("- relabelled: " + str(relabelled) + " commit(s) under a tier row renamed or changed in the window")
+    print("- relabelled: " + str(relabelled) + " commit(s) whose tier, a stricter row or a guarded path changed in the window")
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: " + src + ", unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
