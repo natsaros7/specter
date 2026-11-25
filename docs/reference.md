@@ -172,7 +172,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   that commit; it reads first-parent commits on `merged_ref` inside each tier's window, labels each with
   the profile as of its parent, and counts per tier: merged, reverted (a later commit whose change set has
   `This reverts commit <sha>` naming one of this commit's), escaped (the same with a `Fixes: <sha>` trailer) and
-  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; see
+  human-caught (a `Human-Findings: <n>` trailer written at the merge, caught when above 0 or not plain digits; a merge labelled `none` carries none, so its `0` is ignored and its tier never holds on the trailer; see
   `kit/playbooks/sync.md` § Trailers). The window is by position: it runs from the tip down to the oldest commit dated
   inside it, and every commit above that counts whatever its own date; a future date never sets it. Human-caught is a
   rate over the merges that carry the trailer, printed `human-caught <c> of <k> (<pct>%)`. Each tier is `eligible`,

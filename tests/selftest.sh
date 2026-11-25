@@ -1003,6 +1003,17 @@ export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e15 -b main; mr docs -m age
 for i in $(seq 20); do mr docs -m "old$i"; done; unset GIT_COMMITTER_DATE
 gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4; do mr docs -m "c$i"; done
 want "13e15 the window adds the named commit, not the commits between" "routine: breach (reverted 16.7% > 10%)"
+# Human-Findings on a none tier: nobody writes it for the human, so no trailer is no hold, and an agent-written 0 is no data (a caught value still counts)
+GR='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n'
+ER='| routine | 90 | 3 | - | - | 10 |\n| domain | 90 | 1 | - | - | - |\n'"$GR"
+nr t13e18 -b main; mr docs -m h1; mr docs -m h2; mr docs -m h3
+want "13e18 a none tier holds on a missing Human-Findings" "routine: eligible"
+mr docs -m h4 -m "Human-Findings: 2"
+want "13e18 a caught Human-Findings on a none tier still counts" "routine: breach (human-caught 100.0% > 10%)"
+nr t13e19 -b main; mr docs -m h1 -m "Human-Findings: 0"; mr docs -m h2 -m "Human-Findings: 0"; mr docs -m h3 -m "Human-Findings: 0"
+sed -i.bak 's/| standard | none |/| standard | spot |/' "$R/.specs/steering/autonomy.md"; rm -f "$R/.specs/steering/autonomy.md.bak"
+gitq -C "$R" add -A; gitq -C "$R" commit -qm "routine is spot"
+want "13e19 agent-written zeros on a none tier are no data once it is spot" "routine: hold (Human-Findings on 0 of 3 merges)"
 # a profile that is not UTF-8 gets a readable reason, from the label's reader and from --check, never a traceback
 nr t13e17 -b main; mr docs -m d0; printf '\377\376' >> "$R/.specs/steering/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm bin
 rc=0; out=$(er) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF "not UTF-8" || fail "13e17 evidence: not-UTF-8 profile exits $rc, want 2 and 'not UTF-8': $out"

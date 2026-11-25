@@ -120,7 +120,8 @@ flowchart LR
    At the merge, the human adds `Human-Findings: <n>` to the merge (or squash) commit message: the number of
    problems the human found that the gates and the reviewer missed, `0` when none. Write it on every merge, so
    `tiers.py --evidence` can tell "no findings" from "no data": human-caught % counts only merges that carry the trailer,
-   and a window with too few of them is a hold (see [sync.md](../playbooks/sync.md) § Trailers).
+   and a window with too few of them is a hold. A `none` merge carries no `Human-Findings:`: nobody writes it for the
+   human, so its `0` is ignored and a tier whose Human is `none` never holds on it (a value above 0 still counts; see [sync.md](../playbooks/sync.md) § Trailers).
 
 A review finding that reaches `human: none` or `auto-merge: yes` without a human is a security finding. File it
 privately, through the project's `SECURITY.md` channel (on GitHub, a draft advisory), not as a public issue or

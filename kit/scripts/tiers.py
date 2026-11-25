@@ -47,7 +47,8 @@ its first parent (a parent with no profile or Tiers, and the root commit, are `u
 counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
 human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
-share of the merges that carry one. With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold. It never edits the profile.
+share of the merges that carry one; a merge labelled `none` carries none unless its value is above 0 (nobody writes the trailer for the human).
+With a Max human-caught set, fewer such merges than max(Min merged, 1) is a hold, except for a tier whose Human is `none`. It never edits the profile.
 Under a `breach` it prints `  demote: <file>:<line> Human <cur> → <one step stricter> (a human edit; tiers.py changes nothing)` for that tier's
 row (none → spot, spot → required; `required` says already required); --json: per tier `demote` {file, line, from, to} or null.
 Exit 0 whenever it printed a report; 2 on a bad profile, argument or ref, with `file:line` for a bad row.
@@ -513,7 +514,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             return refuse("commit " + r[0][:7] + " has an unreadable committer date")
     cut = lambda win: max([i for i, r in enumerate(recs) if now - win * 86400 <= int(r[2]) <= now] or [-1])
     last = -1 if shallow else cut(longest)  # windows nest, so the longest one's cut is the max of the tier cuts
-    # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body).
+    # newest first: (tier or None, change-set shas, shas named by reverts, shas named by Fixes:, own body, position, the label's Human).
     # The change set of F is F^1..F: F itself for a squash or linear commit, every commit a merge brought in otherwise.
     ents, unprofiled = {}, 0
     where = (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
@@ -537,7 +538,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
         ents[i] = ((c["tier"], tuple(sorted(c["globs"]))) if c and c["why"] is None else None, [h for h, _ in cs],
-                   named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i)
+                   named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i, c["human"] if c and c["why"] is None else None)
         # a commit below the cut that a revert or Fixes: in the window names joins it alone, not the commits between
         todo += sorted({j for x in ents[i][2] + ents[i][3] for j in range(last + 1, len(recs)) if recs[j][0].startswith(x)} - set(todo[last + 1:]))
     log = [ents[i] for i in sorted(ents)]  # newest first
@@ -554,7 +555,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
     # a commit counts for a tier only under the same (name, Paths globs) its parent's row had as the row read now; Reviewer and Human are not compared
     cur = {(r[0], tuple(sorted(r[1]))) for r in tiers}
     relabelled = sum(1 for e in log if e[0] and e[0] not in cur)
-    out = {}
+    out, rows_h = {}, {r[0]: r[3] for r in tiers}
     for name, globs in ((r[0], tuple(sorted(r[1]))) for r in tiers):
         row = (ev or {}).get(name)
         m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
@@ -569,12 +570,13 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         wlog = tier_log(win)
         mine = [(i, e) for i, e in enumerate(wlog) if e[0] == (name, globs)]
         m.update(window_days=win, merged=len(mine))
-        for i, (_, shas, _, _, body, _) in mine:
+        for i, (_, shas, _, _, body, _, human) in mine:
             later = wlog[:i]  # the log is newest first, so these came after this commit
             hit_ = lambda k: any(h.startswith(x) for e in later for x in e[k] for h in shas)
             m["reverted"] += hit_(2)
             m["escaped"] += hit_(3)
             carries, caught = findings(body)
+            carries = carries and (caught or human != "none")  # nobody writes the trailer for a none merge: its 0 is no data
             m["human_caught"] += caught
             m["with_trailer"] += carries
         den = {"reverted": m["merged"], "escaped": m["merged"], "human_caught": m["with_trailer"]}
@@ -582,7 +584,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         # a merge without the trailer is no data, never "no findings": the rate is over the merges that carry one
         why = ("merged " + str(m["merged"]) + " < min " + str(low)) if m["merged"] < max(low, 1) else \
               "Human-Findings on %d of %d merges" % (m["with_trailer"], m["merged"]) \
-              if caps[2] is not None and m["with_trailer"] < max(low, 1) else None
+              if caps[2] is not None and m["with_trailer"] < max(low, 1) and rows_h[name] != "none" else None
         if why:
             m["why"] = why
             continue
