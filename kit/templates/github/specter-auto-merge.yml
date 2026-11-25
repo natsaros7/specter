@@ -72,8 +72,8 @@ jobs:
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
       # sandbox-delay: the live test inserts a sleep step here
 
+      # Minted on a failed check too: a re-run (the body edited after a pass) must be able to take the approval back.
       - name: Mint the App token
-        if: steps.check.outputs.rc == '0'
         id: app
         uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         with:
@@ -102,3 +102,21 @@ jobs:
           now=$(gh api "repos/$GH_REPO/pulls/$PR" --jq .head.sha)
           [ "$now" = "$HEAD_SHA" ] && ok=1
           [ -n "${ok-}" ] || echo "head moved from $HEAD_SHA to $now: approval dismissed, auto-merge disabled"
+
+      # A failed check on a re-run (same head, the body now blocks) must not leave the earlier approval or auto-merge.
+      # The App's reviews are the ones by <app-slug>[bot]; the slug is the token action's output, not PR data.
+      - name: Revoke an earlier approval
+        if: steps.check.outputs.rc != '0'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          BOT: ${{ steps.app.outputs.app-slug }}[bot]
+        run: |
+          set -u
+          gh api --paginate "repos/$GH_REPO/pulls/$PR/reviews" \
+            --jq '.[] | select(.state == "APPROVED" and .user.login == $ENV.BOT) | .id' |
+          while read -r id; do
+            gh api -X PUT "repos/$GH_REPO/pulls/$PR/reviews/$id/dismissals" -f event=DISMISS \
+              -f message="specter-auto-merge: the check no longer passes" || true
+          done
+          gh pr merge "$PR" --disable-auto || true

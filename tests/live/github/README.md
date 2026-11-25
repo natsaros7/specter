@@ -91,6 +91,7 @@ Reads: `pr N` is `gh pr view N --json state,reviews,autoMergeRequest,headRefOid,
    | N5 | during the 60 s hold: `for i in 1 2 3 4; do echo x > docs/over-$i.md; done; git add docs; git commit -m over; git push` on the branch | approval dismissed stale, 2nd run does nothing, not merged |
    | N6 | first `gh variable set SANDBOX_DELAY --repo $R --body 30`; during the sleep push the same over-cap commit; afterwards `gh variable delete SANDBOX_DELAY --repo $R` | not merged; record which line caught it |
    | P2 | during the 60 s hold: `gh pr edit <n> --body-file <the text plus a line "Human-Findings: 0">` | merges with the checked body, no trailer |
+   | N7 | open a `slow/` PR like P2; once the App approves, `gh pr edit <n> --body-file <the text with "complexity: non-trivial">` | the `edited` run fails its check, the App's approval is dismissed, auto-merge is off, not merged |
 
    Observations: the table's "Observed by" column in the design. For N5 the timeline is
    `gh api repos/$R/issues/<n>/timeline` (look for `review_dismissed`).

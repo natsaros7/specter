@@ -4,10 +4,17 @@
 # the host. The example's own Gates table is left as a real project would have it. Needs docker only at gate time.
 set -eu
 dir=${1:?usage: sandbox.sh <dir under \$HOME>}
-case $dir in "$HOME"/?*) ;; *) echo "sandbox: $dir must be a path under \$HOME" >&2; exit 2 ;; esac
+# Resolve before the check ("$HOME/../../tmp/x" is text-under-$HOME but not real-under-$HOME), and never delete what
+# this script did not make: a non-empty dir needs the marker it writes below.
+mkdir -p "$dir"
+d=$(cd "$dir" && pwd -P); h=$(cd "$HOME" && pwd -P)
+case $d in "$h"/?*) ;; *) echo "sandbox: $d must be a path under $h" >&2; exit 2 ;; esac
+[ -z "$(ls -A "$d")" ] || [ -f "$d/.specter-eval-sandbox" ] || { echo "sandbox: $d is not empty and not a previous sandbox" >&2; exit 2; }
+dir=$d
 root=$(cd "$(dirname "$0")/../../.." && pwd)
 rm -rf "$dir"
 cp -R "$root/examples/acme-shop" "$dir"
+: > "$dir/.specter-eval-sandbox"
 rm -rf "$dir/target" "$dir"/*/target
 git -C "$dir" init -q
 "$root/install.sh" "$dir" >/dev/null

@@ -2,7 +2,7 @@
 # Live-recipe sandbox kit (v070 task 2). Nothing here writes to GitHub on its own.
 #   sandbox.sh seed <dir>             build the sandbox repository locally (no network); <dir> must be new, under $HOME
 #   sandbox.sh dry-run <dir>          run every scenario's ready.py call against a local bare origin; exit 0 = all as expected
-#   sandbox.sh open <dir> <id> [--yes] make scenario <id> (K1 N1 N2 N3 N4 P1 N5 N6 P2) as a local branch with its PR text,
+#   sandbox.sh open <dir> <id> [--yes] make scenario <id> (K1 N1 N2 N3 N4 P1 N5 N6 P2 N7) as a local branch with its PR text,
 #                                      then PRINT the push and `gh pr create` commands. Only --yes runs them.
 # Which scenario does what, and what is expected: .specs/features/v070-live-and-eval/design.md, "Scenarios".
 set -eu
@@ -81,15 +81,15 @@ mkdocs() { i=1; while [ "$i" -le "$1" ]; do echo "$BR $i" > "docs/$(echo "$BR" |
 # setup <id> <base ref>: branch, change, commit. Sets BR IMPL REV LVL CX.
 setup() {
   BR=live/$(echo "$1" | tr 'A-Z' 'a-z'); IMPL=claude-sonnet-5-5; REV=gpt-5-1; LVL=standard; CX=trivial
-  case $1 in N5|P2) BR=slow/$(echo "$1" | tr 'A-Z' 'a-z') ;; esac
+  case $1 in N5|P2|N7) BR=slow/$(echo "$1" | tr 'A-Z' 'a-z') ;; esac
   g checkout -q -B "$BR" "$2"
   case $1 in
     K1) mkdir -p .github/workflows; cp "$HERE/probe.yml" .github/workflows/probe.yml; LVL=deep ;;
     N1) mkdocs 4 ;;
     N2) mkdocs 1; CX=non-trivial ;;
     N3) mkdocs 1; REV=claude-opus-5-5 ;;
-    N4|P1|N5|N6|P2) mkdocs 1 ;;
-    *) die "unknown scenario '$1' (K1 N1 N2 N3 N4 P1 N5 N6 P2)" ;;
+    N4|P1|N5|N6|P2|N7) mkdocs 1 ;;
+    *) die "unknown scenario '$1' (K1 N1 N2 N3 N4 P1 N5 N6 P2 N7)" ;;
   esac
   g add -A; g commit -qm "docs: live scenario $1"
 }
@@ -143,6 +143,8 @@ dry_run() {
   expect N6.2 1 'size [0-9]+ files' $b1 "$pf"
   setup P2 $b1; body $b1 > "$pf"; expect P2.1 0 '^auto-merge: yes' $b1 "$pf"
   printf '\nHuman-Findings: 0\n' >> "$pf"; expect P2.2 1 'Human-Findings' $b1 "$pf"
+  # N7: the same head after a pass, the body edited to non-trivial; only the check is modelled, the App's dismissal is live-only
+  setup N7 $b1; CX=non-trivial; body $b1 > "$pf"; expect N7 1 'complexity non-trivial' $b1 "$pf"
   echo "dry-run: $ROWS rows, $BAD failed"
   [ "$BAD" = 0 ]
 }
@@ -160,7 +162,7 @@ open_pr() {
   echo "scenario $id is on local branch $BR, PR text in $f"
   case $id in
     K1) echo "note: expect no merge; read the three probe jobs, see README task 8" ;;
-    N5|P2) echo "note: the branch starts with slow/: the check holds for a minute; do the mid-flight step from README task 9 then" ;;
+    N5|P2|N7) echo "note: the branch starts with slow/: the check holds for a minute; do the mid-flight step from README task 9 then" ;;
     N6) echo "note: set the variable SANDBOX_DELAY=30 first (README task 9) and delete it afterwards" ;;
     N4) echo "note: open it only after P1 has merged" ;;
   esac

@@ -1353,6 +1353,8 @@ for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'r
 # the shipped workflow is the recipe as a file: same keys as the prose, every action pinned by sha, a timeout, no push/schedule/workflow_run trigger, and no GITHUB_TOKEN outside comments
 AM="$KIT/kit/templates/github/specter-auto-merge.yml"
 for k in 'pull_request_target' 'environment:' 'persist-credentials: false' 'commit_id' '--match-head-commit' '--body-file' 'cancel-in-progress: false' '--disable-auto' 'timeout-minutes:'; do grep -qF -e "$k" "$AM" || fail "14b: specter-auto-merge.yml does not name $k"; done
+# a failed re-check (the body edited after a pass) revokes: the steps on rc != 0 dismiss the App's approvals and disable auto-merge
+awk "/if: steps.check.outputs.rc != '0'/{f=1} f" "$AM" | grep -qF -e 'dismissals' && awk "/if: steps.check.outputs.rc != '0'/{f=1} f" "$AM" | grep -qF -e '--disable-auto' || fail "14b: specter-auto-merge.yml has no failed-check path that dismisses and disables auto-merge"
 # a fork PR is a stranger's text: the job runs only for a same-repo head and a trusted author
 for k in 'head.repo.full_name' 'author_association'; do grep -E '^[[:space:]]*if:' "$AM" | grep -qF -e "$k" || fail "14b: specter-auto-merge.yml job if: does not name $k"; done
 ! grep -E '^[[:space:]]*(- )?uses:' "$AM" | grep -vE '@[0-9a-f]{40}( |$)' | grep -q . || fail "14b: specter-auto-merge.yml has an action not pinned by sha"
