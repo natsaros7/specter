@@ -34,7 +34,7 @@ No `action`. The `Max bytes` Evidence column in `steering/autonomy.md` is option
 
 - action: if `autonomy.md` exists, add the `## Guardrails` and `## Evidence` sections from the template: without
   Guardrails every `none` tier is labelled `spot`.
-- action: write `Human-Findings: <n>` on every merge and `Fixes: <sha>` on an escaped-defect fix (`sync.md`).
+- action: the human writes `Human-Findings: <n>` at the human check (never on an auto-merge: 0.11 refuses it there), and `Fixes: <sha>` goes on an escaped-defect fix (`sync.md`).
 
 ## 0.7.0
 
