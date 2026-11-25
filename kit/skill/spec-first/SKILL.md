@@ -17,6 +17,7 @@ Pick the mode from the request, then follow the playbook **exactly**. The playbo
 | "next task / continue <feature>" | `.specs/kit/playbooks/next-task.md` |
 | "sync specs / <feature> landed" | `.specs/kit/playbooks/sync.md` |
 | "refresh / re-ground specs" | `.specs/kit/playbooks/refresh.md` |
+| "run agents in parallel / dispatch a batch" | `.specs/kit/playbooks/parallel.md` |
 | "lint specs" | `python3 .specs/kit/scripts/spec_lint.py` |
 
 - If your tool has a question UI, use it for the interview questions; otherwise ask in chat.

@@ -167,6 +167,12 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - Two workers sharing one checkout must not use `git stash`, `reset`, `checkout` or `restore`: one worker's
   stash wipes the other's edits. Give each its own `git worktree`, or read old code with `git show HEAD:path`.
 
+## Retro after a merge
+
+After a merge, a mistake that got through becomes one line in `.specs/steering/lessons.md` plus the check that now
+catches it (a Gates row, a lint rule, a test or a playbook step). The agent proposes the line and the check; a human
+approves them before they land. Several agents at once: [parallel.md](../playbooks/parallel.md).
+
 ## Grill the artifact (optional, before implementation)
 
 A spec or plan is cheapest to fix before code exists. For a large or risky one, attack the document instead of

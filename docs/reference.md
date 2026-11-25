@@ -135,7 +135,8 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   others at the moment the row names.
 - **Lessons.** `.specs/steering/lessons.md` takes one dated line per correction. A lesson seen twice becomes a check first
   (a Gates row, a lint rule or a test), and a rule in spec-rules, code-standards or decisions only when no check can
-  catch it (`sync.md`).
+  catch it (`sync.md`). After a merge, a mistake becomes one lessons line plus the check that catches it, proposed by
+  the agent and approved by a human (`review-loop.md`). Several agents at once follow `kit/playbooks/parallel.md`.
 - **Tiers.** A `| Tier | Paths | Reviewer | Human |` table, rows from most to least autonomous (setup suggests routine: tests,
   docs, lockfiles; domain: source; critical: security, interfaces, migrations, CI). Each changed file takes the lowest row a
   glob matches; the change takes its strictest file. Guarded paths (the profile, the kit, agent files) always take the last row.
