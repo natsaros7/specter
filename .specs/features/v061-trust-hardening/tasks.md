@@ -5,12 +5,13 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 ## ▶ Resume here (2026-11-25)
 
 - **Plan:** pinned issue #31 holds the batches, decisions and dispatch rules. Tick a batch there when it lands.
-- **Landed on `feat/0.10.0` (tip `0fa5139`):** tasks 1 to 15 except 16, plus 17, 18, 21, 22, 24 and README pass 1
-  (task 20). G1 to G4 pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
-- **Next: batch 5.** Task 23 (#30, size cap and reviewer `complexity`), task 25 (#34, the lessons in kit for any
-  project: a container-gates form with a loud empty-mount check, and the playbook's gates line made generic), bug #33
-  (`spec_lint` exits 0 on a missing dir), then task 26 (#36, `kit/scripts/readme_check.py`).
-- **Then** the release: task 16 (#18), task 19 (#26), README pass 2 (task 20, #27), docs/overview refresh.
+- **Landed on `feat/0.10.0`:** every task except 16, 19 and 20 (README pass 1 is in). Bug #33 is fixed. G1 to G4
+  pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
+- **Next: the 0.10.0 release.** Task 20 pass 2 (README, deck, roadmap, overview PDF), then task 16 (deep review,
+  CHANGELOG, VERSION), then task 19 (the release PR's own Gates, Review and Verification blocks, `ready.py` says
+  ready). The maintainer approves the merge to `main`, the tag and the GitHub Release.
+- **Then:** the orchestrator (stage 5) spec as a proposal, no code; #35 acme eval set; the live recipe test with
+  Nikos.
 - **Rules:** 2 to 3 agents per batch. Reset each worktree to the tip. `PYTHONDONTWRITEBYTECODE=1`. Use
   `f=$(mktemp)` for every gate output. No polling loops. Gates in Docker. Land with `git cherry-pick`, check the rc,
   count the 24 task lines, then run the gates once on the tip.
