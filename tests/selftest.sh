@@ -14,7 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27 27c:27"
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27 27c:27 27d:27"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
@@ -1640,11 +1640,11 @@ P="$TMP/p27c"; p27 "$P"; S="$P/platform/.specs"; mkdir -p "$S/features/cross-a" 
 printf '# B\n\n[REQ-BIL-2] billing feature cap\n' > "$P/billing/.specs/features/b/requirements.md"
 printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on REQ-ORD-1\n' > "$S/features/cross-a/requirements.md"
 printf '# D\n\nREQ-PLT-1 uses [REQ-ORD-1] and [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
-printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
 out=$(lintp "$P/platform") || fail "27c(a): member ids must resolve: $out"
-printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2] [REQ-NOPE-9]\n' > "$S/features/cross-a/tasks.md"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2] [REQ-NOPE-9]\n' > "$S/features/cross-a/tasks.md"
 rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'referenced but never defined: REQ-NOPE-9' || fail "27c(b): undefined id rc=$rc: $out"
-printf -- '- [ ] 1 x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
 mv "$P/billing" "$TMP/billing.gone27c"
 rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q 'WARN.*REQ-BIL-2.*not checked: billing$' && ! echo "$out" | grep -q 'WARN.*REQ-ORD-1' || fail "27c(c): unchecked member rc=$rc: $out"
 mv "$TMP/billing.gone27c" "$P/billing"
@@ -1656,5 +1656,36 @@ out=$(lintp "$P/platform") || fail "27c(e): arch cite: $out"; ! echo "$out" | gr
 printf '# D\n\nREQ-PLT-1 uses [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
 printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on [REQ-ORD-1]\n' > "$S/features/cross-a/requirements.md"
 rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'design.md does not trace REQ-ORD-1' || fail "27c(f): bracket defines rc=$rc: $out"
+fi; if sect 27d "platform layer: cross-repo task lines"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+P="$TMP/p27t"; p27 "$P"; S="$P/platform/.specs"; F="$S/features/cross-b"; T="$F/tasks.md"
+mkdir -p "$F" "$P/orders/.specs/features/f"
+printf '# B\nStatus: Proposed\n[REQ-PLT-1] x\n' > "$F/requirements.md"; printf '# D\nREQ-PLT-1\n' > "$F/design.md"
+good() { printf '%s\n' '- [ ] 1 platform: decision — [REQ-PLT-1]' \
+  '- [ ] 2 orders: a → orders/.specs/features/f/ · after: 1 — [REQ-PLT-1]' \
+  '- [ ] 3 billing: b → https://example.invalid/pull/12 · after: 2 — [REQ-PLT-1]' \
+  '- [ ] 4 billing: c → billing#13 · after: 1, 3 — [REQ-PLT-1]' \
+  '- [ ] 5 orders: wrapped' '  -> orders#7 · after: 4 — [REQ-PLT-1]' > "$T"; }
+tl() { # sed expr, appended line: rewrite the good file, then lint it
+  good; [ -z "$1" ] || { sed "$1" "$T" > "$TMP/t27d" && cat "$TMP/t27d" > "$T"; }; [ -z "$2" ] || printf '%s\n' "$2" >> "$T"
+  python3 "$LINT" --specs "$S" cross-b 2>&1
+}
+t27() { rc=0; out=$(tl "$2" "$3") || rc=$?; [ "$rc" = "$1" ] && echo "$out" | grep -qF -- "$4" || fail "27d($5): rc=$rc want $1 and '$4': $out"; }
+t27 0 '' '' 'OK   cross-b' clean
+t27 1 '' '- [ ] 6 shipping: x → shipping#1 — [REQ-PLT-1]' "task 6: unknown repo 'shipping' (not in system/repos.md)" a
+t27 1 '2s/ → orders[^ ]*//' '' "task 2: no child (→ orders/.specs/features/<f>/ or a PR)" b
+t27 1 '2s#orders/.specs#billing/.specs#' '' "task 2: child is not an orders feature or PR" c1
+t27 1 '2s#→ [^ ]*#→ billing\#2#' '' "task 2: child is not an orders feature or PR" c2
+t27 1 '2s#features/f#features/nope#' '' "task 2: child orders/.specs/features/nope/ not found" d1
+mv "$P/orders" "$P/orders.off"; t27 0 '2s#features/f#features/nope#' '' 'OK   cross-b' d2; mv "$P/orders.off" "$P/orders"
+t27 1 's/after: 4/after: 9/' '' "task 5: after 9: no such task" e
+t27 1 '2s/after: 1/after: 3/;3s/after: 2/after: 2/' '' "after: cycle 2 → 3 → 2" f1
+[ "$(echo "$out" | grep -c 'cycle')" = 1 ] || fail "27d(f): cycle reported once: $out"
+t27 1 '4s/after: 1, 3/after: 4/' '' "after: cycle 4 → 4" f2
+t27 1 '' '- [ ] foo: no number' "task line without a number: '- [ ] foo: no number'" g1
+t27 1 '4s/- \[ \] 4/- [ ] 3/' '' "task 3: number used twice" g2
+sed 's/^Status: Proposed/Status: Done 2026-11-25 (#1)/' "$F/requirements.md" > "$TMP/t27d" && cat "$TMP/t27d" > "$F/requirements.md"
+t27 0 's/\[ \]/[x]/' '- [x] 6 shipping: x → shipping#1 — [REQ-PLT-1]' "history: task 6: unknown repo" h
+printf '{}' > "$S/spec-kit.json"; out=$(tl '' '- [ ] foo: no number') || fail "27d(i): no layer lints as today: $out"
 fi; sect_end
 echo "selftest: OK"

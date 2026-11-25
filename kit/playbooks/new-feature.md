@@ -39,6 +39,9 @@ Copy the template. Keep the sections in this order:
 ## 4. tasks.md: atomic and traceable
 
 - `- [ ] N <imperative task> — [REQ-…]`. Every task links at least one REQ. One task is roughly one reviewable diff.
+- On a platform root (`"layer": "platform"`) each task is `- [ ] N <repo>: <what> → <repo>/.specs/features/<f>/ · after: N — [REQ-…]`:
+  one registry repo or `platform:` per task, a child feature or PR link, `after:` to existing tasks; cite member ids
+  without brackets in `requirements.md`. The lint checks all of it.
 - The first task is the decision gate (if there is one). Near the end come the gate run, the spec sync
   (`domains/` update) and the PR.
 - For refactors, the **safety net comes first**: characterisation tests (golden responses, query counts, auth matrix)

@@ -25,6 +25,9 @@ Platform layer: spec-kit.json "layer" is "platform", "member" or null (default n
       On a platform root a feature's cited REQ id also resolves from the checked-out members' domains/*/ and features/*/
       requirements.md; an id the platform and a member, or two members, define FAILs as ambiguous; an id defined nowhere is a
       WARN naming the members not checked out, a FAIL when all are checked out. Brackets in a platform requirements.md still define.
+      Task lines (every task of every feature on a platform root): `- [ ] N <repo>: <what> -> <repo>/.specs/features/<f>/ . after: N, N`
+      with <repo> a registry repo or `platform:` (no child needed); the child is a feature of that repo (must exist when the
+      member is checked out) or a PR (URL, #n, <repo>#n); after: names existing tasks, no cycle; numbers are unique.
 
 History: a feature whose Status is Done or Dropped reports its structural FAILs below as WARN `history: <message>` (exit code unaffected);
       broken links and citations still FAIL everywhere.
@@ -205,7 +208,65 @@ def task_blocks(text):
     return blocks
 
 
-def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_ids=None, unchecked=()):
+def platform_tasks(text, rows, members):
+    """task-line FAILs of a platform feature (every task): '- [ ] N <repo>: <what> -> <child> · after: N, N' where <repo>
+    is a registry repo or 'platform', the child (first token after the arrow, the item may wrap) is a feature
+    '<repo>/<spec path>/features/<f>/' or a PR (URL, '#n', '<repo>#n'), and after: names existing tasks with no cycle.
+    rows: registry rows; members: repo -> spec dir or None (not checked out; the child path is then not checked)."""
+    fails, after, seen = [], {}, set()
+    for line, block in task_blocks(text):
+        m = re.match(r"\s*- \[[ xX]\] (\d+) (?:([\w.-]+): )?", line)
+        if not m:
+            fails.append("task line without a number: '" + line.strip()[:70] + "'")
+            continue
+        n, who, why = m.group(1), m.group(2), None
+        if n in seen:
+            fails.append("task " + n + ": number used twice")
+        seen.add(n)
+        ids = [int(i) for i in re.findall(r"\d+", (re.search(r"after:\s*(\d+(?:\s*,\s*\d+)*)", block) or [0, ""])[1])]
+        after.setdefault(n, [str(i) for i in ids])
+        if not who:
+            why = "no repo (<repo>: or platform:)"
+        elif who != "platform" and who not in {r[0] for r in rows}:
+            why = "unknown repo '" + who + "' (not in system/repos.md)"
+        elif who != "platform":
+            arrow = re.search(r"(?:\u2192|->)\s*(\S+)", block)
+            child = arrow.group(1).rstrip(".,;") if arrow else ""
+            feat = re.match(r"([\w.-]+)/.+/features/([^/]+)/?$", child)
+            pr = re.match(r"(?:https?://\S+|([\w.-]*)#\d+)$", child)
+            if not child:
+                why = "no child (\u2192 " + who + "/.specs/features/<f>/ or a PR)"
+            elif not ((feat and feat.group(1) == who) or (pr and pr.group(1) in (None, "", who))):
+                why = "child is not " + ("an " if who[0] in "aeiou" else "a ") + who + " feature or PR"
+            elif feat and members.get(who) and not (members[who] / "features" / feat.group(2)).is_dir():
+                why = "child " + child + " not found"
+        if why:
+            fails.append("task " + n + ": " + why)
+    for n in sorted(after, key=int):
+        fails += ["task " + n + ": after " + a + ": no such task" for a in after[n] if a not in after]
+    done, path = set(), []
+
+    def walk(n):  # first cycle only
+        if n in path:
+            return path[path.index(n):] + [n]
+        if n in done or n not in after:
+            return None
+        path.append(n)
+        for a in after[n]:
+            cyc = walk(a)
+            if cyc:
+                return cyc
+        path.pop()
+        done.add(n)
+    for n in sorted(after, key=int):
+        cyc = walk(n)
+        if cyc:
+            fails.append("task " + cyc[0] + ": after: cycle " + " \u2192 ".join(cyc))
+            break
+    return fails
+
+
+def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_ids=None, unchecked=(), platform=None):
     fails, warns = [], []
     req = re.compile(config["req_id_pattern"])
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
@@ -243,6 +304,8 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_
         bare = [first.strip()[:70] for first, block in task_blocks(docs["tasks"]) if not req.search(block)]
         if bare:
             warns.append(str(len(bare)) + " task(s) without a REQ link, e.g. '" + bare[0] + "'")
+        if platform:  # (registry rows, members dict) on a platform root, v080 task 5
+            fails += platform_tasks(docs["tasks"], *platform)
     for name, headings in config.get("required_sections", {}).items():
         for heading in headings:
             if name in docs and not re.search(r"^" + re.escape(heading) + r"\s*$", docs[name], re.M):
@@ -566,6 +629,7 @@ def lint_all(specs, names=(), members_root=None):
         for no, line in enumerate(p.read_text().splitlines(), 1):
             for r in defined_re.findall(line):
                 req_defs.setdefault(r, (p.relative_to(specs).as_posix(), no))
+    platform = (registry(specs)[0], dict(members(specs, config, members_root))) if config["layer"] == "platform" else None
     warnings = []
     profile = specs / "steering" / "project-profile.md"
     if not profile.exists() or "status: setup-incomplete" in profile.read_text():
@@ -578,7 +642,7 @@ def lint_all(specs, names=(), members_root=None):
             warnings.append("WARN merged-work check skipped: invalid tracker_pattern (" + str(err) + ")")
     for feature in targets:
         if feature.is_dir():
-            fails, warns = lint_feature(feature, config, traceability, domain_reqs, member_ids, unchecked)
+            fails, warns = lint_feature(feature, config, traceability, domain_reqs, member_ids, unchecked, platform)
             req_path = feature / "requirements.md"
             status = feature_status(req_path.read_text()) if req_path.exists() else None
             if status and status["state"] in ("Done", "Dropped"):
