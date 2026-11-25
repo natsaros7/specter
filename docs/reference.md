@@ -198,7 +198,9 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `test/*`, `*/test/*`,
   `*_test.*`, `*.test.*`, `test_*`), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
-  `spot`. `ready.py --auto-merge` exits 0 only when the verdict is `ready`, the reported human is `none` and there is no
+  `spot`. A `--range` label (and `ready.py`) also says `spot` when its base, the merge base, is not the `merged_ref`
+  tip that `--evidence` reads: `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps
+  its base. `ready.py --auto-merge` exits 0 only when the verdict is `ready`, the reported human is `none` and there is no
   warning. The platform recipe (one approval on every PR, dropped on a new commit; a non-required job that runs that
   check from a trusted worktree of the base and, on exit 0 only, approves with a non-agent identity and enables
   auto-merge; the merge queue re-runs the Gates, not `ready.py`), with a GitHub and a GitLab line, is in

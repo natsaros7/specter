@@ -34,6 +34,8 @@ Human `none` also needs the lowest row (the first of the Tiers table) and, in th
 The label counts history with the Evidence thresholds of the profile at the base (never the working tree), and with no
 merged_ref or refs/remotes/origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no
 merged_ref …`), and so it does when that history holds any commit of the change (`evidence: <ref> contains the change`).
+A --range label keeps `none` only when its base is the merged_ref tip that --evidence reads (full shas compared): a base
+behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps its base.
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
 `Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
 (globs of an optional `## Tests` section, default tests/* test/* */test/* *_test.* *.test.* test_*): `size <f> files / <l> lines > cap <F>/<L>`,
@@ -397,11 +399,12 @@ def classify(root, rel, rng, specs=None, where=None):
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
-def earned(root, rel, specs, profile, tier, base, head):
+def earned(root, rel, specs, profile, tier, base, head, staged=False):
     """None when `tier` is eligible in the Evidence report, else why not; a refusing report is a why too (fails closed).
     Thresholds are the profile's text at `base`, the text classify() read, never the working tree. With no merged_ref the
     history would be HEAD, the change itself: refused, as staged mode refuses it. So is a history that holds any commit
-    of the change (base..head), whatever its name: a merged_ref or origin/HEAD at the PR branch, or one that merged it."""
+    of the change (base..head), whatever its name: a merged_ref or origin/HEAD at the PR branch, or one that merged it.
+    Unless staged (a preflight), an eligible tier also needs base to equal the merged_ref tip the report read."""
     text = profile_at(root, base, rel) if base and head else None
     if text is None:
         return "evidence: no profile at the base"
@@ -423,7 +426,9 @@ def earned(root, rel, specs, profile, tier, base, head):
     if mine is None or mine != git(root, "rev-list", "--count", head, "^" + base, "^" + rep_["head"]):
         return "evidence: " + ref + " contains the change"
     m = rep_["tiers"].get(tier) or {}
-    return None if m.get("verdict") == "eligible" else "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
+    if m.get("verdict") != "eligible":
+        return "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
+    return None if staged or base == rep_["head"] else "base %s is behind %s: update the branch" % (base[:7], ref)
 
 
 def small(root, rel, tier, base, head, staged):
@@ -463,7 +468,7 @@ def label(root, rel, rng, as_json, specs=None, profile=None):
         c = classify(root, rel, rng, specs)
         # Only a label that would still be none reads history; a profile with no Tiers section has no tier to count.
         if c["human"] == "none" and c["why"] is None:
-            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"], c["head"])
+            why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"], c["head"], not rng)
             c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
         if c["human"] == "none" and c["why"] is None:
             more = small(root, rel, c["tier"], c["base"], c["head"], not rng)

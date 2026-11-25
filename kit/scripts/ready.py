@@ -22,13 +22,15 @@ it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
-Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it), the change is over the
+Human `none` is reported as `spot` when the tier's evidence is not eligible or, with --range, the base is not the
+merged_ref tip (as tiers.py labels it: `base <sha7> is behind <ref>: update the branch`), the change is over the
 size cap or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
 family, or its `- complexity: trivial|non-trivial` line is missing or not `trivial` (`reviewer: complexity <value or missing>`;
 a repeated complexity line is not ready): `- human: none → spot (<why>)`, --json tier.human_why; the exit code is unchanged.
 --auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
 is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
-non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha> (without
+non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha>, the base
+the merged_ref tip and the merge base of the two (without
 --range, `auto-merge: no`); on exit 0 only, it approves with a non-agent identity and enables auto-merge (review-loop.md
 step 5). --range ends are resolved as in tiers.py: a tag or an ambiguous name is exit 2. Without the flag the exit code is as above.
 --json: {verdict, gates, tier, review, verification, warnings, auto_merge}.
@@ -331,7 +333,7 @@ def main(argv):
     why = []
     if tier["human"] == "none":
         prof = specs / "steering" / "autonomy.md"
-        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head)
+        why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head, not rng)
                            if change["why"] is None else None,
                            "same family" if review["same_family"] else None,
                            "reviewer: complexity " + (review["complexity"] or "missing") if review["complexity"] != "trivial" else None,

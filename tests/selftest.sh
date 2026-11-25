@@ -890,6 +890,19 @@ rc=0; out=$(xrd gpt-5-1 '
 ' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False and d["warnings"], d' || fail "13e N2: --json auto_merge with a warning (exit $rc): $out"
 rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n- complexity: trivial\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (row 'G9 Extra' is not in the base" || fail "13e N2: an unknown Gates row under --auto-merge merged (exit $rc): $out"
+
+# t13e22: the trunk gets a revert, then a profile commit that makes routine spot; a PR branched before it must not keep none
+xmk t13e22 "$TJ" 1 $AP 2; OLD=$(git -C "$R" rev-parse HEAD); xdoc a1; gitq -C "$R" revert --no-edit HEAD
+sed -i.bak 's/| standard | none |/| standard | spot |/' "$R/$AP"; rm -f "$R/$AP.bak"; gitq -C "$R" commit -qam "routine is spot"; gitq -C "$R" branch -f trunk
+gitq -C "$R" checkout -q -b stale "$OLD"; xdoc 1; W="base $(echo "$OLD" | cut -c1-7) is behind refs/heads/trunk: update the branch"
+out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: spot" && echo "$out" | grep -qF -- "- human: none → spot ($W)" || fail "13e t13e22: a PR behind the merged_ref tip kept none: $out"
+out=$(xl --range trunk...HEAD --json); printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["reasons"]==[sys.argv[1]], d' "$W" || fail "13e t13e22: --json kept none behind the tip: $out"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF "auto-merge: no (human spot: $W)" || fail "13e t13e22: a PR behind the merged_ref tip gave auto-merge (exit $rc): $out"
+gitq -C "$R" checkout -q -b fresh trunk; xdoc 2
+out=$(xl --range trunk...HEAD); echo "$out" | grep -q "human: spot" && ! echo "$out" | grep -q "spot (base" || fail "13e t13e22: a PR from the tip changed: $out"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot)$" || fail "13e t13e22: a PR from the tip changed (exit $rc): $out"
 fi; if sect 13c3 "evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"; then
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null
 el() { python3 "$D/.specs/kit/scripts/tiers.py" --specs "$D/.specs" --evidence "$@" 2>&1; }

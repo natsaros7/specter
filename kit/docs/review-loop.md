@@ -58,9 +58,11 @@ flowchart LR
         commit is pushed. The required checks are the Gates, and only the Gates.
      2. A non-required job, defined where the PR cannot edit it, runs from a trusted worktree of the base (as step 3
         shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
-        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
-        when the verdict is `ready`, the reported human is `none` (the lowest tier, with evidence earned at the base, every guardrail declared,
-        another model family, a change within the size cap with tests only added, and `complexity: trivial`)
+        name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). `<base sha>` is the
+        `merged_ref` tip and must equal the merge base: a PR behind it is `spot` until the branch is updated. It exits 0
+        only when the verdict is `ready`, the reported human is `none` (the lowest tier, with evidence earned at the base,
+        every guardrail declared, another model family, a change within the size cap with tests only added, and
+        `complexity: trivial`)
         and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`), and fetch it
         with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
         disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings. Fetch full
