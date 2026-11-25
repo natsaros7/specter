@@ -7,8 +7,11 @@ and a GitHub App are created under Nikos's account for the live test, then archi
 
 - **Plan:** pinned issue #68. Tick a batch there when it lands.
 - **Where:** branch `feat/0.11.0`. The spec was approved 2026-11-25 with decisions 1 to 9 as recommended (task 1, #46).
-- **Next: batch 1.** Task 2 (#47, sandbox kit), task 13 (#58, byte cap and LFS), task 16 (#61, commit-graph). In
-  parallel, Nikos does tasks 3 to 5 (sandbox repo, App, environment), each with his OK.
+- **Landed (batch 1):** task 2 (#47, sandbox kit and workflow template), task 13 (#58, byte cap and LFS), task 16 (#61,
+  commit-graph off). G1 to G4 pass in Docker on the tip. The dry-run row P2.2 is PENDING until task 14 lands.
+- **Next: batch 2.** Task 14 (#59, human zeros and the checked body), task 17 (#62, the docker copy), task 18 (#63, G5 in
+  a container).
+- **Waiting on Nikos:** tasks 3 to 5 (#48 to #50; steps in `tests/live/github/README.md`); PRs #44 and #45.
 - **Rules:** 2 to 3 agents per batch, worktrees reset to the tip, `PYTHONDONTWRITEBYTECODE=1`, `mktemp` for gate output,
   no polling loops, gates in Docker, land with `cherry-pick` and check its rc, count the task lines, then gates once on
   the tip. Outward-facing steps need Nikos's OK.
