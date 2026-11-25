@@ -1,0 +1,30 @@
+# Sandbox only: the required check `gates` (G1 of the sandbox's spec-rules.md). Runs PR code, so no credentials.
+name: gates
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gates-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HEAD_REF: ${{ github.head_ref }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Sandbox only: a `slow/` branch keeps the check open for a minute, so scenarios N5 and P2 can push or edit mid-flight.
+      - name: Hold slow branches
+        run: |
+          case "$HEAD_REF" in slow/*) sleep 60 ;; esac
+      - name: G1 spec lint
+        run: python3 .specs/kit/scripts/spec_lint.py

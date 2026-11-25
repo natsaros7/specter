@@ -14,7 +14,7 @@ and a GitHub App are created under Nikos's account for the live test, then archi
   the tip. Outward-facing steps need Nikos's OK.
 
 - [x] 1 Gate: Nikos approves the spec and decisions 1 to 9, recorded on the plan issue (Nikos) (#46) — [REQ-V070-01] [REQ-V070-02] [REQ-V070-03] [REQ-V070-04] [REQ-V070-05] [REQ-V070-06] [REQ-V070-07] [REQ-V070-08] [REQ-V070-09]
-- [ ] 2 Sandbox kit: `tests/live/github/` (checklist, `sandbox.sh` seed/dry-run/open, sandbox workflows), the `specter-auto-merge.yml` template, a 14b grep row; the local dry run passes (#47) — [REQ-V070-01]
+- [x] 2 Sandbox kit: `tests/live/github/` (checklist, `sandbox.sh` seed/dry-run/open, sandbox workflows), the `specter-auto-merge.yml` template, a 14b grep row; the local dry run passes (#47) — [REQ-V070-01]
 - [ ] 3 Create the public sandbox repository and its settings, with the interaction limit (Nikos) (#48) — [REQ-V070-01]
 - [ ] 4 Create the GitHub App and install it on the sandbox only (Nikos) (#49) — [REQ-V070-01]
 - [ ] 5 Environment `specter-approver` (deployment branch `main` only), App id variable and key secret (Nikos) (#50) — [REQ-V070-01]

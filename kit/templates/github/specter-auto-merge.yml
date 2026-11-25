@@ -1,0 +1,97 @@
+# specter: auto-merge for PRs whose Human tier is `none` (kit/docs/review-loop.md, step 5, GitHub recipe).
+# Copy to .github/workflows/specter-auto-merge.yml on the default branch. Not yet run live: see
+# tests/live/github/README.md in the specter repository. A `# Verified: <date>` line goes here when it has been.
+#
+# Needs, before it can approve anything:
+#   - a GitHub App (Pull requests and Contents read/write) installed on this repository only, never GITHUB_TOKEN;
+#   - an environment `specter-approver` whose deployment branches allow only the default branch, holding the variable
+#     SPECTER_APP_ID and the secret SPECTER_APP_KEY (never repository secrets);
+#   - a ruleset: PR required, 1 approval, stale approvals dismissed, up to date, the Gates as required checks;
+#   - "Allow GitHub Actions to create and approve pull requests" left off, auto-merge allowed, squash merge allowed.
+# This job is not a required check: its failure never blocks a PR a human approved.
+name: specter-auto-merge
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# One run per PR, queued: cancelling between the approval and the re-read would leave an approval on a new head.
+concurrency:
+  group: specter-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  auto-merge:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    environment: specter-approver
+    timeout-minutes: 5
+    env:
+      # Data from the PR: only ever read through the environment, never expanded into a script.
+      PR: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      TITLE: ${{ github.event.pull_request.title }}
+      BODY: ${{ github.event.pull_request.body }}
+    steps:
+      # The base branch's code and kit: the PR's own files are never checked out.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The PR head comes in as data, with the full history the evidence windows read.
+      # shortcut: anonymous fetch, so a public repository only; a private one passes the token to this one command
+      # (git -c http.extraheader), never persist-credentials.
+      - name: Fetch the base and the PR head
+        run: |
+          set -eu
+          unshallow=
+          [ "$(git rev-parse --is-shallow-repository)" = true ] && unshallow=--unshallow
+          git fetch --no-tags $unshallow origin +refs/heads/main:refs/remotes/origin/main "$HEAD_SHA"
+
+      - name: Check
+        id: check
+        run: |
+          set -u
+          printf '%s' "$BODY" > "$RUNNER_TEMP/pr.md"
+          base=$(git rev-parse refs/remotes/origin/main)
+          rc=0
+          python3 .specs/kit/scripts/ready.py --specs .specs --range "$base...$HEAD_SHA" \
+            --pr "$RUNNER_TEMP/pr.md" --auto-merge || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+      # sandbox-delay: the live test inserts a sleep step here
+
+      - name: Mint the App token
+        if: steps.check.outputs.rc == '0'
+        id: app
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
+        with:
+          app-id: ${{ vars.SPECTER_APP_ID }}
+          private-key: ${{ secrets.SPECTER_APP_KEY }}
+          permission-pull-requests: write
+          permission-contents: write
+
+      - name: Approve and enable auto-merge
+        if: steps.check.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          review=$(gh api -X POST "repos/$GH_REPO/pulls/$PR/reviews" -f event=APPROVE -f commit_id="$HEAD_SHA" --jq .id)
+          # Any failure from here undoes the approval: it must never outlive a merge that did not happen.
+          undo() {
+            gh api -X PUT "repos/$GH_REPO/pulls/$PR/reviews/$review/dismissals" -f event=DISMISS \
+              -f message="specter-auto-merge: merge not enabled for $HEAD_SHA" || true
+            gh pr merge "$PR" --disable-auto || true
+          }
+          trap '[ -n "${ok-}" ] || undo' EXIT
+          gh pr merge "$PR" --auto --squash --match-head-commit "$HEAD_SHA" \
+            --subject "$TITLE (#$PR)" --body-file "$RUNNER_TEMP/pr.md"
+          now=$(gh api "repos/$GH_REPO/pulls/$PR" --jq .head.sha)
+          [ "$now" = "$HEAD_SHA" ] && ok=1
+          [ -n "${ok-}" ] || echo "head moved from $HEAD_SHA to $now: approval dismissed, auto-merge disabled"

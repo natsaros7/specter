@@ -1280,6 +1280,11 @@ out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1)
 RL="$KIT/kit/docs/review-loop.md"
 for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'resource_group'; do grep -qF -e "$k" "$RL" || fail "14b: review-loop.md does not name $k"; done
 ! grep -F 'GITHUB_TOKEN' "$RL" | grep -vF 'never `GITHUB_TOKEN`' | grep -q . || fail "14b: review-loop.md offers GITHUB_TOKEN"
+# the shipped workflow is the recipe as a file: same keys as the prose, every action pinned by sha, a timeout, no push/schedule/workflow_run trigger, and no GITHUB_TOKEN outside comments
+AM="$KIT/kit/templates/github/specter-auto-merge.yml"
+for k in 'pull_request_target' 'environment:' 'persist-credentials: false' 'commit_id' '--match-head-commit' '--body-file' 'cancel-in-progress: false' '--disable-auto' 'timeout-minutes:'; do grep -qF -e "$k" "$AM" || fail "14b: specter-auto-merge.yml does not name $k"; done
+! grep -E '^[[:space:]]*(- )?uses:' "$AM" | grep -vE '@[0-9a-f]{40}( |$)' | grep -q . || fail "14b: specter-auto-merge.yml has an action not pinned by sha"
+! grep -vE '^[[:space:]]*#' "$AM" | grep -E 'GITHUB_TOKEN|^[[:space:]]*(push|schedule|workflow_run):' | grep -q . || fail "14b: specter-auto-merge.yml uses GITHUB_TOKEN or a push/schedule/workflow_run trigger"
 # the lessons ship in the kit: setup.md names the container wrap and the empty-mount note
 for k in 'docker run --rm --memory 2g' 'Colima' 'only `$HOME`' 'SECURITY.md'; do grep -qF -e "$k" "$KIT/kit/playbooks/setup.md" || fail "14b: setup.md does not name $k"; done
 # an empty mount (gates.sh with no tests/ beside it) refuses with exit 2; needs Docker, which the gates container lacks
