@@ -11,9 +11,13 @@ and a GitHub App are created under Nikos's account for the live test, then archi
   `Human-Findings:`, human zeros kept), 17 (#62, the docker copy) and 18 (#63, G5 in a container on
   `azul/zulu-openjdk:21`, since protoc fails on Alpine; offline after the first build). G1 to G5 pass in Docker on the
   tip. The sandbox dry run passes all 12 rows.
-- **Next: batch 3.** Task 15 (#60, the evidence key), task 19 (#64, eval goals), task 21 (#66, generic resume rule;
-  Human required).
-- **Waiting on Nikos:** tasks 3 to 5 (#48 to #50; steps in `tests/live/github/README.md`); PRs #44 and #45.
+- **Batch 3 landed:** task 15 (#60, evidence keyed by the rows from the tier down plus the guarded globs), task 19 (#64,
+  eval goals E1 to E5, dry run green), task 21 (#66, AGENTS.md generic resume rule and G1/G5 rows; a rule change, so
+  #66 stays open until Nikos approves). G1 to G5 pass in Docker on the tip.
+- **Next:** the deep security review, round 1, of all 0.11 trust-layer changes (tasks 2, 13 to 17). In parallel, the
+  live test as soon as Nikos has done tasks 3 to 5: then task 6 (seed and push the sandbox) and tasks 7 to 9.
+- **Waiting on Nikos:** tasks 3 to 5 (#48 to #50; steps in `tests/live/github/README.md`); approving #66; the token
+  spend for task 20 (#65, first eval run); PRs #44 and #45.
 - **Rules:** 2 to 3 agents per batch, worktrees reset to the tip, `PYTHONDONTWRITEBYTECODE=1`, `mktemp` for gate output,
   no polling loops, gates in Docker, land with `cherry-pick` and check its rc, count the task lines, then gates once on
   the tip. Outward-facing steps need Nikos's OK.
