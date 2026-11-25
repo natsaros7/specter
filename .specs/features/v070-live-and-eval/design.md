@@ -437,6 +437,32 @@ is not released yet, and six advisories.
     - an inherited `GIT_CONFIG_PARAMETERS` still leaves the commit-graph off.
 - **Round 2:** after 23a and 23b land, a fresh reviewer goes over the whole 0.11 trust-layer diff again.
 
+### Task 24: security review round 2 fixes (#71, #72)
+
+Round 2 (2026-11-25) found one blocker, which is also in 0.10.0. It went to a private draft advisory first, as
+SECURITY.md says. Round 2 also found three advisories.
+
+- **24a, `tiers.py` and `ready.py` (#71, security):**
+  - **The blocker:** every `git diff` that the label, the size cap or the staged check reads gets
+    `--ignore-submodules=none`, so the base's `submodule.<name>.ignore` or `diff.ignoreSubmodules` can't hide a
+    gitlink change.
+  - **A1:** a changed path whose `filter` attribute is set counts as over the cap. Read the attribute with
+    `git check-attr -z filter` at the base: the work tree in CI, or `--source=<base>` locally. This covers LFS,
+    git-annex and git-fat with one rule. Keep the LFS regex as a second line of defence.
+  - **Red rows in 13c2 `t70d`:**
+    - a gitlink bump under `ignore = all` in a critical path is critical and required, and auto-merge exits 1;
+    - the same bump under a `none` path is over the cap;
+    - a one-line change to a `filter=annex` path is over the cap.
+- **24b, template and scripts (#72):**
+  - **A2:** when a re-run's check fails, the job mints the token, dismisses this PR's App reviews and disables
+    auto-merge. The live test adds scenario N7: Nikos edits the body after a pass, and it must not merge.
+  - **A3:** `examples/acme-shop/eval/sandbox.sh` resolves its target with `pwd -P` before the `$HOME` check, and
+    refuses a folder that is not empty unless it is a previous sandbox.
+  - **Notes:**
+    - the hook unsets `BASE_VERSION`;
+    - the hook's refusal message names sparse checkouts.
+- **Round 3:** after 24a and 24b land, a third reviewer reads the 0.11 trust-layer diff.
+
 ## Parallel lanes
 
 Batches hold at most 3 agent tasks. Inside a lane, tasks run in order, each merged before the next starts.
