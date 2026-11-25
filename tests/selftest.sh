@@ -851,6 +851,15 @@ rc=0; out=$(xrd claude-opus-5-5 '- rounds: 1
 ' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False, d' || fail "13e B1: --json auto_merge false (exit $rc): $out"
 rc=0; out=$(xrd gpt-5-1 '- rounds: 3
 ' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "^auto-merge: no (verdict not ready)" || fail "13e B1: none but not ready was not refused (exit $rc): $out"
+# v070 task 14: the human writes Human-Findings at the merge, so a trailer in the PR text (read raw: a comment still lands in the squash body) or in a range commit bars auto-merge
+for hf in 'Human-Findings: 0' '<!--
+Human-Findings: 0
+-->' '  human-findings : 0'; do rc=0; out=$(xrd gpt-5-1 "- rounds: 1
+$hf
+" --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "human: none" && echo "$out" | grep -q "^auto-merge: no (.*Human-Findings" || fail "13e t14: PR text '$hf' gave auto-merge (exit $rc): $out"; done
+echo hf > "$R/docs/hf"; gitq -C "$R" add -A; gitq -C "$R" commit -m hf -m "Human-Findings: 0"
+rc=0; out=$(xrd gpt-5-1 '- rounds: 1
+' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (.*Human-Findings" || fail "13e t14: a range commit with Human-Findings gave auto-merge (exit $rc): $out"
 xmk b1h "$TJ" 20 $AP 2; gitq -C "$R" checkout -q -b pr; xdoc 1
 rc=0; out=$(xrd gpt-5-1 '- rounds: 1
 ' --auto-merge) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: evidence: hold" || fail "13e B1: spot (evidence hold) was not refused (exit $rc): $out"
@@ -1127,7 +1136,7 @@ export GIT_COMMITTER_DATE=2025-06-01T00:00:00; nr t13e15 -b main; mr docs -m age
 for i in $(seq 20); do mr docs -m "old$i"; done; unset GIT_COMMITTER_DATE
 gitq -C "$R" revert --no-edit "$AG"; for i in 1 2 3 4; do mr docs -m "c$i"; done
 want "13e15 the window adds the named commit, not the commits between" "routine: breach (reverted 16.7% > 10%)"
-# Human-Findings on a none tier: nobody writes it for the human, so no trailer is no hold, and an agent-written 0 is no data (a caught value still counts)
+# Human-Findings on a none tier: no human check, so no trailer is no hold; ready.py keeps the trailer off auto-merges, so every value counts
 GR='\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule on main | 2026-01-02 |\n'
 ER='| routine | 90 | 3 | - | - | 10 |\n| domain | 90 | 1 | - | - | - |\n'"$GR"
 nr t13e18 -b main; mr docs -m h1; mr docs -m h2; mr docs -m h3
@@ -1137,7 +1146,12 @@ want "13e18 a caught Human-Findings on a none tier still counts" "routine: breac
 nr t13e19 -b main; mr docs -m h1 -m "Human-Findings: 0"; mr docs -m h2 -m "Human-Findings: 0"; mr docs -m h3 -m "Human-Findings: 0"
 sed -i.bak 's/| standard | none |/| standard | spot |/' "$R/.specs/steering/autonomy.md"; rm -f "$R/.specs/steering/autonomy.md.bak"
 gitq -C "$R" add -A; gitq -C "$R" commit -qm "routine is spot"
-want "13e19 agent-written zeros on a none tier are no data once it is spot" "routine: hold (Human-Findings on 0 of 3 merges)"
+# the zeros count now: ready.py refuses an auto-merge that carries one, so a 0 on a none merge is a human's
+want "13e19 zeros on a none tier count once it is spot" "routine: eligible"
+# finding 4: dropping the zeros made the one human finding in 20 merges read as 100%
+nr t13e24 -b main; for i in $(seq 19); do mr docs -m "z$i" -m "Human-Findings: 0"; done; mr docs -m z20 -m "Human-Findings: 1"
+want "13e24 human zeros on a none tier are the denominator" "routine: eligible"
+echo "$out" | grep -qF "human-caught 1 of 20 (5.0%)" || fail "13c evidence: 13e24 human-caught is over every trailered merge: $out"
 # a profile that is not UTF-8 gets a readable reason, from the label's reader and from --check, never a traceback
 nr t13e17 -b main; mr docs -m d0; printf '\377\376' >> "$R/.specs/steering/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm bin
 rc=0; out=$(er) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF "not UTF-8" || fail "13e17 evidence: not-UTF-8 profile exits $rc, want 2 and 'not UTF-8': $out"

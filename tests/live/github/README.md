@@ -17,8 +17,7 @@ sh tests/live/github/sandbox.sh dry-run ~/specter-live-dry     # exit 0, every r
 rm -rf ~/specter-live-dry
 ```
 
-`dry-run` runs each scenario's `ready.py` call on a local bare origin. Row P2.2 prints PENDING until task 14 (`ready.py`
-refuses `Human-Findings:`) has landed; after that it must say `ok`.
+`dry-run` runs each scenario's `ready.py` call on a local bare origin.
 
 ## What `sandbox.sh` does
 

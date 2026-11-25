@@ -142,13 +142,7 @@ dry_run() {
   BR=live/n6-over; mkdocs 4; g add -A; g commit -qm "docs: push during the check"; body $b1 > "$pf"
   expect N6.2 1 'size [0-9]+ files' $b1 "$pf"
   setup P2 $b1; body $b1 > "$pf"; expect P2.1 0 '^auto-merge: yes' $b1 "$pf"
-  printf '\nHuman-Findings: 0\n' >> "$pf"
-  # shortcut: ready.py does not refuse Human-Findings until v070 task 14; P2.2 then reports PENDING, not FAIL. Make it a hard row when task 14 lands.
-  rc=0; out=$(ready $b1 "$pf") || rc=$?; ROWS=$((ROWS+1)); last=$(printf '%s\n' "$out" | grep -E '^auto-merge: ' | tail -n 1)
-  if [ "$rc" = 1 ] && printf '%s\n' "$last" | grep -q 'Human-Findings'; then st=ok
-  elif [ "$rc" = 0 ]; then st="PENDING (task 14: ready.py does not refuse Human-Findings yet)"
-  else st=FAIL; BAD=$((BAD+1)); fi
-  printf '%-4s expected exit 1 /Human-Findings/  got exit %s "%s"  %s\n' P2.2 "$rc" "$last" "$st"
+  printf '\nHuman-Findings: 0\n' >> "$pf"; expect P2.2 1 'Human-Findings' $b1 "$pf"
   echo "dry-run: $ROWS rows, $BAD failed"
   [ "$BAD" = 0 ]
 }
