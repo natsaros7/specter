@@ -40,8 +40,11 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | Scheduled chores run from a clean clone or the CI checkout of the default branch, never a working copy | <the scheduler entry, or "no chores, checked <how>"> | <YYYY-MM-DD> |
 
 ## Evidence
-<!-- tiers.py --evidence reads merged history on merged_ref and gives each tier eligible, hold (<why>) or breach (<metric>). A row that keeps a <placeholder> is a hold, so no tier is eligible until you set numbers. Suggested start: Window 90, Min merged 20, Max reverted 2, Max escaped 5, Max human-caught 10. A Max cell of - is not checked. -->
+<!-- tiers.py --evidence reads merged history on merged_ref and gives each tier eligible, hold (<why>) or breach (<metric>). A row that keeps a <placeholder> is a hold, so no tier is eligible until you set numbers. Suggested start: Window 90, Min merged 20, Max reverted 2, Max escaped 5, Max human-caught 10. A Max cell of - is not checked. Optional trailing columns `Max files` and `Max lines` cap a change in a tier whose Human is `none` (defaults 3 and 50; - is the default): a larger change is labelled `spot`. -->
 | Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |
 |---|---|---|---|---|---|
 | routine | <days> | <n> | <%> | <%> | <%> |
 | domain | <days> | <n> | <%> | <%> | <%> |
+
+## Tests
+<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `tests/*`, `test/*`, `*/test/*`, `*_test.*`, `*.test.*`, `test_*`. -->

@@ -190,7 +190,13 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   is the platform's auto-merge, never a specter script's. A label keeps `none` only on the lowest Tiers row, with every
   guardrail declared and that tier `eligible` in `tiers.py --evidence`; otherwise it says `spot` and
   `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
-  the implementer's model family makes `ready.py` report `spot` too; `ready.py` applies the evidence rule as the label does, and the label reads the Evidence thresholds at the
+  the implementer's model family makes `ready.py` report `spot` too, and so does a `complexity:` line that is missing or not
+  `trivial` (`reviewer: complexity <value or missing>`; a repeated one is not ready). A change in a `none` tier is also
+  `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over)
+  or deletes or edits a line of a test file (`tests changed, not only added: <path>`). The cap is two optional trailing
+  Evidence columns, `Max files` and `Max lines` (defaults 3 and 50; `-` is the default; any other non-number is exit 2 with
+  `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `test/*`, `*/test/*`,
+  `*_test.*`, `*.test.*`, `test_*`), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
   `spot`. `ready.py --auto-merge` exits 0 only when the verdict is `ready`, the reported human is `none` and there is no
   warning. The platform recipe (one approval on every PR, dropped on a new commit; a non-required job that runs that

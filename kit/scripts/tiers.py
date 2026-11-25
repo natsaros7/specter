@@ -34,7 +34,10 @@ Human `none` also needs the lowest row (the first of the Tiers table) and, in th
 The label counts history with the Evidence thresholds of the profile at the base (never the working tree), and with no
 merged_ref or refs/remotes/origin/HEAD (the history would be HEAD, the change itself) it says `spot` (`evidence: no
 merged_ref …`), and so it does when that history holds any commit of the change (`evidence: <ref> contains the change`).
-A refusing evidence run is `spot` too. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
+A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
+`Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
+(globs of an optional `## Tests` section, default tests/* test/* */test/* *_test.* *.test.* test_*): `size <f> files / <l> lines > cap <F>/<L>`,
+`tests changed, not only added: <path>`; a binary file counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
 --evidence prints, per tier of the Tiers table at the merged_ref tip (never the working tree; it prints that commit), `eligible`, `hold (<why>)` or `breach (<metric>)` from the
@@ -92,6 +95,8 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
            "docs/CODEOWNERS"]
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
+SIZE = ["Max files", "Max lines"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3 and 50)
+TESTS = ["tests/*", "test/*", "*/test/*", "*_test.*", "*.test.*", "test_*"]  # default `## Tests` globs
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
 
@@ -189,7 +194,7 @@ def parse_guardrails(text):
 
 
 def parse_evidence(text, tiers):
-    """{tier: (window, min_merged, [max reverted, escaped, human-caught or None], lineno)} or None when there is no
+    """{tier: (window, min_merged, [max reverted, escaped, human-caught, files, lines; None for -], lineno)} or None when there is no
     Evidence section; a row that keeps a <placeholder> maps to None (thresholds not set, a hold, not an error).
     Raises ValueError((lineno, message)) on a bad header, a bad cell, an unknown or duplicate tier."""
     lines = section(text, "Evidence")
@@ -202,13 +207,13 @@ def parse_evidence(text, tiers):
         cells = gates.split_row(line)
         if head is None:
             head = [c.lower() for c in cells]
-            if head != [h.lower() for h in EHEAD]:
-                raise ValueError((n, "header must be | " + " | ".join(EHEAD) + " |"))
+            if head not in ([h.lower() for h in EHEAD], [h.lower() for h in EHEAD + SIZE]):
+                raise ValueError((n, "header must be | " + " | ".join(EHEAD) + " | (then optionally " + " | ".join(SIZE) + " |)"))
             continue
         if set("".join(cells)) <= set("-: "):
             continue
-        if len(cells) != len(EHEAD):
-            raise ValueError((n, "row needs " + str(len(EHEAD)) + " cells, found " + str(len(cells))))
+        if len(cells) != len(head):
+            raise ValueError((n, "row needs " + str(len(head)) + " cells, found " + str(len(cells))))
         if cells[0] not in tiers:
             raise ValueError((n, "unknown tier '" + cells[0] + "' (not in the Tiers table)"))
         if cells[0] in rows:
@@ -217,13 +222,16 @@ def parse_evidence(text, tiers):
             rows[cells[0]] = None
             continue
         win, low, *caps = cells[1:]
+        caps += ["-"] * (len(EHEAD + SIZE) - len(cells))  # no size columns: the defaults
         if not (re.fullmatch(r"[0-9]+", win) and int(win) > 0):
             raise ValueError((n, "Window (days) must be a whole number above 0, found " + win))
         if not re.fullmatch(r"[0-9]+", low):
             raise ValueError((n, "Min merged must be a whole number, found " + low))
         for i, c in enumerate(caps):
-            if c != "-" and not (re.fullmatch(r"[0-9]+(\.[0-9]+)?", c) and float(c) <= 100):
+            if i < 3 and c != "-" and not (re.fullmatch(r"[0-9]+(\.[0-9]+)?", c) and float(c) <= 100):
                 raise ValueError((n, EHEAD[3 + i] + " must be 0 to 100 or -, found " + c))
+            if i >= 3 and c != "-" and not re.fullmatch(r"[0-9]{1,9}", c):
+                raise ValueError((n, SIZE[i - 3] + " must be a whole number or -, found " + c))
         rows[cells[0]] = (int(win), int(low), [None if c == "-" else float(c) for c in caps], n)
     return rows
 
@@ -418,6 +426,32 @@ def earned(root, rel, specs, profile, tier, base, head):
     return None if m.get("verdict") == "eligible" else "evidence: %s (%s)" % (m.get("verdict", "hold"), m.get("why") or "no report")
 
 
+def small(root, rel, tier, base, head, staged):
+    """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
+    One `git diff --numstat` (the index against base when staged). Cap: Max files / Max lines of the tier's Evidence row at
+    base (3 and 50 when absent or -); tests: the `## Tests` globs at base (TESTS). A binary file counts as over the cap.
+    A profile that cannot be read says so: none is never kept on a guess."""
+    try:
+        text = profile_at(root, base, rel) or ""
+        rows = parse_tiers(text)
+        row = (parse_evidence(text, [r[0] for r in rows or []]) or {}).get(tier)
+    except ValueError as err:
+        return ["size: " + (err.args[0][1] if isinstance(err.args[0], tuple) else str(err))]
+    mf, ml = ((row[2][3:5] if row else []) + [None, None])[:2]
+    mf, ml = int(mf if mf is not None else 3), int(ml if ml is not None else 50)
+    globs = [g for _, ln in section(text, "Tests") or [] for g in re.findall(r"`([^`]+)`", ln)] or TESTS
+    out = gitz(git(root, "rev-parse", "--show-toplevel"), "diff", "--numstat", "-z", "--no-renames", *(["--cached", base] if staged else [base, head]))
+    if out is None:
+        return ["size: cannot read the diff"]
+    ent = [e.split("\t", 2) for e in out]
+    lines, binary = sum(int(a) + int(d) for a, d, _ in ent if a != "-"), any(a == "-" for a, _, _ in ent)
+    why = []
+    if len(ent) > mf or lines > ml or binary:
+        why.append("size %d files / %d%s lines > cap %d/%d" % (len(ent), lines, "+" if binary else "", mf, ml))
+    changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None)
+    return why + (["tests changed, not only added: " + changed] if changed else [])
+
+
 AUTONOMY = {"required": "the human check before merge",
             "spot": "approve on the readiness verdict, the ### Gates block and the tests; read the flagged files in full",
             "none": "no human before merge; the merge is the platform's auto-merge on required checks, never a specter script's"}
@@ -431,6 +465,9 @@ def label(root, rel, rng, as_json, specs=None, profile=None):
         if c["human"] == "none" and c["why"] is None:
             why = earned(root, rel, specs, profile or Path(specs) / "steering" / "autonomy.md", c["tier"], c["base"], c["head"])
             c["human"], c["reasons"] = ("spot", [why]) if why else ("none", c["reasons"])
+        if c["human"] == "none" and c["why"] is None:
+            more = small(root, rel, c["tier"], c["base"], c["head"], not rng)
+            c["human"], c["reasons"] = ("spot", more) if more else ("none", c["reasons"])
     except ValueError as err:
         return refuse(str(err))
     base, files, tier, reviewer, human, why, set_by, ordered, guard = (c[k] for k in (

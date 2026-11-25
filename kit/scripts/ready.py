@@ -22,8 +22,10 @@ it advisory; a Location that is not file:line is not ready.
 Verification: each `- [REQ] <path or URL>: ...` line needs a REQ defined in a requirements.md at the head, and a path
 that is a regular file at the head (index in staged mode; no `..`, no absolute path, no symlink); a URL is `declared,
 not fetched`. A missing block changes nothing.
-Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it) or the review shares the
-implementer's model family (`- human: none → spot (<why>)`; --json tier.human_why); the exit code is unchanged.
+Human `none` is reported as `spot` when the tier's evidence is not eligible (as tiers.py labels it), the change is over the
+size cap or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
+family, or its `- complexity: trivial|non-trivial` line is missing or not `trivial` (`reviewer: complexity <value or missing>`;
+a repeated complexity line is not ready): `- human: none → spot (<why>)`, --json tier.human_why; the exit code is unchanged.
 --auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human
 is `none` and there is no warning (no human reads one on that path); otherwise exit 1 and `auto-merge: no (<why>)`. A
 non-required platform job runs it from a trusted worktree of the base with --range <base sha>...<head sha> (without
@@ -125,8 +127,8 @@ def family(model):
 
 
 def check_review(text, base, want="standard"):
-    """{implementer, reviewer, same_family, rules, rounds, blockers, advisories, problems, warnings} for the ### Review block."""
-    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "blockers": [], "advisories": [],
+    """{implementer, reviewer, same_family, rules, rounds, complexity, blockers, advisories, problems, warnings} for the ### Review block."""
+    r = {"implementer": None, "reviewer": None, "reviewer_tier": None, "same_family": False, "rules": None, "rounds": None, "complexity": None, "blockers": [], "advisories": [],
          "problems": [], "warnings": []}
     lines, cur, n = [], False, 0
     for line in text.splitlines():
@@ -149,6 +151,14 @@ def check_review(text, base, want="standard"):
             r[m.group(1)] = m.group(2) or None
             if m.group(1) == "reviewer":
                 r["reviewer_tier"] = (m.group(3) or "").lower() or None
+        elif re.match(r"- complexity\b", line, re.I):
+            m = re.fullmatch(r"- complexity: *(\S+) *", line, re.I)
+            if r["complexity"] is not None or any(x.startswith("review complexity") for x in r["problems"]):
+                r["problems"].append("review complexity repeated: one `complexity:` line per Review block")
+            elif m:
+                r["complexity"] = m.group(1).lower()
+            else:
+                r["problems"].append("review complexity line unreadable: " + line.strip()[:30])
         elif re.match(r"\s*[-*+]\s*rounds\b", line, re.I):
             m = re.fullmatch(r"\s*[-*+]\s*rounds\s*:(.*)", line, re.I)
             v = m.group(1).strip() if m else None
@@ -323,7 +333,9 @@ def main(argv):
         prof = specs / "steering" / "autonomy.md"
         why = [w for w in (tiers.earned(root, prof.relative_to(root).as_posix(), specs, prof, tier["tier"], base, head)
                            if change["why"] is None else None,
-                           "same family" if review["same_family"] else None) if w]
+                           "same family" if review["same_family"] else None,
+                           "reviewer: complexity " + (review["complexity"] or "missing") if review["complexity"] != "trivial" else None,
+                           *(tiers.small(root, prof.relative_to(root).as_posix(), tier["tier"], base, head, not rng) if change["why"] is None else [])) if w]
     tier["human_why"] = "; ".join(why) or None
     tier["human"] = "spot" if tier["human_why"] else tier["human"]
     # the one merge-without-a-human test: a ready verdict and a reported human of none (a platform check runs it)

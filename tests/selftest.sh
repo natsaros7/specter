@@ -698,13 +698,44 @@ n=4; fset '| routine | `docs/*` | standard | none |\n| domain | `src/*` | standa
 echo "$out" | grep -q "tier: domain (reviewer: standard, human: spot)" && echo "$out" | grep -q "none → spot (not the lowest tier)" || fail "13c2: none on a non-lowest row kept none: $out"
 # ready.py: a shared family and Human none reports spot, exit unchanged
 n=5; fset "$T1" 2; FH=$(git -C "$F" rev-parse --short HEAD)
-fr() { m=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n' "$FH" "$m" "$FH" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" "$@" 2>&1; }
+fr() { m=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n- complexity: trivial\n' "$FH" "$m" "$FH" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" "$@" 2>&1; }
 rc=0; out=$(fr claude-opus-5-5) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (same family)" || fail "13c2: ready.py same family kept none (exit $rc): $out"
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && ! echo "$out" | grep -q "same family" && echo "$out" | grep -q "human: none" || fail "13c2: ready.py other family lost none (exit $rc): $out"
 js=$(fr claude-opus-5-5 --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tier"]["human"]=="spot" and d["tier"]["human_why"]=="same family", d' || fail "13c2: ready --json same family: $js"
 # ready.py agrees with the label: evidence on hold bars none whatever the reviewer's family
 n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
+# v061 task 23: Human none only for a small change that adds tests only and that the reviewer calls trivial
+E="$TMP/t13e20"; mkdir -p "$E/docs" "$E/tests"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null; printf '{"merged_ref": "trunk"}' > "$E/.specs/spec-kit.json"
+F0=$F; F=$E; n=7; fset '| routine | `docs/*`, `tests/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |' 2; F=$F0
+printf 'a\nb\n' > "$E/tests/x_test.py"; gitq -C "$E" add -A; gitq -C "$E" commit -m t0; gitq -C "$E" branch -f trunk
+el() { python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range trunk...HEAD "$@" 2>&1; }
+ec() { gitq -C "$E" reset -q --hard trunk; "$@"; gitq -C "$E" add -A; gitq -C "$E" commit -qm c; }
+eq() { ex=$1; shift; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n%s' "$(git -C "$E" rev-parse --short HEAD)" "$(git -C "$E" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$E/.specs/kit/scripts/ready.py" --specs "$E/.specs" --range trunk...HEAD --auto-merge "$@" 2>&1; }
+four() { for i in 1 2 3 4; do echo "$i" > "$E/docs/f$i"; done; }
+ec four; out=$(el)
+echo "$out" | grep -q "human: spot" && echo "$out" | grep -q "none → spot (size 4 files / 4 lines > cap 3/50)" || fail "13c2 t23: 4 files kept none: $out"
+js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["human"]=="spot" and d["reasons"]==["size 4 files / 4 lines > cap 3/50"], d' || fail "13c2 t23: --json size: $js"
+rc=0; out=$(eq '- complexity: trivial
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: size 4 files" || fail "13c2 t23: ready.py kept none on size (exit $rc): $out"
+ec sh -c 'echo a > "$0/tests/x_test.py"' "$E"; out=$(el)
+echo "$out" | grep -q "none → spot (tests changed, not only added: tests/x_test.py)" || fail "13c2 t23: a deleted test line kept none: $out"
+ec sh -c 'printf "a\nb\nc\n" > "$0/tests/x_test.py"; echo n > "$0/tests/y_test.py"' "$E"; out=$(el)
+echo "$out" | grep -q "tier: routine (reviewer: standard, human: none)" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t23: tests added within the cap lost none: $out"
+rc=0; out=$(eq '- complexity: trivial
+') || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "^auto-merge: yes" || fail "13c2 t23: small, tests added, trivial lost auto-merge (exit $rc): $out"
+rc=0; out=$(eq '- complexity: non-trivial
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human spot: reviewer: complexity non-trivial)" || fail "13c2 t23: complexity non-trivial kept auto-merge (exit $rc): $out"
+rc=0; out=$(eq '') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "reviewer: complexity missing" || fail "13c2 t23: a missing complexity kept auto-merge (exit $rc): $out"
+rc=0; out=$(eq '- complexity: trivial
+- complexity: non-trivial
+') || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "not ready: .*complexity.*repeated" || fail "13c2 t23: a repeated complexity line was ready (exit $rc): $out"
+# the caps are the profile's: Max lines 1 turns a 2-line change into spot, a bad cap is exit 2 with file:line in --evidence
+sed -i.bak 's/^| Tier | Window (days) | Min merged | Max reverted % | Max escaped % | Max human-caught % |$/& Max files | Max lines |/; s/^|---|---|---|---|---|---|$/&---|---|/; s/^| routine | 30 | 2 | - | - | - |$/& - | 1 |/' "$E/.specs/steering/autonomy.md"; rm -f "$E/.specs/steering/autonomy.md.bak"
+gitq -C "$E" add -A; gitq -C "$E" commit -qm caps; gitq -C "$E" branch -f trunk; ec sh -c 'printf "1\n2\n" > "$0/docs/g"' "$E"; out=$(el)
+echo "$out" | grep -q "none → spot (size 1 files / 2 lines > cap 3/1)" || fail "13c2 t23: Max lines column was not read: $out"
+sed -i.bak 's/ - | 1 |$/ - | many |/' "$E/.specs/steering/autonomy.md"; rm -f "$E/.specs/steering/autonomy.md.bak"; gitq -C "$E" add -A; gitq -C "$E" commit -qm badcap; gitq -C "$E" branch -f trunk
+rc=0; out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max lines must be" || fail "13c2 t23: a bad Max lines was not exit 2 with file:line (exit $rc): $out"
 fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3
@@ -731,7 +762,7 @@ xmk() { R="$X/$1"; rm -rf "$R"; mkdir -p "$R/.specs/steering" "$R/.specs/kit" "$
 xdoc() { mkdir -p "$R/docs"; echo "$((UQ=UQ+1))" > "$R/docs/new$1"; gitq -C "$R" add -A; gitq -C "$R" commit -m "new$1"; }
 xl() { python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" "$@" 2>&1; }
 # xrd <reviewer> <extra Review lines> [ready.py flags]: the PR text for trunk...HEAD, checked with ready.py
-xrd() { rv=$1; ex=$2; shift 2; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n%s' "$(git -C "$R" rev-parse --short HEAD)" "$rv" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD "$@" 2>&1; }
+xrd() { rv=$1; ex=$2; shift 2; printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: %s (deep)\n- rules: %s\n- complexity: trivial\n%s' "$(git -C "$R" rev-parse --short HEAD)" "$rv" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" "$ex" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD "$@" 2>&1; }
 TJ='{"merged_ref": "trunk"}'; AP=.specs/steering/autonomy.md
 
 # B2: Min merged lowered in the working tree only (never committed, never reviewed) must not earn none
@@ -854,7 +885,7 @@ for ex in '' '- **rounds**: 1' '1. rounds: 1'; do
 done
 rc=0; out=$(xrd gpt-5-1 '
 ' --json --auto-merge) || rc=$?; [ "$rc" = 1 ] && printf '%s' "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["auto_merge"] is False and d["warnings"], d' || fail "13e N2: --json auto_merge with a warning (exit $rc): $out"
-rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
+rc=0; out=$(printf '### Gates\n- G1 Lint: pass (a)\n- G9 Extra: pass (x)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n- complexity: trivial\n' "$(git -C "$R" rev-parse --short HEAD)" "$(git -C "$R" merge-base trunk HEAD | cut -c1-7)" | python3 "$R/.specs/kit/scripts/ready.py" --specs "$R/.specs" --range trunk...HEAD --auto-merge 2>&1) || rc=$?
 [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (row 'G9 Extra' is not in the base" || fail "13e N2: an unknown Gates row under --auto-merge merged (exit $rc): $out"
 fi; if sect 13c3 "evidence: tiers.py --evidence counts first-parent merges per tier by the parent's profile; hold, breach, eligible; bad rows exit 2; profile never edited"; then
 D="$TMP/t13d"; mkdir -p "$D/docs" "$D/src"; gitq -C "$D" init; "$KIT/install.sh" "$D" >/dev/null

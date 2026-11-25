@@ -49,7 +49,7 @@ flowchart LR
    <!-- shortcut: the cap is fixed at 2; make it a profile value when a repository asks for another number. -->
    <!-- shortcut: rounds are declared by the lead, not counted by a script; count them from the frozen patch files when the declared numbers prove wrong. -->
 5. **Human check, by the label's Human value** (`tiers.py`; `none` is kept only on the lowest tier with every
-   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so):
+   guardrail declared and the tier `eligible`; a shared model family in `### Review` bars it, `ready.py` says so; so does a change over the size cap, an edited or deleted test line, and a reviewer `complexity:` line that is not `trivial`):
    - `required`: rerun the gate yourself (and the UI in a real browser when the change is visual) and read the
      reviewer's verdict table, as below.
    - `spot`: approve on the readiness verdict, the `### Gates` block and the tests, and read the flagged files in full.
@@ -154,6 +154,7 @@ Verdict table (the lead copies it into the PR as the `### Review` block; `ready.
 - reviewer: <model id>
 - rules: <base sha>
 - rounds: <n>
+- complexity: <trivial|non-trivial>
 | Severity | Location | Evidence | Trigger | Consequence | Fix |
 |---|---|---|---|---|---|
 | blocker | src/shop/Order.java:42 | "if (total > 0)" | an order with total 0 | it ships unpaid | ">= 0", and a test |
