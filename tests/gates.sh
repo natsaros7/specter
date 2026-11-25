@@ -23,9 +23,14 @@ if [ "$docker" = 1 ]; then
   # Colima and similar runtimes share only $HOME: a clone elsewhere mounts empty, which the first command catches.
   # shortcut: the image tag is not pinned by digest, pin it when CI uses this.
   here=$(cd "$(dirname "$0")/.." && pwd)
-  exec docker run --rm --memory 2g -e SELFTEST_ONLY="${SELFTEST_ONLY:-}" -e BASE_VERSION="$BASE_VERSION" -v "$here":/src:ro python:3.12 sh -c \
+  git -C "$here" rev-parse --git-dir >/dev/null 2>&1 || { echo "gates: --docker needs a git checkout" >&2; exit 2; }
+  # Only tracked and unignored files go in (a stray __pycache__ must not reach G3). The list is made on the host because a
+  # worktree's .git file points outside the mount; -z keeps odd names whole, --ignore-failed-read skips a tracked file
+  # deleted in the work tree. .git stays out: no gate reads it in the container (BASE_VERSION is passed in).
+  git -C "$here" ls-files -z --cached --others --exclude-standard | docker run --rm -i --memory 2g -e SELFTEST_ONLY="${SELFTEST_ONLY:-}" -e BASE_VERSION="$BASE_VERSION" -v "$here":/src:ro python:3.12 sh -c \
     '[ -f /src/tests/gates.sh ] || { echo "gates: /src is empty (does your container runtime share this path?)" >&2; exit 2; }
-     mkdir /tmp/s && cp -R /src/. /tmp/s/ && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
+     mkdir /tmp/s && cd /src && tar --null --ignore-failed-read -T - -cf - | tar -xf - -C /tmp/s && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
+  exit $?
 fi
 
 cd "$(dirname "$0")/.." || exit 2
