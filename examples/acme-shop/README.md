@@ -79,4 +79,6 @@ Each seed runs in a fresh sandbox. The tier is the risk tier a change should lan
 | S7 | ORD-156 | domain | domain rule | Currency rule into the order API, plus an ArchUnit rule (drift D6) |
 | S8 | ORD-157 | domain | rule | Service queries are read-only, plus an ArchUnit rule |
 
+[`eval/`](eval/README.md) turns S1, S2, S5, S6 and S7 into five scored goals (E1 to E5) with a run procedure.
+
 Some seeds rely on a planted defect or a known gap, so do not fix them in this folder.
