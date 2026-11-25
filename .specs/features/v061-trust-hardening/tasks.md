@@ -9,7 +9,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
   (task 20). G1 to G4 pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
 - **Next: batch 5.** Task 23 (#30, size cap and reviewer `complexity`), task 25 (#34, the lessons in kit for any
   project: a container-gates form with a loud empty-mount check, and the playbook's gates line made generic), bug #33
-  (`spec_lint` exits 0 on a missing dir).
+  (`spec_lint` exits 0 on a missing dir), then task 26 (#36, `kit/scripts/readme_check.py`).
 - **Then** the release: task 16 (#18), task 19 (#26), README pass 2 (task 20, #27), docs/overview refresh.
 - **Rules:** 2 to 3 agents per batch. Reset each worktree to the tip. `PYTHONDONTWRITEBYTECODE=1`. Use
   `f=$(mktemp)` for every gate output. No polling loops. Gates in Docker. Land with `git cherry-pick`, check the rc,
@@ -30,7 +30,7 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 13 Refuse a symref to a `.../HEAD` ref; full ids at the repo's hash length only (final review D1, D2) (#15) — [REQ-V061-04]
 - [x] 14 A refused `origin/HEAD` fallback says why; v060's evidence amendment states the symref rule (D3, D4) (#16) — [REQ-V061-04]
 - [x] 15 Refuse a ref with a case-folded twin or an unlisted symref target (a pushed `MAIN` shadows `origin/main` on APFS) (#17) — [REQ-V061-04]
-- [ ] 16 Gate G1-G4, deep review, CHANGELOG, release, after 17, 18, 20 to 24 (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04] [REQ-V061-05] [REQ-V061-06] [REQ-V061-07] [REQ-V061-08] [REQ-V061-09]
+- [ ] 16 Gate G1-G4, deep review, CHANGELOG, release, after 17, 18, 20 to 26 (#18) — [REQ-V061-01] [REQ-V061-02] [REQ-V061-03] [REQ-V061-04] [REQ-V061-05] [REQ-V061-06] [REQ-V061-07] [REQ-V061-08] [REQ-V061-09]
 - [x] 17 Specter's own `.specs/steering/autonomy.md`: trust-layer files on a Human `required` tier (#24) — [REQ-V061-05]
 - [x] 18 G1-G4 locally before every push (`tests/gates.sh`, a pre-push hook); CI only with Nikos's OK (#25) — [REQ-V061-05]
 - [ ] 19 The 0.10.0 PR carries Gates, Review and Verification blocks; `ready.py` says ready (#26) — [REQ-V061-05]
@@ -39,3 +39,5 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 22 Faster, deterministic selftest: section timings, `SELFTEST_ONLY`, copied fixtures, no clock content (#29) — [REQ-V061-08]
 - [ ] 23 Human `none` only within a size cap (3 files, 50 lines), tests only added, reviewer `complexity: trivial` (#30) — [REQ-V061-09]
 - [x] 24 Specter's own `lessons.md`, a kit playbook for parallel agent dispatch, a retro step in the review loop (#32) — [REQ-V061-10]
+- [ ] 25 The lessons ship in the kit: container gates in setup, an empty-mount check, a generic playbook gates line, resume and SECURITY templates (#34) — [REQ-V061-10]
+- [ ] 26 `kit/scripts/readme_check.py`, a README check any project can run (#36) — [REQ-V061-10]

@@ -441,6 +441,60 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
   rule change and a human approves it.
 - **Check:** G1 to G4. Run `spec_lint` on the new playbook if playbooks are linted.
 
+### Task 25: the lessons ship in the kit (#34)
+
+- **Why:** specter runs on other projects. A lesson fixed only in specter's `tests/` or `.specs/` helps only specter.
+- **Container gates:**
+  - `kit/playbooks/setup.md` adds one ask-if-unclear question: does this machine inspect every process launch
+    (endpoint security)?
+  - On yes, step 6 writes heavy Gates rows wrapped in `docker run --rm --memory 2g -v "$PWD":/src:ro <image>`, which
+    copy `/src` to the container's `/tmp` first. It adds a note that some runtimes (Colima, for example) share only
+    `$HOME`, so a clone elsewhere mounts empty.
+  - `kit/templates/steering/spec-rules.md` gets the same note as a comment by the Gates table.
+- **Mount check:** in `tests/gates.sh --docker`, the container's first command refuses with
+  `gates: /src is empty (does your container runtime share this path?)` and exit 2 when `/src/tests/gates.sh` is
+  missing. This is the lesson's source, and specter's own pre-push hook relies on it.
+- **Playbook:** `kit/playbooks/parallel.md` says "the project's Gates (in a container where scanners slow the host)"
+  where it now says specter's `tests/gates.sh --docker`.
+- **Resume:**
+  - `kit/playbooks/next-task.md` says that "pick up and continue", "resume" or "continue" means: read the
+    `▶ Resume here` block, and the pinned plan issue when the project has a tracker, then run the next task.
+  - `kit/templates/feature/tasks.md` names the pinned plan issue in its Resume hint.
+- **Advisories:** `kit/templates/SECURITY.md`, adapted from specter's own with placeholders for the channel and what
+  counts. `setup.md` offers it when the repository is public and has no `SECURITY.md`. The installer copies
+  templates as a tree, so no list changes.
+- **Check:**
+  - one 14b-style grep row in the selftest, which checks that `setup.md` names the container wrap and the empty-mount
+    note;
+  - one row that runs `gates.sh --docker` against an empty mount dir, only when Docker is up, and otherwise prints
+    "skipped" as 13e E2 does. Skip it in the selftest if Docker is not reachable from inside the gates container,
+    and say so;
+  - G1 to G4.
+- **Lane:** docs and `tests/gates.sh`. No conflict with tasks 23 and 26.
+
+### Task 26: a README check any project can run (#36)
+
+- **Why:** specter's README gate is a lesson too, but `tests/readme_check.py` is specter-only.
+- **`kit/scripts/readme_check.py`:** stdlib, one process, one line per check, exit 1 on any FAIL and 2 on a bad
+  argument. It checks:
+  - links, images and anchors resolve (C1);
+  - every image has alt text (C2);
+  - a line cap (C13);
+  - required section headings, in order (C7);
+  - a denylist of words (C17).
+- **Config:** settings come from `spec-kit.json` key `readme`: `path`, `max_lines`, `sections`, `deny`. Defaults:
+  `README.md`, 200, no required sections, an empty denylist. A missing key means defaults; a wrong type exits 2.
+- **Specter:** `tests/readme_check.py` keeps C4, C5, C9, C11, C12 and C15, and calls the kit script's functions for
+  the rest, so the output lines stay the same.
+- **Docs:** `docs/reference.md` and `kit/docs/chores.md` offer it as a Gates row or a scheduled chore.
+- **Check:** selftest rows on a fixture README:
+  - a broken link fails;
+  - a missing alt text fails;
+  - a clean one passes;
+  - a bad config type exits 2.
+  - Then G1 to G4.
+- **Lane:** new files plus `tests/readme_check.py`. Independent of tasks 23 and 25.
+
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
 After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a task touched `examples/acme-shop/` outside
