@@ -40,7 +40,7 @@ pre-push hook that runs them: `git config core.hooksPath .githooks`. The hook un
 
 | # | Gate | Command |
 |---|---|---|
-| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n examples/acme-shop/scripts/mvnw-docker.sh && sh -n tests/live/github/sandbox.sh && sh -n .githooks/pre-push` |
+| G1 | Shell syntax | `sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n examples/acme-shop/scripts/mvnw-docker.sh && sh -n tests/live/github/sandbox.sh && sh -n examples/acme-shop/eval/sandbox.sh && sh -n .githooks/pre-push` |
 | G2 | Example specs lint and citations | `python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites` |
 | G3 | Selftest (installer idempotency, hook, citations, drift, report, uninstall) | `sh tests/selftest.sh` |
 | G4 | Specter's own specs and README | `python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py` |
