@@ -495,6 +495,79 @@ path. On a case-folding disk the two disagree. Explicit `merged_ref` values (`ma
   - Then G1 to G4.
 - **Lane:** new files plus `tests/readme_check.py`. Independent of tasks 23 and 25.
 
+## Fix round from the 0.10.0 deep review
+
+The report is `docs/reviews/2026-11-25-v061-deep-review.md`. Finding 1 is handled privately (SECURITY.md). Findings 3
+(the byte cap), 4 and 5 move to 0.11.
+
+### Task 27: Human `none` only on a current base (finding 1)
+
+- **Touches:**
+  - `tiers.classify()` or `tiers.earned()`, in range mode;
+  - `ready.py` through the same label;
+  - `kit/docs/review-loop.md` step 5 item 2;
+  - `docs/reference.md`.
+- **Fix:** Human `none` is kept only when the base the label reads equals the tip of `merged_ref` (the commit that
+  `--evidence` reads). Otherwise the label says `- human: none → spot (base <sha7> is behind <ref>: update the branch)`.
+  The recipe says the job's `<base sha>` is the `merged_ref` tip and must equal the merge base. If no `merged_ref`
+  resolves, the label already fails closed. Staged mode is a preflight and keeps its base.
+- **Red row:** in 13e, on fixture `t13e22`. The trunk gets a revert and then a profile commit that makes routine
+  `spot`. A PR branched before that commit must give `spot (base`, and `ready.py --auto-merge` must exit 1. A PR from
+  the tip stays as it is today.
+
+### Task 28: the test and size checks fail closed (findings 2, 3 in part, 10)
+
+- **Touches:** `tiers.small()`, `TESTS`, `kit/templates/steering/autonomy.md`, and 13c2 rows `t23`.
+- **Fix:**
+  - also read `git diff --raw -z --no-renames`. Each of these gives `tests changed, not only added`:
+    - a deleted test file;
+    - a mode or type change on a test file;
+    - an added or changed `conftest.py` or `__init__.py`.
+  - A gitlink (mode `160000`) counts as over the cap.
+  - Widen the default test globs so that an unknown layout counts as a test: `*test*`, `*spec*`, `conftest.py`,
+    matched with `tiers.key()`'s fold.
+  - The template drops `<lockfile>` from the `none` row, and says that an added line can still disable a test, so
+    the reviewer's `complexity:` remains the backstop.
+- **Red rows:**
+  - a deleted empty test file;
+  - a `chmod` on a test file;
+  - `pkg/tests/test_a.py` edited;
+  - a binary file in `docs/`;
+  - a custom `## Tests` glob;
+  - a staged change of four files.
+  - Also reword the 13e18 row text.
+
+### Task 29: grafts and the NTFS fold (findings 6, 7)
+
+- **Touches:** the `tiers.py` import block (next to task 7), and `spec_lint.branch_ref()` `fold`.
+- **Fix:**
+  - set `os.environ["GIT_GRAFT_FILE"]` to a path that never exists;
+  - `branch_ref` uses `tiers.key()`'s fold, which is NFC, casefold and upper. Move the fold into `spec_lint` and
+    import it in `tiers`.
+- **Red rows:**
+  - a grafts file that hides a revert must still give `breach` (13c3, `t13e23`);
+  - `maın` against `main` must be a twin (13e, a Python one-liner).
+
+### Task 30: the gates cannot go green without running (findings 8, 9)
+
+- **Touches:**
+  - `.githooks/pre-push`;
+  - `tests/gates.sh`;
+  - the `tests/selftest.sh` `sect` filter;
+  - `kit/docs/review-loop.md` step 5 items 2 and 3 and GitHub bullet 3.
+- **Fix:**
+  - The hook unsets `SELFTEST_ONLY`, and refuses with exit 1 and a reason when the tree has uncommitted or untracked
+    changes.
+  - `gates.sh --only` with an unknown gate exits 2.
+  - When `SELFTEST_ONLY` is set, `gates.sh` prints `G3 PARTIAL (SELFTEST_ONLY=…)` and exits 1.
+  - `selftest.sh` exits 2 when `SELFTEST_ONLY` names no known section.
+  - Drop the stale G2 comment.
+  - The recipe says to fetch full history with the explicit refspec (`--unshallow`, or `fetch-depth: 0` with the
+    refspec overridden). Item 2 names all five `none` conditions.
+- **Check:**
+  - G1 to G4;
+  - a scratch run that shows each refusal, from a clone under `$HOME`.
+
 ## Task 16: gates, deep review, CHANGELOG, release (#18)
 
 After tasks 1 to 15 are merged into `feat/0.10.0`: G1 to G4, plus G5 only if a task touched `examples/acme-shop/` outside
