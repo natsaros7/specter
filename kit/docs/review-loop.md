@@ -66,8 +66,8 @@ flowchart LR
         and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`), and fetch it
         with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
         disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings. Fetch full
-        history too: `git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main <head sha>` (or
-        `fetch-depth: 0` with that refspec overriding the default), because a shallow clone hides the merged history the
+        history too: when `git rev-parse --is-shallow-repository` prints `true`, `git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main <head sha>` (without
+        `--unshallow` otherwise; or `fetch-depth: 0` with that refspec overriding the default), because a shallow clone hides the merged history the
         evidence windows read.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
         or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform
@@ -80,8 +80,9 @@ flowchart LR
         <!-- shortcut: the label is the one made at approval; a base that moves under the PR re-labels it only when the branch is updated (a new commit drops the approval and the job runs again); re-run ready.py in the queue against the PR head when evidence that moved must bar a queued merge. -->
 
      - GitHub, in this order:
-       1. A ruleset (or branch protection) with "Require a pull request before merging", 1 required approval and
-          "Dismiss stale pull request approvals when new commits are pushed".
+       1. A ruleset (or branch protection) with "Require a pull request before merging", 1 required approval,
+          "Dismiss stale pull request approvals when new commits are pushed" and "Require branches to be up to date
+          before merging".
        2. The approver is a GitHub App, never `GITHUB_TOKEN`: leave "Allow GitHub Actions to create and approve pull
           requests" off. Its private key is a secret of an environment whose deployment branches allow only the default
           branch.

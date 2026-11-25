@@ -47,4 +47,4 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 28 The test and size checks fail closed: deleted or chmod test files, wider test globs, gitlinks (deep review 2, 3, 10) (#37) — [REQ-V061-09]
 - [x] 29 Grafts off; the NTFS fold in `branch_ref` (deep review 6, 7) (#38) — [REQ-V061-01] [REQ-V061-04]
 - [x] 30 The gates and the hook cannot report green without running; the recipe fetches full history (deep review 8, 9) (#39) — [REQ-V061-05] [REQ-V061-03]
-- [ ] 31 Second-review fixes: narrower test globs, hook checks the pushed sha and untracked files, selftest unsets git env, blank `SELFTEST_ONLY`, recipe fetch (#41) — [REQ-V061-05] [REQ-V061-09]
+- [x] 31 Second-review fixes: narrower test globs, hook checks the pushed sha and untracked files, selftest unsets git env, blank `SELFTEST_ONLY`, recipe fetch (#41) — [REQ-V061-05] [REQ-V061-09]

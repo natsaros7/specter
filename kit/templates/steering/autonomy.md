@@ -47,4 +47,4 @@ Runs: <schedule>, by <cron | launchd | CI schedule>, as `python3 .specs/kit/scri
 | domain | <days> | <n> | <%> | <%> | <%> |
 
 ## Tests
-<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `*test*`, `*spec*`, `conftest.py`. A deleted or re-moded test file and an added or changed `conftest.py` or `__init__.py` are `spot` too. An added line can still switch a test off (a skip marker): the reviewer's `complexity:` is the backstop. -->
+<!-- Optional. Path globs (in backticks) of test files; a change in a Human `none` tier that deletes or edits a line of one is labelled `spot`, only adding lines keeps `none`. Default: `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`. A deleted or re-moded test file and an added or changed `conftest.py` or `__init__.py` are `spot` too. An added line can still switch a test off (a skip marker): the reviewer's `complexity:` is the backstop. -->

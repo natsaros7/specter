@@ -6,8 +6,17 @@ if [ "${SPECTER_SKIP_GATES:-}" = 1 ]; then
   exit 0
 fi
 cd "$(git rev-parse --show-toplevel)" || exit 1
+# stdin: <local ref> <local sha> <remote ref> <remote sha>. The gates test HEAD, so every pushed sha must be HEAD.
+head=$(git rev-parse HEAD) || exit 1
+while read -r lref lsha _; do
+  case "$lsha" in *[!0]*) ;; *) continue;; esac  # all zeros: a branch delete
+  if [ "$lsha" != "$head" ]; then
+    echo "pre-push: $lref is not the checked-out commit; the gates would test HEAD, not what you push. Check it out, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
+    exit 1
+  fi
+done
 unset SELFTEST_ONLY  # an inherited filter would make G3 a partial run
-if [ -n "$(git status --porcelain)" ]; then
+if [ -n "$(git status --porcelain --untracked-files=normal)" ]; then
   echo "pre-push: uncommitted or untracked changes; the gates would test files you are not pushing. Commit or stash, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
   exit 1
 fi

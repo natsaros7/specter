@@ -5,6 +5,7 @@ KIT=$(cd "$(dirname "$0")/.." && pwd)
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/home"; export HOME="$TMP/home" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null  # the developer's real ~/.claude/agents must not change outcomes
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_PREFIX GIT_COMMON_DIR  # a hook's repo variables must not point fixtures at the caller's repo
 export TZ=UTC LC_ALL=C  # same result on any locale or time zone (sort order of the file lists below is C order)
 # shortcut: evidence windows read the real clock (tiers.py has no test clock, by design); a run that straddles midnight UTC could move a day-granular window, add a clock override only if it ever flakes
 # shortcut: ~8800 process launches per run (7243 git), mostly inside tiers.py/ready.py; slow on hosts that scan every exec — run --docker; copy prebuilt fixtures if a host run is ever required
@@ -15,6 +16,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
 DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14"
 ONLY=" ${SELFTEST_ONLY:-} "
+case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
   grep -q "sect $n \"" "$0" || { echo "selftest: unknown SELFTEST_ONLY section: $n" >&2; bad=1; }
 done; [ -z "${bad:-}" ] || exit 2
@@ -710,8 +712,9 @@ n=6; fset "$T1" 20; FH=$(git -C "$F" rev-parse --short HEAD)
 rc=0; out=$(fr gpt-5-1) || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q "human: none → spot (evidence: hold (merged [0-9]* < min 20))" || fail "13c2: ready.py kept none on held evidence (exit $rc): $out"
 # v061 task 23: Human none only for a small change that adds tests only and that the reviewer calls trivial
 E="$TMP/t13e20"; mkdir -p "$E/docs" "$E/tests"; gitq -C "$E" init; "$KIT/install.sh" "$E" >/dev/null; printf '{"merged_ref": "trunk"}' > "$E/.specs/spec-kit.json"
-F0=$F; F=$E; n=7; fset '| routine | `docs/*`, `tests/*`, `pkg/*`, `spec/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |' 2; F=$F0
+F0=$F; F=$E; n=7; fset '| routine | `docs/*`, `tests/*`, `pkg/*`, `spec/*`, `.specs/features/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |' 2; F=$F0
 printf 'a\nb\n' > "$E/tests/x_test.py"; : > "$E/tests/empty_test.py"; mkdir -p "$E/pkg/tests" "$E/spec"; printf 'assert 1\n' > "$E/pkg/tests/test_a.py"; : > "$E/pkg/__init__.py"; echo a > "$E/spec/a"
+mkdir -p "$E/.specs/features/f"; printf -- '- [ ] 1 x\n' > "$E/.specs/features/f/tasks.md"; echo a > "$E/docs/latest.md"
 gitq -C "$E" add -A; gitq -C "$E" commit -m t0; gitq -C "$E" branch -f trunk
 el() { python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --range trunk...HEAD "$@" 2>&1; }
 ec() { gitq -C "$E" reset -q --hard trunk; "$@"; gitq -C "$E" add -A; gitq -C "$E" commit -qm c; }
@@ -743,7 +746,11 @@ t23 "tests changed, not only added: tests/conftest.py" sh -c 'echo a > "$0/tests
 t23 "tests changed, not only added: pkg/__init__.py" gitq -C "$E" rm pkg/__init__.py
 t23 "size 1 files / 0+ lines" sh -c 'printf "\0\1" > "$0/docs/b.bin"' "$E"
 t23 "size 1 files / 1+ lines" sh -c 'mkdir "$0/docs/vendor"; git -C "$0/docs/vendor" -c user.name=t -c user.email=t@t init -q; git -C "$0/docs/vendor" -c user.name=t -c user.email=t@t commit -q --allow-empty -m s' "$E"
-rm -rf "$E/docs/vendor"; ec sh -c 'echo a > "$0/docs/spec_notes.md"' "$E"; out=$(el)
+rm -rf "$E/docs/vendor"
+# v061 task 31: the default globs are test paths, not any path containing "test" or "spec"
+ec sh -c 'printf -- "- [x] 1 x\n" > "$0/.specs/features/f/tasks.md"; echo b > "$0/docs/latest.md"' "$E"; out=$(el)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t31: a ticked task or an edited docs/latest.md lost none: $out"
+ec sh -c 'echo a > "$0/docs/spec_notes.md"' "$E"; out=$(el)
 echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t23: an added file named like a test lost none: $out"
 gitq -C "$E" reset -q --hard trunk; printf '\n## Tests\n`spec/*`\n' >> "$E/.specs/steering/autonomy.md"; gitq -C "$E" add -A; gitq -C "$E" commit -qm tests; gitq -C "$E" branch -f trunk
 t23 "tests changed, not only added: spec/a" sh -c 'echo a2 > "$0/spec/a"' "$E"

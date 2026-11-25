@@ -38,7 +38,7 @@ A --range label keeps `none` only when its base is the merged_ref tip that --evi
 behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps its base.
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
 `Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
-(globs of an optional `## Tests` section, default *test* *spec* conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
+(globs of an optional `## Tests` section, default: test directories, `*_test.*`, `*.test.*`, `test_*`, spec files, conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
 `tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file or a gitlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
 
@@ -69,7 +69,6 @@ import re
 import subprocess
 import sys
 import time
-import unicodedata
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__ (guarded path)
@@ -101,7 +100,8 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
 SIZE = ["Max files", "Max lines"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3 and 50)
 # Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
-TESTS = ["*test*", "*spec*", "conftest.py"]
+TESTS = ["tests/*", "*/tests/*", "test/*", "*/test/*", "__tests__/*", "*/__tests__/*", "spec/*", "*/spec/*", "*_test.*",
+         "*.test.*", "*_spec.*", "*.spec.*", "test_*", "*/test_*", "conftest.py", "*/conftest.py"]  # fnmatch: * crosses /
 PLACEHOLDER = re.compile(r"<[^<>`]*>")
 
 

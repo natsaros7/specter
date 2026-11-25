@@ -196,7 +196,7 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   or deletes or edits a line of a test file, deletes or re-modes one, or adds or changes a `conftest.py` or `__init__.py`
   (`tests changed, not only added: <path>`; a gitlink counts as over the cap). The cap is two optional trailing
   Evidence columns, `Max files` and `Max lines` (defaults 3 and 50; `-` is the default; any other non-number is exit 2 with
-  `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `*test*`, `*spec*`, `conftest.py`,
+  `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`,
   matched case- and Unicode-folded), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says
   `spot`. A `--range` label (and `ready.py`) also says `spot` when its base, the merge base, is not the `merged_ref`
