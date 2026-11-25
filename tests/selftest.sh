@@ -1022,7 +1022,7 @@ assert t["domain"]["demote"] is None and t["critical"]["demote"] is None and t["
 TD='| routine | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}${EV1}"; js=$(el --json)
 printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]; assert t["routine"]["merged"]==0 and t["domain"]["merged"]==6 and d["relabelled"]==5, d' || fail "13c evidence: a changed row kept its history (want routine 0, relabelled 5): $js"
-el | grep -q "^- relabelled: 5 commit(s) under a tier row renamed or changed in the window" || fail "13c evidence: no relabelled line: $(el)"
+el | grep -q "^- relabelled: 5 commit(s) whose tier, a stricter row or a guarded path changed in the window" || fail "13c evidence: no relabelled line: $(el)"
 # a rename with the same globs is a changed row too: the old commits count under no tier, docs included
 TD='| docs | `nothing/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
 ev "${EVH}| docs | 90 | 1 | - | - | - |\n"; js=$(el --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["tiers"]["docs"]["merged"]==0 and d["relabelled"]==5, d' || fail "13c evidence: a renamed tier inherited its old commits: $js"
@@ -1152,6 +1152,23 @@ want "13e19 zeros on a none tier count once it is spot" "routine: eligible"
 nr t13e24 -b main; for i in $(seq 19); do mr docs -m "z$i" -m "Human-Findings: 0"; done; mr docs -m z20 -m "Human-Findings: 1"
 want "13e24 human zeros on a none tier are the denominator" "routine: eligible"
 echo "$out" | grep -qF "human-caught 1 of 20 (5.0%)" || fail "13c evidence: 13e24 human-caught is over every trailered merge: $out"
+# finding 5: the key is the rows from the tier down plus the guarded globs, since a file takes the strictest row it matches
+TD='| routine | `docs/*` `*.md` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |'
+ER='| routine | 90 | 2 | - | - | - |\n| domain | 90 | 1 | - | - | - |\n| critical | 90 | 1 | - | - | - |\n'"$GR"'\n## Knowledge\n| Knowledge | Where | Read |\n|---|---|---|\n| Notes | [kb](../../kb/notes.md) | start |\n'
+pe() { sed -i.bak "$1" "$R/.specs/steering/autonomy.md"; rm -f "$R/.specs/steering/autonomy.md.bak"; gitq -C "$R" add -A; gitq -C "$R" commit -qm "$2"; }
+nr t13e25 -b main; for i in 1 2; do echo "$i" >> "$R/src/README.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm "readme $i"; done; mr docs -m d1; mr docs -m d2
+want "13e25 routine did not earn its two docs merges" "routine: eligible"
+# narrowing domain drops src/README.md into routine, so routine's two merges no longer speak for it
+pe 's#`src/\*` |#`src/*.py` |#' "domain narrowed"
+want "13e25 a narrowed stricter row kept routine's evidence" "routine: hold (merged 0 < min 2)"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["relabelled"]==4 and d["tiers"]["critical"]["merged"]==1, d' || fail "13e25 relabelled after the narrowing (want 4): $js"
+gitq -C "$R" checkout -q -b readme; echo 3 >> "$R/src/README.md"; gitq -C "$R" commit -qam readme3
+out=$(python3 "$R/.specs/kit/scripts/tiers.py" --specs "$R/.specs" --range main...HEAD 2>&1); echo "$out" | grep -q "tier: routine (reviewer: standard, human: spot)" && echo "$out" | grep -qF "none → spot (evidence: hold (merged 0 < min 2))" || fail "13e25 a src/README.md PR kept none after the narrowing: $out"
+gitq -C "$R" checkout -q main; mr docs -m d3; mr docs -m d4; echo x > "$R/src/a.py"; gitq -C "$R" add -A; gitq -C "$R" commit -qm py
+pe 's/| standard | spot |/| standard | required |/' "domain is required"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; t=json.load(sys.stdin)["tiers"]; assert t["routine"]["verdict"]=="eligible" and [t[k]["merged"] for k in ("routine","domain","critical")]==[2,1,2], t' || fail "13e25 a Human-only edit reset a tier: $js"
+pe '/\[kb\]/d' "knowledge link removed"
+js=$(er --json); printf '%s' "$js" | python3 -c 'import json,sys; d=json.load(sys.stdin); t=d["tiers"]; assert [t[k]["merged"] for k in ("routine","domain","critical")]==[0,0,0] and d["relabelled"]==10, d' || fail "13e25 a removed Knowledge link kept evidence (want 0 0 0, relabelled 10): $js"
 # a profile that is not UTF-8 gets a readable reason, from the label's reader and from --check, never a traceback
 nr t13e17 -b main; mr docs -m d0; printf '\377\376' >> "$R/.specs/steering/autonomy.md"; gitq -C "$R" add -A; gitq -C "$R" commit -qm bin
 rc=0; out=$(er) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF "not UTF-8" || fail "13e17 evidence: not-UTF-8 profile exits $rc, want 2 and 'not UTF-8': $out"

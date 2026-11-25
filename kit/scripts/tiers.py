@@ -49,7 +49,9 @@ commits on merged_ref (as the label's staged mode finds it) inside each tier's w
 the oldest commit dated inside the window, whatever the dates above it (a future date sets no window; a shallow clone
 holds every tier with a row; an unreadable change set is exit 2), labels each with the profile as of
 its first parent (a parent with no profile or Tiers, and the root commit, are `unprofiled`: left out and counted), and
-counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
+counts it for a tier only when that profile's rows from the tier down to the last (name and Paths globs) and its guarded
+globs equal those of the profile read now (Reviewer and Human are not compared); the others are `- relabelled: <n>`
+(--json `relabelled`). It counts per tier: merged; reverted (a later commit whose change set, F^1..F, has a `This reverts commit <sha>` line naming
 any commit of this one's change set); escaped (the same with `Fixes: <sha, 7 to 64 hex>`; `Fixes: #12` is ignored);
 human-caught (its own `Human-Findings: <n>` lines: the max, and a value that is not plain digits counts as caught), as a
 share of the merges that carry one, a `0` on a `none` merge included (ready.py --auto-merge refuses a PR whose text or commits carry the trailer, so it is a human's).
@@ -262,6 +264,13 @@ def guarded_globs(text, rel):
     return out
 
 
+def row_keys(rows, guarded):
+    """One evidence key per row index: (name, sorted globs) of that row and every stricter row below it, and the sorted
+    guarded globs. classify() tries the strictest row first, so these decide which files the row's tier gets."""
+    g = tuple(sorted(guarded))
+    return [(tuple((r[0], tuple(sorted(r[1]))) for r in rows[i:]), g) for i in range(len(rows))]
+
+
 key = spec_lint.fold  # one fold for paths, globs and ref names (see spec_lint.fold)
 
 
@@ -341,11 +350,12 @@ def end_commit(root, end):
 
 
 def classify(root, rel, rng, specs=None, where=None):
-    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note}
+    """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note, globs, key}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
     ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
-    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. where: (top-level, prefix) of
+    root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. key is the tier's row_keys()
+    entry (evidence compares it). where: (top-level, prefix) of
     root when the caller already has them (evidence calls this once per commit)."""
     top, prefix = where or (git(root, "rev-parse", "--show-toplevel"), git(root, "rev-parse", "--show-prefix") or "")
     closed = False
@@ -379,6 +389,7 @@ def classify(root, rel, rng, specs=None, where=None):
     else:
         why = None
     guarded = guarded_globs(text, rel)
+    keys = row_keys(rows, guarded)
     guarded += [prefix + g for g in guarded] if prefix else []
     last, counts, top = len(rows) - 1, {}, (-1, None, None)
     for f in files:
@@ -400,7 +411,7 @@ def classify(root, rel, rng, specs=None, where=None):
         human = "spot" if no_low else human
     return {"base": base, "head": head, "files": files, "tier": tier, "reviewer": reviewer, "human": human, "why": why, "note": note, "guardrails": guard,
             "reasons": ["not the lowest tier"] if why is None and no_low else [],
-            "globs": rows[idx][1], "set_by": {"file": top[1], "glob": top[2]} if files else None,
+            "globs": rows[idx][1], "key": keys[idx], "set_by": {"file": top[1], "glob": top[2]} if files else None,
             "counts": {r[0]: counts[r[0]] for r in rows if r[0] in counts}}
 
 
@@ -611,7 +622,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
                 return refuse("cannot read the change set of " + sha[:7])  # never the body alone: a missed revert passes
             cs = list(zip(t[::2], t[1::2]))
         named = lambda pat: [x.lower() for _, b in cs for x in re.findall(pat, b, re.M | re.I)]
-        ents[i] = ((c["tier"], tuple(sorted(c["globs"]))) if c and c["why"] is None else None, [h for h, _ in cs],
+        ents[i] = (c["key"] if c and c["why"] is None else None, [h for h, _ in cs],
                    named(r"^This reverts commit ([0-9a-f]{7,64})\b"), named(r"^Fixes:[ \t]*([0-9a-f]{7,64})\b"), body, i)
         # a commit below the cut that a revert or Fixes: in the window names joins it alone, not the commits between
         todo += sorted({j for x in ents[i][2] + ents[i][3] for j in range(last + 1, len(recs)) if recs[j][0].startswith(x)} - set(todo[last + 1:]))
@@ -626,11 +637,13 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             if not more:
                 return [e for e in log if e in mine]
             mine += more
-    # a commit counts for a tier only under the same (name, Paths globs) its parent's row had as the row read now; Reviewer and Human are not compared
-    cur = {(r[0], tuple(sorted(r[1]))) for r in tiers}
-    relabelled = sum(1 for e in log if e[0] and e[0] not in cur)
+    # a commit counts for a tier only when its parent's profile had the same rows from that tier down to the last (name,
+    # Paths globs) and guarded globs as the profile read now: a stricter row narrowed moves files into the lower tiers.
+    # Reviewer and Human are not compared, so a promotion keeps its evidence.
+    keys = row_keys(tiers, guarded_globs(text, rel))
+    relabelled = sum(1 for e in log if e[0] and e[0] not in keys)
     out, rows_h = {}, {r[0]: r[3] for r in tiers}
-    for name, globs in ((r[0], tuple(sorted(r[1]))) for r in tiers):
+    for name, k in zip(names, keys):
         row = (ev or {}).get(name)
         m = dict(verdict="hold", why="thresholds not set" if name in (ev or {}) else "no Evidence row",
                  window_days=None, merged=0, reverted=0, escaped=0, human_caught=0, with_trailer=0)
@@ -642,7 +655,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
             m["why"] = "shallow clone: fetch the full history"
             continue
         wlog = tier_log(win)
-        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == (name, globs)]
+        mine = [(i, e) for i, e in enumerate(wlog) if e[0] == k]
         m.update(window_days=win, merged=len(mine))
         for i, (_, shas, _, _, body, _) in mine:
             later = wlog[:i]  # the log is newest first, so these came after this commit
@@ -686,7 +699,7 @@ def evidence(root, rel, specs, profile, as_json, text=None):
         if d is not None:
             print("  demote: %s:%d Human %s" % (d["file"], d["line"], d["from"])
                   + (" → %s (a human edit; tiers.py changes nothing)" % d["to"] if d["to"] else ": already required"))
-    print("- relabelled: " + str(relabelled) + " commit(s) under a tier row renamed or changed in the window")
+    print("- relabelled: " + str(relabelled) + " commit(s) whose tier, a stricter row or a guarded path changed in the window")
     print("- unprofiled: " + str(unprofiled) + " commit(s) left out")
     print("- profile: " + src + ", unchanged; promotion and demotion are a human edit of " + rel)
     # shortcut: one history log, then one classify and one change-set log per commit in the window (top-level and prefix read once); cache by commit when a window holds thousands of merges.
