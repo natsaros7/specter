@@ -9,6 +9,10 @@ import os
 import re
 import sys
 
+sys.dont_write_bytecode = True
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "kit", "scripts"))
+import readme_check as kit  # C1, C2, C7, C13, C17 live in the kit script; the rest is specter's own
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 rd = lambda *p: open(os.path.join(ROOT, *p), encoding="utf-8").read()
 README = rd("README.md")
@@ -21,50 +25,13 @@ def rec(status, check, msg):
     results.append((status, check, msg))
 
 
-def slugs(text):
-    out, fence = set(), False
-    for line in text.splitlines():
-        if line.startswith("```"):
-            fence = not fence
-        m = None if fence else re.match(r"#{1,6}\s+(.*)", line)
-        if m:
-            h = re.sub(r"[`*_]", "", m.group(1)).strip().lower()
-            out.add(re.sub(r"\s", "-", re.sub(r"[^\w\s-]", "", h)))
-    return out
-
-
-def targets(text):
-    t = re.findall(r"\]\(([^)\s]+)\)", text) + re.findall(r'(?:src|href)="([^"]+)"', text)
-    return [x for x in t if not re.match(r"[a-z]+:", x)]
-
-
-def prose_lines(lines):
-    fence = False
-    for n, line in enumerate(lines, 1):
-        if line.startswith("```"):
-            fence = not fence
-        elif not fence:
-            yield n, line
-
-
 # C1 links, images and anchors resolve (SECURITY.md is C11's job while task 21 is open)
-bad = []
-for t in targets(README):
-    path, _, anchor = t.partition("#")
-    if path == "SECURITY.md":
-        continue
-    f = os.path.join(ROOT, path) if path else os.path.join(ROOT, "README.md")
-    if not os.path.exists(f):
-        bad.append(t)
-    elif anchor and f.endswith(".md") and anchor not in slugs(open(f, encoding="utf-8").read()):
-        bad.append(t)
+bad = kit.broken_links(README, ROOT, "README.md", skip=("SECURITY.md",))
 rec("FAIL" if bad else "PASS", "C1", "broken: " + ", ".join(bad) if bad else "links, images and anchors resolve")
 
 # C2 alt text on every image
-imgs = re.findall(r"<img\b[^>]*>", README)
-noalt = [i for i in imgs if not re.search(r'alt="[^"]+"', i)]
-noalt += [m for m in re.findall(r"!\[([^\]]*)\]\(", README) if not m.strip()]
-rec("FAIL" if noalt else "PASS", "C2", "%d image(s) without alt" % len(noalt) if noalt else "%d image(s) all have alt" % len(imgs))
+n_noalt, n_imgs = kit.alt_check(README)
+rec("FAIL" if n_noalt else "PASS", "C2", "%d image(s) without alt" % n_noalt if n_noalt else "%d image(s) all have alt" % n_imgs)
 
 # C4 no OS-only command in a code block
 os_only = re.compile(r"^\s*(open|xdg-open|pbcopy|pbpaste|start)\s|&&\s*(open|xdg-open)\s")
@@ -84,10 +51,9 @@ for f in ("docs/overview/deck/specter-overview.html", "docs/overview/roadmap.svg
         wrong.append(f + " lacks " + VERSION)
 rec("FAIL" if wrong else "PASS", "C5", "stale: " + ", ".join(wrong) if wrong else "README, deck and roadmap name " + VERSION)
 
-# C7 required sections, License last
-heads = [re.sub(r"[`*]", "", m) for m in re.findall(r"^##\s+(.*)$", README, re.M)]
+# C7 required sections, in order, License last
 need = ["Try it", "Set it up", "Decisions", "How it compares", "Limits", "Security", "Contributing", "License"]
-miss = [s for s in need if not any(h.startswith(s) for h in heads)]
+miss, heads = kit.missing_sections(README, need)
 if heads and not heads[-1].startswith("License"):
     miss.append("License last")
 rec("FAIL" if miss else "PASS", "C7", "missing: " + ", ".join(miss) if miss else "required sections present, License last")
@@ -99,7 +65,7 @@ odd = [b for b in badges if not ok_kind.search(b)]
 rec("FAIL" if len(badges) > 4 or odd else "PASS", "C9", "%d badge(s)%s" % (len(badges), "; not licence/version/assessment: " + ", ".join(odd) if odd else ""))
 
 # C11 SECURITY.md linked; warn while the file is missing (task 21 adds it)
-linked = "SECURITY.md" in targets(README)
+linked = "SECURITY.md" in kit.targets(README)
 exists = os.path.exists(os.path.join(ROOT, "SECURITY.md"))
 if not linked:
     rec("FAIL", "C11", "README does not link SECURITY.md")
@@ -120,13 +86,13 @@ for b in wb:
 rec("FAIL" if over else "PASS", "C12", "badge names non-checked agent(s): " + ", ".join(over) if over else "no works-with badge overclaims (checked: %s)" % ", ".join(good))
 
 # C13 length
-rec("FAIL" if len(LINES) >= 200 else "PASS", "C13", "%d lines (limit 199)" % len(LINES))
+rec("FAIL" if len(LINES) >= kit.DEFAULTS["max_lines"] else "PASS", "C13", "%d lines (limit %d)" % (len(LINES), kit.DEFAULTS["max_lines"] - 1))
 
 # C15 each screenshot shown in the README or the overview has its raw text beside it
 shots = set()
 for f in ("README.md", "docs/overview/README.md"):
     base = os.path.dirname(f)
-    for t in targets(rd(*f.split("/"))):
+    for t in kit.targets(rd(*f.split("/"))):
         p = os.path.normpath(os.path.join(base, t.split("#")[0]))
         if "screenshots/" in p and p.endswith(".png"):
             shots.add(p)
@@ -135,7 +101,7 @@ rec("FAIL" if nots else "PASS", "C15", "no raw text: " + ", ".join(nots) if nots
 
 # C17 marketing words
 deny = re.compile(r"\b(blazing|seamless(ly)?|powerful|most loved|best-in-class|cutting-edge|revolutionary|game-chang\w+|supercharge\w*|effortless(ly)?|robust|world-class|10x)\b", re.I)
-mk = ["%d:%s" % (n, m.group(0)) for n, l in prose_lines(LINES) for m in [deny.search(l)] if m]
+mk = kit.deny_hits(LINES, deny)
 rec("FAIL" if mk else "PASS", "C17", "marketing words " + ", ".join(mk) if mk else "no marketing words")
 
 for st, c, msg in results:

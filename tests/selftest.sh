@@ -1193,5 +1193,22 @@ if docker info >/dev/null 2>&1; then
   [ "$rc" = 2 ] && echo "$out" | grep -qF "gates: /src is empty (does your container runtime share this path?)" || fail "14b: empty mount gave rc=$rc: $out"
 else echo "14b: empty-mount row skipped, no Docker reachable"; fi
 
+fi; if sect 26 "readme_check.py: broken link and missing alt fail, a clean README passes, a bad setting exits 2"; then
+R="$TMP/t26"; mkdir -p "$R/.specs" "$R/img"; touch "$R/img/a.png"
+rcheck() { python3 "$KIT/kit/scripts/readme_check.py" --specs "$R/.specs" 2>&1; }
+printf '# T\n![a](img/a.png)\n[doc](img/a.png)\n## Use\n## License\n' > "$R/README.md"
+out=$(rcheck) && echo "$out" | grep -q "^PASS C1 " && echo "$out" | grep -q "^PASS C2 " && echo "$out" | grep -q "^PASS C13 " || fail "26: clean README: $out"
+printf '# T\n[x](nope.md)\n' > "$R/README.md"
+out=$(rcheck) && fail "26: broken link passed"; echo "$out" | grep -q "^FAIL C1 *broken: nope.md" || fail "26: broken link line: $out"
+printf '# T\n![](img/a.png)\n' > "$R/README.md"
+out=$(rcheck) && fail "26: missing alt passed"; echo "$out" | grep -q "^FAIL C2 *1 image(s) without alt" || fail "26: alt line: $out"
+printf '# T\n## License\n## Use\nThis is seamless.\n' > "$R/README.md"
+printf '{"readme": {"sections": ["Use", "License"], "deny": ["seamless"]}}' > "$R/.specs/spec-kit.json"
+out=$(rcheck) && fail "26: order and deny passed"; echo "$out" | grep -q "^FAIL C7 *missing: License (out of order)" && echo "$out" | grep -q "^FAIL C17 " || fail "26: C7/C17 lines: $out"
+for cfg in '{"readme": {"max_lines": "9"}}' '{"readme": {"sections": "Use"}}' '{"readme": []}' '{"readme": {"path": "../x.md"}}'; do
+  printf '%s' "$cfg" > "$R/.specs/spec-kit.json"; rc=0; rcheck >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "26: bad setting $cfg exits $rc, want 2"
+done
+printf '{}' > "$R/.specs/spec-kit.json"; rm "$R/README.md"; rc=0; rcheck >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "26: missing README exits $rc, want 2"
+
 fi; sect_end
 echo "selftest: OK"

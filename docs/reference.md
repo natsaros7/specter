@@ -71,6 +71,7 @@ python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec cha
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
 python3 .specs/kit/scripts/tiers.py --check       # validate the Tiers table in steering/autonomy.md (tiers.py alone labels the staged change)
 python3 .specs/kit/scripts/tiers.py --evidence    # per tier from merged history: eligible, hold (why) or breach (metric, plus the demote: line); edits nothing
+python3 .specs/kit/scripts/readme_check.py       # README: links, anchors, alt text, line cap; `readme` in spec-kit.json adds sections and denied words (exit 1 a FAIL, 2 a bad setting)
 ```
 
 Citations: `path:12`, `path:12-20,31`, `path#L12-L20`, and `<repo>:path:12` (repo = a `cite_aliases` key or a folder name).
@@ -83,6 +84,7 @@ New `.specs/spec-kit.json` keys (all optional):
 | Key | Default | Effect |
 |---|---|---|
 | `cite_aliases` | `{}` | Repo prefix to folder, e.g. `{"NS": "tools/load-sim"}` |
+| `readme` | `{}` | Settings of `readme_check.py`: `path` (`README.md`, relative to the project root), `max_lines` (`200`, the README must be shorter), `sections` (`##` headings required in this order, default none), `deny` (words refused outside code fences, default none). A wrong type exits 2 |
 | `cite_ignore_globs` | `[]` | fnmatch on the root-relative path; drops these files when a citation matches several |
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 | `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
