@@ -1,5 +1,6 @@
 """Installer logic for install.sh. Python 3.8+, stdlib only. Idempotent: every write is a full copy or a marker block."""
 import datetime
+import hashlib
 import json
 import re
 import shutil
@@ -85,6 +86,64 @@ def put_file(path, text):
         path.write_text(text)
     write(path, "create" if old is None else "replace", go)
     return True
+
+
+def blob_id(data):
+    """git's blob hash, so a file compares with `git ls-tree` output without a git call per file."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def recorded(kit_home, kit, old):
+    """{root-relative path: blob id} of what the old kit shipped: its MANIFEST, else the v<old> tag, else None (unverified)."""
+    try:
+        pairs = [l.split(" ", 1) for l in (kit / "MANIFEST").read_text().splitlines() if l]
+        if pairs and all(len(p) == 2 for p in pairs):
+            return {path: blob for blob, path in pairs}
+    except OSError:
+        pass
+    done = git(kit_home, "ls-tree", "-r", "-z", "v" + old, "--", *["kit/" + p for p in KIT_PARTS])
+    if done.returncode != 0 or not done.stdout:
+        return None
+    rec = {}
+    for entry in done.stdout.split("\0"):
+        meta, _, path = entry.partition("\t")
+        if path and path != "kit/scripts/install.py":
+            rec[".specs/" + path] = meta.split()[2]
+    return rec or None
+
+
+UP = None  # upgrade state: {"old", "rec", "dir", "saved"}; None outside upgrade mode
+OWNED = []  # project files put_owned wrote or found current: they go in MANIFEST
+
+
+def kit_files(kit):
+    return sorted(f for f in kit.rglob("*") if f.is_file() and f.name not in ("MANIFEST", "VERSION") and "__pycache__" not in f.parts)
+
+
+def keep(path, new):
+    """Upgrade mode: copy path into .specs/kit.bak-<old>/ unless its bytes are the recorded ones or the new ones."""
+    if UP is None or not path.is_file():
+        return
+    have, key = blob_id(path.read_bytes()), shown(path)
+    if have == (blob_id(new) if new is not None else None) or (UP["rec"] or {}).get(key) == have:
+        return
+    if UP["dir"] is None:
+        base = ROOT / (".specs/kit.bak-" + UP["old"])
+        UP["dir"] = next(d for d in [base] + [Path(str(base) + "-%d" % n) for n in range(2, 10000)] if not d.exists())
+    rel = key[len(".specs/kit/"):] if key.startswith(".specs/kit/") else "project/" + key
+    dst = UP["dir"] / rel
+    def go():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, dst)
+    write(path, "back up", go)
+    UP["saved"].append(key)
+
+
+def put_owned(path, text):
+    """put_file for a file specter owns outside the kit (agent, skill, rule): an edited copy is backed up first."""
+    keep(path, text.encode())
+    OWNED.append(path)
+    return put_file(path, text)
 
 
 def read_raw(path):
@@ -220,7 +279,7 @@ def install_skill(kit_home, dest_dir):
     if not writable(dst):
         return False
     src = (kit_home / "kit/skill/spec-first/SKILL.md").read_text()
-    put_file(dst, src.replace("{{KIT_HOME}}", str(kit_home)))
+    put_owned(dst, src.replace("{{KIT_HOME}}", str(kit_home)))
     return True
 
 
@@ -275,6 +334,15 @@ def install(kit_home, target):
                                   "upgrade": " (kit installed: it is replaced, your specs and settings kept)",
                                   "fresh": " (forced by --fresh)" if "--fresh" in ARGS else " (no spec system yet)"}[how])
     old_version = (kit / "VERSION").read_text().strip() if how == "upgrade" else None
+    global UP
+    UP = {"old": old_version, "rec": recorded(kit_home, kit, old_version), "dir": None, "saved": []} if how == "upgrade" else None
+    if UP:
+        for f in kit_files(kit):
+            new = src_kit / f.relative_to(kit)
+            keep(f, new.read_bytes() if new.is_file() else None)
+        if UP["rec"] is None:
+            say("could not verify what " + old_version + " shipped (no MANIFEST, no v" + old_version + " tag): "
+                "backed up every file that differs from the new kit", True)
     for part in KIT_PARTS:
         src, dst = src_kit / part, kit / part
         def go(src=src, dst=dst):
@@ -337,14 +405,14 @@ def install(kit_home, target):
                 continue
             dst = target / ".claude/agents" / agent.name
             if writable(dst):
-                put_file(dst, agent.read_text())
+                put_owned(dst, agent.read_text())
                 wrote.append(agent.stem)
         if wrote:
             say(".claude/agents: " + " / ".join(wrote) + " (sub-agents for .specs/kit/roles/)")
     if "cursor" in agents and (target / ".cursor").is_dir():
         header = (kit_home / "kit/adapters/cursor/spec-first.mdc").read_text()
         if writable(target / ".cursor/rules/spec-first.mdc"):
-            put_file(target / ".cursor/rules/spec-first.mdc", header + rules)
+            put_owned(target / ".cursor/rules/spec-first.mdc", header + rules)
             say(".cursor/rules/spec-first.mdc")
     if put_block(target / ".github/copilot-instructions.md", rules, create=False):
         say(".github/copilot-instructions.md: spec rules block")
@@ -361,6 +429,11 @@ def install(kit_home, target):
     else:
         say("not a git repo: no hook. Run `git init` here if you want the specs versioned.")
 
+    if UP and UP["saved"]:
+        say("backed up to " + shown(UP["dir"]) + "/: " + ", ".join(UP["saved"]), True)
+    if not dry():
+        rows = sorted((shown(f), blob_id(f.read_bytes())) for f in kit_files(kit) + [p for p in OWNED if p.is_file()])
+        put_file(kit / "MANIFEST", "".join(blob + " " + path + "\n" for path, blob in rows))
     if dry():
         print("\nDry run done (mode: " + how + "). Nothing was written.")
     elif "--from-go" in ARGS and how == "adopt":
@@ -458,6 +531,7 @@ def uninstall(target):
             (target / d).rmdir()  # only when empty
         except OSError:
             pass
+    kept += [shown(d) + " (your backup)" for d in sorted(specs.glob("kit.bak-*"))]
     print("Removed: " + (", ".join(removed) or "nothing"))
     if kept:
         print("Kept (not specter's): " + ", ".join(kept))

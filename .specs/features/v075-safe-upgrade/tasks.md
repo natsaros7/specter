@@ -13,7 +13,7 @@ Deploy impact: none (installer and selftest only; projects see the change on the
   `.specs/kit.bak-<old>/`; `kit/docs/upgrading.md`; keys listed, never written; no profile seed on upgrade; no
   migration code; synthesized fixtures plus a hand run). Amendments go in as dated rows; nothing below starts before
   this is ticked — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03] [REQ-V075-04]
-- [ ] 2 `MANIFEST` at every install, the `v<old>` tag when there is none, back up every file that is neither recorded
+- [x] 2 `MANIFEST` at every install, the `v<old>` tag when there is none, back up every file that is neither recorded
   nor new into `.specs/kit.bak-<old>/`, lint and uninstall leave the backup alone (selftest 15) — [REQ-V075-01]
 - [x] 3 `kit/docs/upgrading.md` with blocks 0.5.0 to 0.11.0; rows that fail on a CHANGELOG release with no block and on
   a key default that differs from the script's (selftest 15b a, b) — [REQ-V075-02]

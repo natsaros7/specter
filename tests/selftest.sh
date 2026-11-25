@@ -1387,6 +1387,56 @@ if docker info >/dev/null 2>&1; then
   [ "$rc" = 2 ] && echo "$out" | grep -qF "gates: /src is empty (does your container runtime share this path?)" || fail "14b: empty mount gave rc=$rc: $out"
 else echo "14b: empty-mount row skipped, no Docker reachable"; fi
 
+fi; if sect 15 "upgrade keeps edited files: MANIFEST, tag fallback, .specs/kit.bak-<old>"; then
+# fake specter checkout: this repo's install.sh, VERSION and kit/, committed and tagged per version
+KH="$TMP/t15/specter"; mkdir -p "$KH"; gitq -C "$KH" init
+NEWV=$(cat "$KIT/VERSION")
+# kh <version> [kit paths to drop...]: commit $KIT's install.sh, VERSION and kit/ into $KH with the paths removed, tag v<version>
+kh() {
+  v=$1; shift
+  rm -rf "$KH/kit"; cp -R "$KIT/kit" "$KH/kit"; cp "$KIT/install.sh" "$KH/install.sh"; echo "$v" > "$KH/VERSION"
+  for p; do rm -rf "$KH/kit/$p"; done
+  [ "$v" != 0.4.1 ] || echo "old line" >> "$KH/kit/playbooks/sync.md"
+  gitq -C "$KH" add -A; gitq -C "$KH" commit -qm "v$v"; gitq -C "$KH" tag -f "v$v"
+}
+kh 0.4.1 scripts/tiers.py scripts/ready.py scripts/gates.py scripts/readme_check.py templates/steering/autonomy.md templates/steering/decisions.md templates/steering/lessons.md templates/SECURITY.md templates/ONBOARDING.md templates/github docs/chores.md docs/pipeline.md docs/upgrading.md playbooks/parallel.md
+B15="$TMP/t15/base"; mkdir -p "$B15/.claude"; gitq -C "$B15" init
+"$KH/install.sh" "$B15" --agents=claude >/dev/null
+[ -f "$B15/.specs/kit/MANIFEST" ] || fail "15: install wrote no MANIFEST"
+rm -f "$B15/.specs/kit/MANIFEST"  # a 0.4.1 install has none
+kh "$NEWV"
+up15() { "$KH/install.sh" "$1" --agents=claude 2>&1; }
+baks() { find "$1/.specs" -maxdepth 1 -name 'kit.bak-*' | sort; }
+edit15() { echo "# mine" >> "$1/.specs/kit/playbooks/setup.md"; echo "x = 1" > "$1/.specs/kit/scripts/mine.py"; echo "# mine" >> "$1/.claude/agents/reviewer.md"; }
+
+A15="$TMP/t15/a"; cp -R "$B15" "$A15"; up15 "$A15" >/dev/null
+[ -z "$(baks "$A15")" ] || fail "15a: a pristine 0.4.1 install made a backup: $(baks "$A15")"
+[ -f "$A15/.specs/kit/MANIFEST" ] && grep -q " .specs/kit/playbooks/setup.md$" "$A15/.specs/kit/MANIFEST" && grep -q " .claude/agents/reviewer.md$" "$A15/.specs/kit/MANIFEST" || fail "15a: upgrade wrote no usable MANIFEST"
+
+A15="$TMP/t15/b"; cp -R "$B15" "$A15"; edit15 "$A15"
+cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-setup"; cp "$A15/.specs/kit/scripts/mine.py" "$TMP/t15/x-mine"; cp "$A15/.claude/agents/reviewer.md" "$TMP/t15/x-rev"
+out=$(up15 "$A15"); BK="$A15/.specs/kit.bak-0.4.1"
+cmp -s "$TMP/t15/x-setup" "$BK/playbooks/setup.md" && cmp -s "$TMP/t15/x-mine" "$BK/scripts/mine.py" && cmp -s "$TMP/t15/x-rev" "$BK/project/.claude/agents/reviewer.md" || fail "15b: backup does not hold the three edited files byte for byte: $out"
+[ "$(cd "$BK" && find . -type f | sort | tr '\n' ' ')" = "./playbooks/setup.md ./project/.claude/agents/reviewer.md ./scripts/mine.py " ] || fail "15b: backup holds more or less than the three files: $(cd "$BK" && find . -type f)"
+for n in playbooks/setup.md scripts/mine.py .claude/agents/reviewer.md; do echo "$out" | grep -qF "$n" || fail "15b: output does not name $n: $out"; done
+B15B="$A15"
+
+A15="$TMP/t15/c"; cp -R "$B15" "$A15"; edit15 "$A15"
+NG="$TMP/t15/nogit"; mkdir -p "$NG"; cp -R "$KH/kit" "$KH/install.sh" "$KH/VERSION" "$NG/"  # a tarball: no .git, so no tag
+out=$("$NG/install.sh" "$A15" --agents=claude 2>&1); BK="$A15/.specs/kit.bak-0.4.1"
+echo "$out" | grep -q "could not verify" || fail "15c: output does not say could not verify: $out"
+for f in playbooks/setup.md scripts/mine.py playbooks/sync.md project/.claude/agents/reviewer.md; do [ -f "$BK/$f" ] || fail "15c: unverified backup lacks $f"; done
+[ ! -e "$BK/AGENT_RULES.md" ] || fail "15c: backed up a file equal to the new kit"
+
+A15="$TMP/t15/d"; cp -R "$B15" "$A15"; up15 "$A15" >/dev/null
+echo "e1" >> "$A15/.specs/kit/playbooks/setup.md"; cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-e1"; up15 "$A15" >/dev/null
+cmp -s "$TMP/t15/x-e1" "$A15/.specs/kit.bak-$NEWV/playbooks/setup.md" || fail "15d: same-version re-run did not back up the edit"
+echo "e2" >> "$A15/.specs/kit/playbooks/setup.md"; cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-e2"; up15 "$A15" >/dev/null
+cmp -s "$TMP/t15/x-e2" "$A15/.specs/kit.bak-$NEWV-2/playbooks/setup.md" && cmp -s "$TMP/t15/x-e1" "$A15/.specs/kit.bak-$NEWV/playbooks/setup.md" || fail "15d: second edit did not get its own -2 folder"
+
+out=$("$KH/install.sh" "$B15B" --uninstall 2>&1)
+[ -f "$B15B/.specs/kit.bak-0.4.1/playbooks/setup.md" ] || fail "15f: uninstall removed the backup"
+echo "$out" | grep -q "^Kept.*kit.bak-0.4.1" || fail "15f: uninstall does not name the backup under Kept: $out"
 fi; if sect 15b "upgrading.md: a block per CHANGELOG release above 0.4.1, and each key default equals the script's"; then
 UG="$KIT/kit/docs/upgrading.md"
 for v in $(awk '/^## \[0\.4\.1\]/{exit} /^## \[[0-9]/{gsub(/[][]/,"",$2); print $2}' "$KIT/CHANGELOG.md"); do
