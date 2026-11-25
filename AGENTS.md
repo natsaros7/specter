@@ -35,7 +35,7 @@ A change is mergeable only if every gate exits 0. Run them from the repo root; t
 network or JDK, and the selftest works in a `mktemp` dir and leaves the tree untouched.
 
 Normal way to run them: `sh tests/gates.sh --docker` (host security scanners make a bare run slow). Once per clone, enable the
-pre-push hook that runs them: `git config core.hooksPath .githooks`. `SPECTER_SKIP_GATES=1` or `git push --no-verify` skips it.
+pre-push hook that runs them: `git config core.hooksPath .githooks`. The hook unsets `SELFTEST_ONLY` and refuses a dirty tree; `SPECTER_SKIP_GATES=1` or `git push --no-verify` skips it. A set `SELFTEST_ONLY` makes `gates.sh` print `G3 PARTIAL` and exit 1.
 
 | # | Gate | Command |
 |---|---|---|

@@ -6,6 +6,11 @@ if [ "${SPECTER_SKIP_GATES:-}" = 1 ]; then
   exit 0
 fi
 cd "$(git rev-parse --show-toplevel)" || exit 1
+unset SELFTEST_ONLY  # an inherited filter would make G3 a partial run
+if [ -n "$(git status --porcelain)" ]; then
+  echo "pre-push: uncommitted or untracked changes; the gates would test files you are not pushing. Commit or stash, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
+  exit 1
+fi
 if docker info >/dev/null 2>&1; then
   exec sh tests/gates.sh --docker
 fi

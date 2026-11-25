@@ -59,10 +59,14 @@ flowchart LR
      2. A non-required job, defined where the PR cannot edit it, runs from a trusted worktree of the base (as step 3
         shows) `ready.py --specs .specs --range <base sha>...<head sha> --pr <pr text> --auto-merge`. Pass full shas: a
         name can be shadowed by a pushed tag, and `ready.py` refuses a tag or an ambiguous name (exit 2). It exits 0 only
-        when the verdict is `ready`, the reported human is `none` (evidence earned at the base, another model family)
+        when the verdict is `ready`, the reported human is `none` (the lowest tier, with evidence earned at the base, every guardrail declared,
+        another model family, a change within the size cap with tests only added, and `complexity: trivial`)
         and there is no warning. Set `merged_ref` to a ref the job's checkout has (`refs/remotes/origin/main`), and fetch it
         with an explicit refspec (`+refs/heads/main:refs/remotes/origin/main`), never the wildcard: on a case-insensitive
-        disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings.
+        disk a pushed `MAIN` shadows `main`, and `ready.py` refuses the ref only when it sees both spellings. Fetch full
+        history too: `git fetch --no-tags --unshallow origin +refs/heads/main:refs/remotes/origin/main <head sha>` (or
+        `fetch-depth: 0` with that refspec overriding the default), because a shallow clone hides the merged history the
+        evidence windows read.
      3. On exit 0 only, the job approves with a non-agent identity, never the agent's token (an agent's cannot approve
         or merge: the Guardrails row), whose credential only this job can read, and enables auto-merge; the platform
         merges when the Gates pass. The job passes the head sha it checked to every platform call, so a push after the
@@ -80,7 +84,7 @@ flowchart LR
           requests" off. Its private key is a secret of an environment whose deployment branches allow only the default
           branch.
        3. The job is a `pull_request_target` workflow that uses that environment, so it runs from the base branch's
-          definition. It checks out the base, fetches the PR head as data without running it, passes the PR body through
+          definition. It checks out the base, fetches the PR head as data without running it (full history, with the explicit refspec of item 2), passes the PR body through
           an environment variable (never `${{ }}` in the script), and on exit 0, with the App's token and the head sha
           it checked: approves through `POST …/pulls/{n}/reviews` with `commit_id=<head sha>`, runs
           `gh pr merge --auto --match-head-commit <head sha>`, then reads the head again. If it moved, it dismisses that

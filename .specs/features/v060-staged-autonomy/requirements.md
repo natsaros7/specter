@@ -48,7 +48,7 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`), for the research rows:
 
 - A red gate hides what did not run: `gates.py` stops at the first failure and writes only to stderr
   (`kit/scripts/gates.py:103-106`); the `### Gates` block exists only when every row passed (`kit/scripts/gates.py:109`).
-  The selftest pins today's block lines (`tests/selftest.sh:370`).
+  The selftest pins today's block lines (`tests/selftest.sh:373`).
 - The reviewer reads "the project rules" with no commit named, so in practice the working tree, which the diff may
   have edited (review-loop.md lines 23-25 at aabed8b). Its findings are `blocker/major/minor` with no evidence required
   (review-loop.md lines 38 at aabed8b, the 0.6 `kit/roles/reviewer.md` output line), and every finding goes back to the worker

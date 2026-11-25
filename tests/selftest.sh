@@ -15,6 +15,9 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
 DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14"
 ONLY=" ${SELFTEST_ONLY:-} "
+for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
+  grep -q "sect $n \"" "$0" || { echo "selftest: unknown SELFTEST_ONLY section: $n" >&2; bad=1; }
+done; [ -z "${bad:-}" ] || exit 2
 for _ in 1 2 3 4 5 6; do for d in $DEPS; do
   case "$ONLY" in *" ${d%%:*} "*) case "$ONLY" in *" ${d#*:} "*) ;; *) ONLY="$ONLY${d#*:} ";; esac;; esac
 done; done

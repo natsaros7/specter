@@ -6,7 +6,8 @@ only=; docker=0
 while [ $# -gt 0 ]; do
   case $1 in
     --docker) docker=1 ;;
-    --only) shift; only=${1:?--only needs G1..G4} ;;
+    --only) shift; only=${1:?--only needs G1..G4}
+      case $only in G1|G2|G3|G4) ;; *) echo "gates: unknown gate '$only' (G1..G4)" >&2; exit 2;; esac ;;
     *) echo "usage: sh tests/gates.sh [--docker] [--only G<n>]" >&2; exit 2 ;;
   esac
   shift
@@ -32,8 +33,11 @@ gate() { # id command
   [ "$first" != 0 ] || first=$rc
 }
 gate G1 'sh -n install.sh && sh -n tests/selftest.sh && sh -n tests/acme-build.sh && sh -n tests/gates.sh && sh -n .githooks/pre-push'
-# spec_lint exits 0 on a missing --specs dir ("0 FAIL of 0 citations"), so G2 also requires a non-zero citation count.
 gate G2 'python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs && o=$(python3 kit/scripts/spec_lint.py --specs examples/acme-shop/.specs --cites) && echo "$o" && case $o in *" of 0 citation"*) exit 1;; esac'
 gate G3 'sh tests/selftest.sh'
 gate G4 'python3 kit/scripts/spec_lint.py --specs .specs && python3 kit/scripts/spec_lint.py --specs .specs --cites && python3 tests/readme_check.py'
+# A partial selftest is not a green G3: say so and fail overall.
+if [ -n "${SELFTEST_ONLY:-}" ] && { [ -z "$only" ] || [ "$only" = G3 ]; }; then
+  echo "G3 PARTIAL (SELFTEST_ONLY=$SELFTEST_ONLY)"; [ "$first" != 0 ] || first=1
+fi
 exit "$first"
