@@ -2,6 +2,8 @@
 
 Execute a feature one task at a time. **Run on:** a mid-tier model is enough when the spec is clear.
 
+0. "Pick up and continue", "resume" or "continue" means this playbook: read the `▶ Resume here` block, and the pinned
+   plan issue when the project has a tracker, then run the next task below.
 1. Open `.specs/features/<feature>/tasks.md`. Read the `▶ Resume here` block if there is one, then
    `requirements.md` and `design.md`.
 2. Take the **first unchecked** task whose prerequisites are done. If it is a `DECISION` gate that is still open, stop and

@@ -29,7 +29,8 @@ follow `next-task.md`. Each rule exists because skipping it cost a session; see 
 1. Land each worker's commit on the feature branch with `git cherry-pick <sha>` and check its exit code. A conflict
    is resolved by hand, not skipped.
 2. After each landing, count the task lines in `tasks.md`: a conflict can drop one.
-3. Run G1 to G4 once on the tip (`sh tests/gates.sh --docker`), not per worker. Read each `G<n> rc=` line.
+3. Run the project's Gates (in a container where scanners slow the host) once on the tip, not per worker. Read each
+   gate's `rc`.
 4. Close the issues (`Closes #n` in the commit) and update the `▶ Resume here` block with what landed and what is next.
 
 ## Stopping

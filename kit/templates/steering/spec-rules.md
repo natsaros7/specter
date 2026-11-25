@@ -56,6 +56,9 @@ Pull the main branch before asserting code facts. Cite `path:line`. Never assume
    | G1 | <build and tests> | `<exact command, e.g. ./gradlew check or npm test && npm run lint>` |
    | G2 | Spec lint | `python3 .specs/kit/scripts/spec_lint.py` |
 
+   <!-- Where endpoint security scans every process launch, wrap heavy rows in `docker run --rm --memory 2g -v "$PWD":/src:ro <image>`
+        and copy /src to the container's /tmp first. Colima and similar runtimes share only $HOME: a clone elsewhere mounts empty. -->
+
 2. `tasks.md` fully ticked and `Status: Done <date> (<branch, commit or PR>)` set; affected `domains/` (and `system/`) docs updated in the same commit (§8).
 3. The change states `Deploy impact: none` or `Deploy impact: <job or env>: <what changes>`. CI/CD here consumes
    <a pinned artifact or image | the default branch directly> (setup Q9). If it is not `none`, the people who run CI/CD

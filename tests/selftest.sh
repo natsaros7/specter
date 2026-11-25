@@ -1184,6 +1184,14 @@ out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --check 2>&1)
 RL="$KIT/kit/docs/review-loop.md"
 for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'resource_group'; do grep -qF -e "$k" "$RL" || fail "14b: review-loop.md does not name $k"; done
 ! grep -F 'GITHUB_TOKEN' "$RL" | grep -vF 'never `GITHUB_TOKEN`' | grep -q . || fail "14b: review-loop.md offers GITHUB_TOKEN"
+# the lessons ship in the kit: setup.md names the container wrap and the empty-mount note
+for k in 'docker run --rm --memory 2g' 'Colima' 'only `$HOME`' 'SECURITY.md'; do grep -qF -e "$k" "$KIT/kit/playbooks/setup.md" || fail "14b: setup.md does not name $k"; done
+# an empty mount (gates.sh with no tests/ beside it) refuses with exit 2; needs Docker, which the gates container lacks
+if docker info >/dev/null 2>&1; then
+  mkdir -p "$TMP/t14m/x"; cp "$KIT/tests/gates.sh" "$TMP/t14m/x/"
+  rc=0; out=$(sh "$TMP/t14m/x/gates.sh" --docker 2>&1) || rc=$?
+  [ "$rc" = 2 ] && echo "$out" | grep -qF "gates: /src is empty (does your container runtime share this path?)" || fail "14b: empty mount gave rc=$rc: $out"
+else echo "14b: empty-mount row skipped, no Docker reachable"; fi
 
 fi; sect_end
 echo "selftest: OK"

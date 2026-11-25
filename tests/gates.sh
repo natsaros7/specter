@@ -14,10 +14,12 @@ done
 
 if [ "$docker" = 1 ]; then
   # Host security scanners inspect every write on the bind mount, so copy to the VM's own /tmp first.
+  # Colima and similar runtimes share only $HOME: a clone elsewhere mounts empty, which the first command catches.
   # shortcut: the image tag is not pinned by digest, pin it when CI uses this.
   here=$(cd "$(dirname "$0")/.." && pwd)
   exec docker run --rm --memory 2g -e SELFTEST_ONLY="${SELFTEST_ONLY:-}" -v "$here":/src:ro python:3.12 sh -c \
-    'mkdir /tmp/s && cp -R /src/. /tmp/s/ && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
+    '[ -f /src/tests/gates.sh ] || { echo "gates: /src is empty (does your container runtime share this path?)" >&2; exit 2; }
+     mkdir /tmp/s && cp -R /src/. /tmp/s/ && cd /tmp/s && sh tests/gates.sh "$@"' sh ${only:+--only "$only"}
 fi
 
 cd "$(dirname "$0")/.." || exit 2

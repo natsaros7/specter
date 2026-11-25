@@ -39,5 +39,5 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 - [x] 22 Faster, deterministic selftest: section timings, `SELFTEST_ONLY`, copied fixtures, no clock content (#29) — [REQ-V061-08]
 - [ ] 23 Human `none` only within a size cap (3 files, 50 lines), tests only added, reviewer `complexity: trivial` (#30) — [REQ-V061-09]
 - [x] 24 Specter's own `lessons.md`, a kit playbook for parallel agent dispatch, a retro step in the review loop (#32) — [REQ-V061-10]
-- [ ] 25 The lessons ship in the kit: container gates in setup, an empty-mount check, a generic playbook gates line, resume and SECURITY templates (#34) — [REQ-V061-10]
+- [x] 25 The lessons ship in the kit: container gates in setup, an empty-mount check, a generic playbook gates line, resume and SECURITY templates (#34) — [REQ-V061-10]
 - [ ] 26 `kit/scripts/readme_check.py`, a README check any project can run (#36) — [REQ-V061-10]

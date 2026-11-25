@@ -9,7 +9,7 @@ Never ask a question that already has an answer there.
 ## Ground rules
 
 1. **Read-only on code.** Setup writes only under `.specs/`, plus the marker block the installer already placed in
-   the agent instruction files. It never edits source, docs, ADRs or CI.
+   the agent instruction files, and a `SECURITY.md` at the repo root when the user says yes to Q12. It never edits source, docs, ADRs or CI.
 2. **Link, don't copy.** Where a source of truth already exists (ADRs, an architecture doc, an OpenAPI file, a wiki page),
    the spec links to it and summarises in a line or two. Where the two conflict, the source wins, and the conflict goes
    into the Drift Register.
@@ -75,6 +75,8 @@ are skipped when you have a confident default, which you then record as `assumed
 | Q8 | ask-if-unclear | Anything already known to be wrong or stale (docs vs reality)? | Seeds the Drift Register |
 | Q9 | must-ask | How does CI/CD consume this repository: a pinned artifact or image, or the default branch directly? Which jobs? | Whether a merge reaches a job before any release; the `Deploy impact` rule in spec-rules §7. Don't assume pinned: a job that clones the default branch runs every merge on its next run |
 | Q10 | ask-if-unclear | Set up an autonomy profile now? Knowledge: `<found ADR folder, arch tests>`; tiers: routine `<tests, docs, lockfiles>`, domain `<source>`, critical `<security, interfaces, migrations, CI>`; chores: spec health. [not now] | Whether `steering/autonomy.md` (with its Tiers: confirm the suggested paths) and `steering/lessons.md` exist. "Not now" writes neither and everything stays with the human |
+| Q11 | ask-if-unclear | Does this machine inspect every process launch (endpoint security: Defender, BeyondTrust, a DLP agent)? | Step 6 wraps heavy Gates rows in a container (below) |
+| Q12 | ask-if-unclear | (Public repository without a `SECURITY.md` only) Offer a `SECURITY.md` from the template? | Whether `.specs/kit/templates/SECURITY.md` is filled and copied to the repo root, outside `.specs/` and only on a yes |
 
 Record each answer in the profile's **Interview log** as you get it, and Q9's also as a **Facts** row
 (`CI/CD consumes: <pinned artifact or image | default branch>, <jobs>`). Set `phase: 3`.
@@ -104,6 +106,10 @@ From `.specs/kit/templates/`:
    Gates table (one command per row, exactly as the project runs it), the CI/CD answer (Q9) and the decision
    authority (Q3). Settled decisions the interview turned up go in `steering/decisions.md` (from the template);
    otherwise the first settled decision creates it.
+   **If Q11 was yes**, write each heavy Gates row (tests, builds) wrapped as
+   `docker run --rm --memory 2g -v "$PWD":/src:ro <image> sh -c 'cp -R /src/. /tmp/s && cd /tmp/s && <command>'`: the copy
+   to the container's own `/tmp` keeps the scanner off the bind mount. Some runtimes (Colima, for example) share
+   only `$HOME`, so a clone elsewhere mounts empty: have the wrapped command fail first when `/src` has no project file.
 7. `steering/code-standards.md`: link to the project's existing standards and CI gate. Don't restate them.
 8. `steering/autonomy.md` and `steering/lessons.md`: **only if Q10 was yes, and never in adopt mode.** Copy both
    templates. In `autonomy.md` keep Knowledge, Tiers, Chores, Guardrails and Evidence. In Tiers put the real globs found in Phase 1 (tests, docs, lockfile; source; security, interfaces, migrations, CI, `CODEOWNERS`, and the scripts the Gates commands run in the last tier), as the user confirmed them in Q10; every tier keeps at least one glob, and run `python3 .specs/kit/scripts/tiers.py --check` after. Fill every placeholder from what Phase 1 found
