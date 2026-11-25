@@ -338,4 +338,4 @@ Blocked on the auto-merge decision.
 
 ## Open decisions
 
-None. Platform-wide (multi-repository) specs are pinned until a multi-repo spec split on another project proves the model (2026-11-22).
+None. Platform-wide (multi-repository) specs are pinned until a multi-repo spec split on another project proved the model; unpinned 2026-11-25, see `v080-platform-layer` (2026-11-22).
