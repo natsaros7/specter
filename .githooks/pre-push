@@ -10,6 +10,7 @@ cd "$(git rev-parse --show-toplevel)" || exit 1
 head=$(git rev-parse HEAD) || exit 1
 while read -r lref lsha _; do
   case "$lsha" in *[!0]*) ;; *) continue;; esac  # all zeros: a branch delete
+  lsha=$(git rev-parse -q --verify "$lsha^{commit}") || exit 1  # an annotated tag is pushed as its tag object
   if [ "$lsha" != "$head" ]; then
     echo "pre-push: $lref is not the checked-out commit; the gates would test HEAD, not what you push. Check it out, or skip on purpose with SPECTER_SKIP_GATES=1" >&2
     exit 1
