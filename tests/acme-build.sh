@@ -35,7 +35,7 @@ if ! $mvn_cmd -B $offline verify > target/build.log 2>&1; then
     [ -n "$offline" ] && grep -q 'Could not resolve\|Could not transfer\|offline mode' target/build.log &&
         echo "hint: the first run needs network to fill ~/.m2 (drop ACME_OFFLINE)"
     [ "$docker" = 1 ] && grep -q 'protoc\|Exec format\|not found' target/build.log &&
-        echo "hint: if protoc will not exec on musl, retry with ACME_IMAGE=azul/zulu-openjdk:21"
+        echo "hint: protoc needs a glibc image; ACME_IMAGE must not be an Alpine (musl) one"
     echo "G5 FAILED: see examples/acme-shop/target/build.log"
     exit 1
 fi

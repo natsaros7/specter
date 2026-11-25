@@ -29,7 +29,7 @@ sdk env                  # reads .sdkmanrc (java=21.0.13.1+2-tem)
 No JDK on the host? `sh tests/acme-build.sh --docker` (from the specter root) runs the same build in a JDK 21 container
 through `scripts/mvnw-docker.sh`: the source is mounted read-only and copied inside, and `~/.m2` lives in the Docker volume
 `specter-acme-m2`, so only the first run needs the network (`ACME_OFFLINE=1` and `ACME_NETWORK=none` for the rest). The
-image is Alpine by default; if protoc will not run on musl, set `ACME_IMAGE=azul/zulu-openjdk:21`.
+image is `azul/zulu-openjdk:21`: protoc and its gRPC plugin are glibc binaries and fail on Alpine (musl).
 
 On JDK 17 the Maven Enforcer stops the build with a message naming Java 21. To start the app (REST on port 8080):
 
