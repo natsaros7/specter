@@ -15,7 +15,7 @@ done
 
 # A release (VERSION differs from origin/main) must refresh docs/overview; empty when origin/main is unavailable (skip).
 # Computed here because the container copy may not carry a usable .git.
-BASE_VERSION=$(git -C "$(dirname "$0")/.." show origin/main:VERSION 2>/dev/null) || BASE_VERSION=
+[ -n "${BASE_VERSION+x}" ] || { BASE_VERSION=$(git -C "$(dirname "$0")/.." show origin/main:VERSION 2>/dev/null) || BASE_VERSION=; }
 export BASE_VERSION
 
 if [ "$docker" = 1 ]; then

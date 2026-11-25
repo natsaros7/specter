@@ -1338,6 +1338,8 @@ for k in '--match-head-commit' 'commit_id' 'sha=' 'cancel-in-progress: false' 'r
 # the shipped workflow is the recipe as a file: same keys as the prose, every action pinned by sha, a timeout, no push/schedule/workflow_run trigger, and no GITHUB_TOKEN outside comments
 AM="$KIT/kit/templates/github/specter-auto-merge.yml"
 for k in 'pull_request_target' 'environment:' 'persist-credentials: false' 'commit_id' '--match-head-commit' '--body-file' 'cancel-in-progress: false' '--disable-auto' 'timeout-minutes:'; do grep -qF -e "$k" "$AM" || fail "14b: specter-auto-merge.yml does not name $k"; done
+# a fork PR is a stranger's text: the job runs only for a same-repo head and a trusted author
+for k in 'head.repo.full_name' 'author_association'; do grep -E '^[[:space:]]*if:' "$AM" | grep -qF -e "$k" || fail "14b: specter-auto-merge.yml job if: does not name $k"; done
 ! grep -E '^[[:space:]]*(- )?uses:' "$AM" | grep -vE '@[0-9a-f]{40}( |$)' | grep -q . || fail "14b: specter-auto-merge.yml has an action not pinned by sha"
 ! grep -vE '^[[:space:]]*#' "$AM" | grep -E 'GITHUB_TOKEN|^[[:space:]]*(push|schedule|workflow_run):' | grep -q . || fail "14b: specter-auto-merge.yml uses GITHUB_TOKEN or a push/schedule/workflow_run trigger"
 # the lessons ship in the kit: setup.md names the container wrap and the empty-mount note

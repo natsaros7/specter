@@ -94,7 +94,8 @@ flowchart LR
           checked>`, so an edit after the check cannot add a trailer to the merged commit, then reads the head again. If it moved, it dismisses that
           review and runs `gh pr merge --disable-auto`. The workflow has `concurrency: specter-auto-merge-<pr number>`
           with `cancel-in-progress: false`: cancelling a job between its approval and its re-read would leave the
-          approval on the new head.
+          approval on the new head. The job runs only when the PR head is in the same repository and its author is an
+          OWNER, MEMBER or COLLABORATOR: `pull_request_target` also fires for fork PRs, whose text is a stranger's.
        4. Every workflow that runs PR code (the Gates, an agent) has `permissions: contents: read` and checks out with
           `persist-credentials: false`, so a `pull_request` run cannot reach the key.
      - GitLab (a sketch, untested on a live instance; verify each setting when you declare the row):
