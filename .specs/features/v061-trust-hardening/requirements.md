@@ -1,6 +1,6 @@
 # v061 Trust-layer hardening — Requirements
 
-Status: In progress (started 2026-11-24)
+Status: Done 2026-11-25 (release 0.10.0, feat/0.10.0)
 Tracker: GitHub milestone "0.10.0 — v061 trust hardening", issues #3 to #18 for tasks 1 to 16 (task n is issue n+2), #24 to #27 for tasks 17 to 20, #28 for task 21, #29 for task 22, #30 for task 23, #32 for task 24. Branch `feat/0.10.0`. Size M.
 
 ## Why
