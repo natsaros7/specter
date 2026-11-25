@@ -3,7 +3,7 @@
 
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
        python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
-       python3 .specs/kit/scripts/spec_lint.py --members-root DIR   where a platform's member repos are checked out
+       python3 .specs/kit/scripts/spec_lint.py --members-root DIR   where a platform's member repos are checked out; --members (platform root, no --cites or names) lints it, then each member
        python3 .specs/kit/scripts/spec_lint.py --hash-term <word>               digest to add to denylist_sha256
        default DIR = the .specs/ this script is installed in; default features = all; exit 0 clean, 1 FAIL, 2 DIR not a directory
 
@@ -686,6 +686,54 @@ def cites(specs):
     return {"count": count, "problems": problems}
 
 
+def lint_members(specs, config, root, as_json):
+    """--members: the platform, then each checked-out member under its own spec-kit.json. A member that is itself a
+    platform root is linted as a plain root, no recursion."""
+    base = Path(root) if root else specs.parent / (config["members_root"] or "..")
+    top = lint_all(specs, members_root=root)
+    found = members(specs, config, root)
+    results = {repo: lint_all(d) if d else None for repo, d in found}
+    unchecked = [repo for repo, d in found if d is None]
+    fails = top["fails"] + sum(r["fails"] for r in results.values() if r)
+    if as_json:
+        json.dump({"platform": top, "members": results, "unchecked": unchecked}, sys.stdout)
+    else:
+        print("== platform")
+        print_text(top)
+        for repo, result in results.items():
+            print("== " + repo)
+            if result is None:
+                # shortcut: a missing checkout WARNs and exits as before (CI may check out one repo), --strict-members when a pipeline must fail on it
+                print("WARN member " + repo + ": no checkout at " + str(base / repo))
+            else:
+                print_text(result)
+        print("spec-lint --members: " + str(fails) + " FAIL across " + str(len(results) + 1) + " repo(s)"
+              + ("; " + str(len(unchecked)) + " not checked: " + ", ".join(unchecked) if unchecked else ""))
+    return 1 if fails else 0
+
+
+def print_text(result):
+    drift_warns = [w for w in result["warnings"] if w.startswith("WARN drift")]
+    for w in result["warnings"]:
+        if w not in drift_warns:
+            print(w)
+    for f in result["features"]:
+        if f["fails"] == ["no such feature directory"]:
+            print("FAIL " + f["name"] + ": no such feature directory")
+            continue
+        print(("OK   " if f["ok"] else "FAIL ") + f["name"])
+        for text in f["fails"]:
+            print("     FAIL " + text)
+        for text in f["warns"]:
+            print("     WARN " + text)
+    for link in result["links"]:
+        print("FAIL broken link: " + link)
+    for ref in result["refs"]:
+        print("FAIL " + ref)
+    for w in drift_warns:
+        print(w)
+
+
 def main(argv):
     specs = given = Path(__file__).resolve().parents[2]
     if "--specs" in argv:
@@ -707,6 +755,9 @@ def main(argv):
         return 2
     as_json = "--json" in argv
     if "--cites" in argv:
+        if "--members" in argv:
+            print("spec-lint: --members does not combine with --cites", file=sys.stderr)
+            return 2
         result = cites(specs)
         if as_json:
             json.dump(result, sys.stdout)
@@ -716,29 +767,17 @@ def main(argv):
             print("spec-lint --cites: " + str(len(result["problems"])) + " FAIL of " + str(result["count"]) + " citation(s)")
         return 1 if result["problems"] else 0
     names = [a for a in argv if not a.startswith("--")]
+    if "--members" in argv:
+        config = load_config(specs)
+        if config["layer"] != "platform" or names:
+            print("spec-lint: --members needs a platform root (\"layer\": \"platform\") and no feature names", file=sys.stderr)
+            return 2
+        return lint_members(specs, config, members_root, as_json)
     result = lint_all(specs, names, members_root)
     if as_json:
         json.dump(result, sys.stdout)
         return 1 if result["fails"] else 0
-    drift_warns = [w for w in result["warnings"] if w.startswith("WARN drift")]
-    for w in result["warnings"]:
-        if w not in drift_warns:
-            print(w)
-    for f in result["features"]:
-        if f["fails"] == ["no such feature directory"]:
-            print("FAIL " + f["name"] + ": no such feature directory")
-            continue
-        print(("OK   " if f["ok"] else "FAIL ") + f["name"])
-        for text in f["fails"]:
-            print("     FAIL " + text)
-        for text in f["warns"]:
-            print("     WARN " + text)
-    for link in result["links"]:
-        print("FAIL broken link: " + link)
-    for ref in result["refs"]:
-        print("FAIL " + ref)
-    for w in drift_warns:
-        print(w)
+    print_text(result)
     print("spec-lint: " + str(result["fails"]) + " FAIL across " + str(len(result["features"])) + " feature(s)")
     return 1 if result["fails"] else 0
 

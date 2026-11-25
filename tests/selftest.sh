@@ -14,8 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15"
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15c:15"
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
@@ -1604,5 +1603,36 @@ PY
 )
 [ "$out" = "[('orders', False), ('billing', True)] [('orders', True), ('billing', False)]" ] || fail "27g: member lookup: $out"
 
+fi; if sect 27b "platform layer: --members lints the platform and every member"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+lintm() { p=$1; shift; python3 "$LINT" --specs "$p/platform/.specs" --members "$@" 2>&1; }
+P="$TMP/p27m"; p27 "$P"
+rc=0; out=$(lintm "$P") || rc=$?; heads=$(echo "$out" | grep '^== ' | tr '\n' ' ')
+[ "$rc" = 0 ] && [ "$heads" = "== platform == orders == billing " ] && [ "$(echo "$out" | tail -n 1)" = "spec-lint --members: 0 FAIL across 3 repo(s)" ] || fail "27b(a): clean rc=$rc: $out"
+mkdir -p "$P/orders/.specs/features/nodesign"; printf '# F\n' > "$P/orders/.specs/features/nodesign/requirements.md"
+rc=0; out=$(lintm "$P") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | sed -n '/^== orders/,/^== billing/p' | grep -q 'FAIL nodesign' && echo "$out" | tail -n 1 | grep -q 'spec-lint --members: [1-9][0-9]* FAIL across 3 repo(s)' || fail "27b(b): member FAIL rc=$rc: $out"
+jout=$(python3 "$LINT" --specs "$P/platform/.specs" --members --json) && fail "27b(g): json on (b) exited 0"
+echo "$jout" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert set(d)=={"platform","members","unchecked"} and d["unchecked"]==[] and d["members"]["orders"]["fails"]>0 and "features" in d["platform"]' || fail "27b(g): json shape: $jout"
+rm -rf "$P/orders/.specs/features"
+mv "$P/billing" "$TMP/billing.gone"
+rc=0; out=$(lintm "$P") || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q '^WARN member billing: no checkout at ' && echo "$out" | tail -n 1 | grep -qF '; 1 not checked: billing' || fail "27b(c): missing member rc=$rc: $out"
+jout=$(python3 "$LINT" --specs "$P/platform/.specs" --members --json) || fail "27b(g): json on (c) must exit 0"
+echo "$jout" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["unchecked"]==["billing"] and d["members"]["billing"] is None and d["members"]["orders"] is not None' || fail "27b(g): json unchecked: $jout"
+mv "$TMP/billing.gone" "$P/billing"
+printf '{"layer": "member", "required_sections": {"requirements": ["## Nope"]}}' > "$P/orders/.specs/spec-kit.json"
+mkdir -p "$P/orders/.specs/features/f" "$P/billing/.specs/features/f"
+for m in orders billing; do printf '# F\n\n## Why\nx\n' > "$P/$m/.specs/features/f/requirements.md"; done
+out=$(lintm "$P") || :; [ "$(echo "$out" | sed -n '/^== orders/,/^== billing/p' | grep -c 'Nope')" -ge 1 ] && [ "$(echo "$out" | sed -n '/^== billing/,$p' | grep -c 'Nope')" = 0 ] && [ "$(echo "$out" | sed -n '/^== platform/,/^== orders/p' | grep -c 'Nope')" = 0 ] || fail "27b(d): own config: $out"
+P="$TMP/p27e"; p27 "$P"; mkdir -p "$TMP/elsewhere2"; mv "$P/orders" "$P/billing" "$TMP/elsewhere2/"
+out=$(lintm "$P" --members-root "$TMP/elsewhere2"); echo "$out" | tail -n 1 | grep -qF 'across 3 repo(s)' && ! echo "$out" | grep -q 'not checked' || fail "27b(e): --members-root: $out"
+printf '{"layer": "platform", "members_root": "../../elsewhere2"}' > "$P/platform/.specs/spec-kit.json"
+out=$(lintm "$P"); ! echo "$out" | grep -q 'not checked' || fail "27b(e): members_root key: $out"
+printf '{"layer": "platform"}' > "$P/platform/.specs/spec-kit.json"
+out=$(lintm "$P"); echo "$out" | tail -n 1 | grep -qF '; 2 not checked: orders, billing' || fail "27b(e): neither: $out"
+mkdir -p "$P/platform/.specs/features/x"
+for a in "--cites" "x"; do rc=0; out=$(lintm "$P" $a) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): $a rc=$rc: $out"; done
+rc=0; out=$(python3 "$LINT" --specs "$TMP/elsewhere2/orders/.specs" --members 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): no layer rc=$rc: $out"
 fi; sect_end
 echo "selftest: OK"

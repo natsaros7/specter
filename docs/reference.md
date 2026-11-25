@@ -65,6 +65,7 @@ escalates without a failed gate. Details: [`kit/docs/model-routing.md`](../kit/d
 python3 .specs/kit/scripts/spec_lint.py           # files present, REQ traced both ways, links resolve
 python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation exists and points at real code
 python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdout (also with --cites)
+python3 .specs/kit/scripts/spec_lint.py --members # platform root: lint it, then every checked-out member under its own config
 # exit 0 clean, 1 a FAIL, 2 a --specs path that is not a directory
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
