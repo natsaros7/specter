@@ -1,6 +1,6 @@
 # v070 Live recipe, deep-review follow-ups and the acme eval set — Requirements
 
-Status: In progress (approved 2026-11-25, decisions 1 to 9 as recommended)
+Status: Done 2026-11-25 (release 0.11.0; tasks 3 to 12 and 20 moved to 0.12)
 Tracker: GitHub milestone "0.11.0" and one issue per task (Nikos creates them; #40 and #35 are the sources). Branch
 `feat/0.11.0`. Size M.
 

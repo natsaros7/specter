@@ -38,8 +38,8 @@ eval set to measure the loop.
 ### Known limits
 - The GitHub recipe is still not run live. Human `none` stays off until it is verified on a live host.
 - GitLab stays an untested sketch.
-- Some guards need version 2.31 or 2.40 of the version-control tool; on older ones the check refuses or degrades (see
-  the requirements).
+- Switching off the commit-graph needs git 2.31 or newer (older git ignores the setting). The filter-attribute check
+  needs git 2.40 or newer; older git marks every `none` change `spot`.
 - The eval's reviewer is of the same model family as the implementer, so its findings are correlated.
 - Round 3 of the security review left four advisories, which must be fixed before any repository turns `none` on (#73).
 
