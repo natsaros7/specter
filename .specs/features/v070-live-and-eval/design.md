@@ -404,6 +404,39 @@ queues, fork PRs.
 - The release PR carries `### Gates`, `### Review`, `### Verification` and the `ready.py --range` output.
 - A retro into `lessons.md`.
 
+### Task 23: security review round 1 fixes (#69, #70)
+
+Round 1 of the 0.11 deep review (2026-11-25) ran on `feat/0.11.0` at e5ef516. It found two blockers, both in code that
+is not released yet, and six advisories.
+
+- **23a, workflow and gates (#69):**
+  - **B1, fork PRs:** the template's job `if:` also requires `github.event.pull_request.head.repo.full_name ==
+    github.repository`, and `author_association` to be OWNER, MEMBER or COLLABORATOR. One header line says fork PRs
+    never reach the job.
+  - **A1, the title:** the Check step refuses a title that holds a control character, and runs the `Human-Findings`
+    check over the title plus the body.
+  - **A2, `BASE_VERSION`:** `tests/gates.sh` computes it only when the variable is unset, so `--docker` keeps the value
+    the host passes in.
+  - **A6, hidden local edits:** the pre-push hook refuses when `git ls-files -v` shows assume-unchanged or skip-worktree
+    entries.
+  - **Red rows:**
+    - 14b greps the template's `if:` for `head.repo.full_name`;
+    - a scratch run shows `--docker --only G4` failing on a stale overview.
+- **23b, `tiers.py` (#70, security):**
+  - **B2, CRLF LFS pointers:** the LFS match strips a trailing `\r`, drops the `$`, and also accepts the `hawser` and
+    `git-media` spec URLs.
+  - **A3, `GIT_CONFIG_PARAMETERS`:** `core.commitgraph=false` is also appended to `GIT_CONFIG_PARAMETERS`, in `tiers`
+    and in `spec_lint`.
+  - **A4, symlinks:** mode `120000` counts as over the cap, the same as a gitlink.
+  - **A5, attribute files:** `.gitattributes`, `*/.gitattributes` and `.gitmodules` go in GUARDED.
+  - **Red rows in 13c2 `t70c`:**
+    - a CRLF pointer is added;
+    - the oid of a CRLF pointer is swapped;
+    - a symlink is added;
+    - a `docs/.gitattributes` edit takes the last tier;
+    - an inherited `GIT_CONFIG_PARAMETERS` still leaves the commit-graph off.
+- **Round 2:** after 23a and 23b land, a fresh reviewer goes over the whole 0.11 trust-layer diff again.
+
 ## Parallel lanes
 
 Batches hold at most 3 agent tasks. Inside a lane, tasks run in order, each merged before the next starts.

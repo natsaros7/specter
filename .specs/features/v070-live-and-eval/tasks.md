@@ -43,4 +43,5 @@ and a GitHub App are created under Nikos's account for the live test, then archi
 - [x] 19 Eval set: `examples/acme-shop/eval/` goals E1 to E5, run procedure, `sandbox.sh`, score-sheet template; the dry run is green (#64) — [REQ-V070-08]
 - [ ] 20 First eval run, one goal at a time, then `docs/evals/<date>-acme.md` (Nikos OKs the token spend) (#65) — [REQ-V070-08]
 - [x] 21 AGENTS.md: a generic resume rule, and the G1 and G5 rows matching the scripts (rule change, Human required) (#66) — [REQ-V070-09] [REQ-V070-07]
+- [ ] 23 Security review round 1 fixes: 23a workflow and gates (#69), 23b `tiers.py` (#70, security) — [REQ-V070-01] [REQ-V070-02] [REQ-V070-05] [REQ-V070-06]
 - [ ] 22 G1 to G5 with `--docker`, deep review, CHANGELOG 0.11.0, overview refresh, release PR with Readiness, retro (#67) — [REQ-V070-01] [REQ-V070-02] [REQ-V070-03] [REQ-V070-04] [REQ-V070-05] [REQ-V070-06] [REQ-V070-07] [REQ-V070-08] [REQ-V070-09]
