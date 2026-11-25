@@ -24,8 +24,8 @@ Trust-layer hardening (v061). Human `none` is still off in every known repositor
 ### Added
 - Human `none` only within a size cap and a trivial review: at most 3 files and 50 lines by default (optional `Max files`
   and `Max lines` Evidence columns), tests only added (a deleted, edited, `chmod`ed or retyped test file, or any
-  `conftest.py` or `__init__.py` change, is `spot`; default test globs `*test*`, `*spec*`, `conftest.py`, or a
-  `## Tests` section), a binary file or a gitlink counts as over the cap, and the reviewer writes `- complexity:
+  `conftest.py` or `__init__.py` change, is `spot`; default test globs are the usual test folders and names
+  (`tests/`, `__tests__/`, `spec/`, `*_test.*`, `*.spec.*`, `test_*`, `conftest.py`…), or a `## Tests` section), a binary file or a gitlink counts as over the cap, and the reviewer writes `- complexity:
   trivial` (anything else, a missing line or a repeated one bars it). `ready.py` runs the same check.
 - `kit/playbooks/parallel.md`: run several agents on one feature (batches of at most 3, a worktree base check, unique
   temp files, red first, land with `cherry-pick` and check its exit code, one gate run on the tip, stop leftover runs,
@@ -67,6 +67,7 @@ Trust-layer hardening (v061). Human `none` is still off in every known repositor
   still disable a test; the reviewer's `complexity:` is the backstop.
 - On a `none` row one human finding in the window is a breach whatever the threshold (human zeros on `spot` merges are
   dropped). A stricter row narrowed by a human leaves its files on the lowest tier with that tier's evidence.
+- Commit-graph files can carry parents the way grafts do (local `.git` write needed, as for grafts).
 - `.githooks/pre-push` is a local habit: `--no-verify` skips it, and it is on only after `git config core.hooksPath
   .githooks`.
 
