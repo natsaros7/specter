@@ -192,10 +192,11 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `- human: none → spot (<why>)` (`--json`: `reasons`; `labels_only` is `false`). A `### Review` whose reviewer shares
   the implementer's model family makes `ready.py` report `spot` too, and so does a `complexity:` line that is missing or not
   `trivial` (`reviewer: complexity <value or missing>`; a repeated one is not ready). A change in a `none` tier is also
-  `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over)
+  `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over),
+  more changed bytes than `Max bytes` (`bytes <b> > cap <B>`; a diff that cannot be read counts as over), or changes a Git LFS pointer line (`LFS pointer: <path>`),
   or deletes or edits a line of a test file, deletes or re-modes one, or adds or changes a `conftest.py` or `__init__.py`
-  (`tests changed, not only added: <path>`; a gitlink counts as over the cap). The cap is two optional trailing
-  Evidence columns, `Max files` and `Max lines` (defaults 3 and 50; `-` is the default; any other non-number is exit 2 with
+  (`tests changed, not only added: <path>`; a gitlink counts as over the cap). The cap is three optional trailing
+  Evidence columns, `Max files`, `Max lines` and `Max bytes` (defaults 3, 50 and 4000; `-` is the default; any other non-number is exit 2 with
   `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`,
   matched case- and Unicode-folded), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the
   base; with no `merged_ref` (or `refs/remotes/origin/HEAD`), or a history that holds a commit of the change, it says

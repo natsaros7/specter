@@ -765,6 +765,30 @@ gitq -C "$E" add -A; gitq -C "$E" commit -qm caps; gitq -C "$E" branch -f trunk;
 echo "$out" | grep -q "none → spot (size 1 files / 2 lines > cap 3/1)" || fail "13c2 t23: Max lines column was not read: $out"
 sed -i.bak 's/ - | 1 |$/ - | many |/' "$E/.specs/steering/autonomy.md"; rm -f "$E/.specs/steering/autonomy.md.bak"; gitq -C "$E" add -A; gitq -C "$E" commit -qm badcap; gitq -C "$E" branch -f trunk
 rc=0; out=$(python3 "$E/.specs/kit/scripts/tiers.py" --specs "$E/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max lines must be" || fail "13c2 t23: a bad Max lines was not exit 2 with file:line (exit $rc): $out"
+# v070 task 13: Human none counts changed bytes and refuses Git LFS pointers (fixture t70b)
+B="$TMP/t70b"; mkdir -p "$B/docs"; gitq -C "$B" init; "$KIT/install.sh" "$B" >/dev/null; printf '{"merged_ref": "trunk"}' > "$B/.specs/spec-kit.json"
+OID=$(printf '%064d' 7); OID2=$(printf '%064d' 8)
+bset() { printf '# Autonomy\n\n## Tiers\n| Tier | Paths | Reviewer | Human |\n|---|---|---|---|\n| routine | `docs/*` | standard | none |\n| domain | `src/*` | standard | spot |\n| critical | `*/security/*` | deep | required |\n\n## Guardrails\n| Guardrail | Enforced by | Verified |\n|---|---|---|\n| Protected branch | branch rule main | 2026-01-02 |\n\n## Evidence\n| Tier | Window (days) | Min merged | Max reverted %% | Max escaped %% | Max human-caught %% |%s\n|---|---|---|---|---|---|%s\n| routine | 30 | 2 | - | - | - |%s\n' "$1" "$2" "$3" > "$B/.specs/steering/autonomy.md"
+  printf '# Rules\n\n| # | Gate | Command |\n|---|---|---|\n| G1 | Lint | `echo a` |\n' > "$B/.specs/steering/spec-rules.md"; printf 'version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n' "$OID" > "$B/docs/old.bin"; printf 'a\nb\nc\n' > "$B/docs/three.md"
+  gitq -C "$B" add -A; gitq -C "$B" commit -qm p; for i in 1 2; do echo "$i$3" > "$B/docs/m$i"; gitq -C "$B" add -A; gitq -C "$B" commit -qm m$i; done; gitq -C "$B" branch -f trunk; }
+bl() { python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --range trunk...HEAD "$@" 2>&1; }
+bc() { gitq -C "$B" reset -q --hard trunk; "$@"; gitq -C "$B" add -A; gitq -C "$B" commit -qm c; }
+bset "" "" ""
+bc sh -c 'head -c 200000 /dev/zero | tr "\0" a > "$0/docs/big.md"; echo >> "$0/docs/big.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes " || fail "13c2 t70b: a one-line 200 KB file kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n" "$1" > "$0/docs/x.bin"' "$B" "$OID"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/x.bin)" || fail "13c2 t70b: an added LFS pointer kept none: $out"
+bc sh -c 'printf "version https://git-lfs.github.com/spec/v1\noid sha256:%s\nsize 5\n" "$1" > "$0/docs/old.bin"' "$B" "$OID2"; out=$(bl)
+echo "$out" | grep -q "none → spot (LFS pointer: docs/old.bin)" || fail "13c2 t70b: an oid swap in a pointer kept none: $out"
+bc sh -c 'printf "++ %04500d\n" 1 > "$0/docs/h.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes " || fail "13c2 t70b: an added '++ x' line was read as a header: $out"
+bc sh -c 'printf "a1\nb2\nc3\n" > "$0/docs/three.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t70b: a three-line docs edit lost none: $out"
+bset " Max files | Max lines | Max bytes |" "---|---|---|" " - | - | 10 |"; bc sh -c 'printf "a1\nb2\nc3\n" > "$0/docs/three.md"' "$B"; out=$(bl)
+echo "$out" | grep -q "none → spot (bytes [0-9]* > cap 10)" || fail "13c2 t70b: Max bytes 10 was not read: $out"
+bset " Max files | Max lines | Max bytes |" "---|---|---|" " - | - | x |"
+rc=0; out=$(python3 "$B/.specs/kit/scripts/tiers.py" --specs "$B/.specs" --evidence 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -q "autonomy.md at [0-9a-f]*:[0-9]*: Max bytes must be" || fail "13c2 t70b: a bad Max bytes was not exit 2 with file:line (exit $rc): $out"
+bc sh -c 'echo z > "$0/docs/z.md"' "$B"; out=$(bl); echo "$out" | grep -q "none → spot (.*Max bytes must be" || fail "13c2 t70b: a bad Max bytes did not label spot: $out"
 fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3

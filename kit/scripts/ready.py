@@ -24,7 +24,7 @@ that is a regular file at the head (index in staged mode; no `..`, no absolute p
 not fetched`. A missing block changes nothing.
 Human `none` is reported as `spot` when the tier's evidence is not eligible or, with --range, the base is not the
 merged_ref tip (as tiers.py labels it: `base <sha7> is behind <ref>: update the branch`), the change is over the
-size cap or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
+size cap (files, lines, changed bytes, or a Git LFS pointer) or edits a test other than by adding lines (tiers.small, as the label), the review shares the implementer's model
 family, or its `- complexity: trivial|non-trivial` line is missing or not `trivial` (`reviewer: complexity <value or missing>`;
 a repeated complexity line is not ready): `- human: none → spot (<why>)`, --json tier.human_why; the exit code is unchanged.
 --auto-merge: the one test for a merge without a human. Exit 0 only when the verdict is `ready`, the reported human

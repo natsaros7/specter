@@ -37,7 +37,7 @@ merged_ref …`), and so it does when that history holds any commit of the chang
 A --range label keeps `none` only when its base is the merged_ref tip that --evidence reads (full shas compared): a base
 behind it says `base <sha7> is behind <ref>: update the branch`. Staged mode is a preflight and keeps its base.
 A refusing evidence run is `spot` too. So is a change over the size cap of the tier's Evidence row (optional trailing columns
-`Max files` and `Max lines`, defaults 3 and 50, `-` is the default; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
+`Max files`, `Max lines` and `Max bytes`, defaults 3, 50 and 4000 changed bytes, `-` is the default; a Git LFS pointer line changed is over the cap; a bad value is exit 2 in --evidence, `spot` in the label) or one that deletes or edits a line of a test file
 (globs of an optional `## Tests` section, default: test directories, `*_test.*`, `*.test.*`, `test_*`, spec files, conftest.py): `size <f> files / <l> lines > cap <F>/<L>`,
 `tests changed, not only added: <path>` (also a deleted test file, a mode or type change on one, an added or changed conftest.py or __init__.py); a binary file or a gitlink counts as over the cap; both read at the base. `labels_only` is false: a `none` merge is the platform's auto-merge, never specter's.
 No profile or Tiers section at the base: the human tier (the last row's strictness: deep reviewer, human required).
@@ -105,7 +105,7 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
            "docs/CODEOWNERS"]
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
-SIZE = ["Max files", "Max lines"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3 and 50)
+SIZE = ["Max files", "Max lines", "Max bytes"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3, 50, 4000)
 # Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
 TESTS = ["tests/*", "*/tests/*", "test/*", "*/test/*", "__tests__/*", "*/__tests__/*", "spec/*", "*/spec/*", "*_test.*",
          "*.test.*", "*_spec.*", "*.spec.*", "test_*", "*/test_*", "conftest.py", "*/conftest.py"]  # fnmatch: * crosses /
@@ -206,7 +206,7 @@ def parse_guardrails(text):
 
 
 def parse_evidence(text, tiers):
-    """{tier: (window, min_merged, [max reverted, escaped, human-caught, files, lines; None for -], lineno)} or None when there is no
+    """{tier: (window, min_merged, [max reverted, escaped, human-caught, files, lines, bytes; None for -], lineno)} or None when there is no
     Evidence section; a row that keeps a <placeholder> maps to None (thresholds not set, a hold, not an error).
     Raises ValueError((lineno, message)) on a bad header, a bad cell, an unknown or duplicate tier."""
     lines = section(text, "Evidence")
@@ -219,7 +219,7 @@ def parse_evidence(text, tiers):
         cells = gates.split_row(line)
         if head is None:
             head = [c.lower() for c in cells]
-            if head not in ([h.lower() for h in EHEAD], [h.lower() for h in EHEAD + SIZE]):
+            if head not in [[h.lower() for h in EHEAD + SIZE[:k]] for k in (0, 2, 3)]:  # Max bytes is the optional third
                 raise ValueError((n, "header must be | " + " | ".join(EHEAD) + " | (then optionally " + " | ".join(SIZE) + " |)"))
             continue
         if set("".join(cells)) <= set("-: "):
@@ -438,8 +438,10 @@ def earned(root, rel, specs, profile, tier, base, head, staged=False):
 
 def small(root, rel, tier, base, head, staged):
     """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
-    One `git diff --numstat` and one `--raw` (the index against base when staged). Cap: Max files / Max lines of the tier's Evidence row at
-    base (3 and 50 when absent or -); tests: the `## Tests` globs at base (TESTS). A binary file or a gitlink counts as over the cap.
+    One `git diff --numstat`, one `--raw` and one `-U0` patch (the index against base when staged). Cap: Max files / Max lines / Max
+    bytes of the tier's Evidence row at base (3, 50 and 4000 when absent or -); bytes are those of the + and - lines of the hunks, and a
+    changed Git LFS pointer line (version or oid) is over the cap whatever its size; tests: the `## Tests` globs at base (TESTS). A
+    binary file, a gitlink or a diff that cannot be read counts as over the cap.
     A profile that cannot be read says so: none is never kept on a guess."""
     try:
         text = profile_at(root, base, rel) or ""
@@ -447,20 +449,40 @@ def small(root, rel, tier, base, head, staged):
         row = (parse_evidence(text, [r[0] for r in rows or []]) or {}).get(tier)
     except ValueError as err:
         return ["size: " + (err.args[0][1] if isinstance(err.args[0], tuple) else str(err))]
-    mf, ml = ((row[2][3:5] if row else []) + [None, None])[:2]
-    mf, ml = int(mf if mf is not None else 3), int(ml if ml is not None else 50)
+    mf, ml, mb = ((row[2][3:6] if row else []) + [None] * 3)[:3]
+    mf, ml, mb = (int(v if v is not None else d) for v, d in ((mf, 3), (ml, 50), (mb, 4000)))
     globs = [g for _, ln in section(text, "Tests") or [] for g in re.findall(r"`([^`]+)`", ln)] or TESTS
     top, spec = git(root, "rev-parse", "--show-toplevel"), (["--cached", base] if staged else [base, head])
-    out, raw = (gitz(top, "diff", f, "-z", "--no-renames", *spec) for f in ("--numstat", "--raw"))
-    if out is None or raw is None:
+    quiet = ("--no-renames", "--no-ext-diff", "--no-textconv")  # no configured driver runs on the change
+    out, raw = (gitz(top, "diff", f, "-z", *quiet, *spec) for f in ("--numstat", "--raw"))
+    run = subprocess.run(["git", "-C", str(top), "diff", "-U0", "--no-color", *quiet, *spec], capture_output=True)
+    if out is None or raw is None or run.returncode:
         return ["size: cannot read the diff"]
+    # Walk the patch as bytes: a line counts only inside a hunk, so an added `++ x` is content, not a `+++` header.
+    # shortcut: the whole patch is held in memory, upgrade when a none tier takes diffs of hundreds of MB.
+    nbytes, lfs, at, hunk = 0, None, -1, False
+    for ln in run.stdout.split(b"\n"):
+        if ln.startswith(b"diff --git "):
+            at, hunk = at + 1, False
+        elif ln.startswith(b"@@"):
+            hunk = True
+        elif hunk and ln[:1] in (b"+", b"-"):
+            nbytes += len(ln)  # marker stands in for the newline
+            if lfs is None and re.match(rb"[+-](version https://git-lfs\.github\.com/spec/|oid sha256:[0-9a-f]{64}$)", ln):
+                lfs = at
     ent = [e.split("\t", 2) for e in out]
     meta = [(m.split(), p) for m, p in zip(raw[::2], raw[1::2])]  # ":<old mode> <new mode> <old sha> <new sha> <status>", path
     lines = sum(int(a) + int(d) for a, d, _ in ent if a != "-")
     binary = any(a == "-" for a, _, _ in ent) or any("160000" in (m[0][1:], m[1]) for m, _ in meta)
     why = []
+    if at + 1 != len(ent):
+        return ["size: cannot read the diff"]
     if len(ent) > mf or lines > ml or binary:
         why.append("size %d files / %d%s lines > cap %d/%d" % (len(ent), lines, "+" if binary else "", mf, ml))
+    if nbytes > mb:
+        why.append("bytes %d > cap %d" % (nbytes, mb))
+    if lfs is not None:
+        why.append("LFS pointer: " + ent[lfs][2])
     # numstat misses a deleted empty file, a mode change and an added skip line; `__init__.py` and conftest.py change what runs
     changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None) or next((p for m, p in meta if (
         hit(p, globs) and (m[4][0] in "DT" or m[4][0] == "M" and m[0][1:] != m[1])) or key(posixpath.basename(p)) in ("conftest.py", "__init__.py")), None)
