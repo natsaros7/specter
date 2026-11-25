@@ -5,8 +5,9 @@ Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in bra
 ## ▶ Resume here (2026-11-25)
 
 - **Plan:** pinned issue #31 holds the batches, decisions and dispatch rules. Tick a batch there when it lands.
-- **Landed on `feat/0.10.0`:** every task except 16, 19 and 20 (README pass 1 is in). Bug #33 is fixed. G1 to G4
-  pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
+- **Landed on `feat/0.10.0`:** every task except 16, 19 and 20 (README pass 1 is in), plus the deep-review fix
+  round (tasks 27 to 30; finding 1 is a private draft advisory, published after 0.10.0 ships). Bug #33 is fixed.
+  G1 to G4 pass in Docker (`sh tests/gates.sh --docker`, about 25 s). 0.11 follow-ups are in #40.
 - **Next: the 0.10.0 release.** Task 20 pass 2 (README, deck, roadmap, overview PDF), then task 16 (deep review,
   CHANGELOG, VERSION), then task 19 (the release PR's own Gates, Review and Verification blocks, `ready.py` says
   ready). The maintainer approves the merge to `main`, the tag and the GitHub Release.
