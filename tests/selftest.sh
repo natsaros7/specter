@@ -14,6 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15"
 DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15c:15"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
@@ -1454,6 +1455,36 @@ for k, v in keys:
     assert k in defaults and json.loads(v) == defaults[k], k
 PY
 
+# c to h: the upgrade report, on the 0.4.1 fixture of section 15 (a project that ran setup has spec-rules.md)
+R15="$TMP/t15/r"; cp -R "$B15" "$R15"; : > "$R15/.specs/steering/spec-rules.md"
+python3 -I -c 'import json,sys; p=sys.argv[1]; c=json.load(open(p)); c["unresolved_req"]="off"; json.dump(c,open(p,"w"))' "$R15/.specs/spec-kit.json"
+cp "$R15/.specs/spec-kit.json" "$TMP/t15/x-cfg"
+dry=$("$KH/install.sh" "$R15" --agents=claude --dry-run 2>&1); [ ! -e "$R15/.specs/kit.bak-0.4.1" ] || fail "15g: dry run wrote a backup"
+out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+echo "$out" | grep -q "kit files: [0-9]* added, [0-9]* changed, [0-9]* removed" || fail "15c: no kit files count line: $out"
+echo "$out" | grep -qE "^ +\+ scripts/tiers.py$" || fail "15c: no + scripts/tiers.py: $out"
+echo "$out" | grep -qE "^ +~ playbooks/sync.md$" || fail "15c: no ~ playbooks/sync.md: $out"
+for v in 0.5.0 0.7.0 0.8.0 0.9.0 0.10.0; do echo "$out" | grep -qE "^ +$v: " || fail "15d: no action line for $v: $out"; done
+for v in 0.4.1 0.6.0 0.6.5 0.11.0; do ! echo "$out" | grep -qE "^ +$v: " || fail "15d: action line for $v: $out"; done
+for k in decisions denylist_sha256 readme; do echo "$out" | grep -qE "^ +$k = " || fail "15e: key $k not listed: $out"; done
+echo "$out" | grep -qE "^ +decisions = \{\} \(0.5.0\)" || fail "15e: decisions default not shown: $out"
+! echo "$out" | grep -qE "^ +unresolved_req = " || fail "15e: listed a key the config already has: $out"
+cmp -s "$TMP/t15/x-cfg" "$R15/.specs/spec-kit.json" || fail "15e: spec-kit.json changed"
+echo "$out" | grep -q "steering templates not in .specs/steering/: autonomy.md, code-standards.md, decisions.md, lessons.md" || fail "15f: wrong missing templates: $out"
+for l in "kit files:" "+ scripts/tiers.py" "~ playbooks/sync.md" "decisions = {}" "steering templates not in" "0.5.0: " "backed up"; do
+  echo "$dry" | grep -qF "$l" || fail "15g: dry run lacks '$l': $dry"
+done
+for old in 0.0.x 99.0.0; do
+  R15="$TMP/t15/r$old"; cp -R "$B15" "$R15"; echo "$old" > "$R15/.specs/kit/VERSION"
+  out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+  if [ "$old" = 0.0.x ]; then
+    for v in 0.5.0 0.10.0; do echo "$out" | grep -qE "^ +$v: " || fail "15h: 0.0.x did not print $v: $out"; done
+    echo "$out" | grep -q "not a release number" || fail "15h: no unparsed-version note: $out"
+  else ! echo "$out" | grep -q "action needed" || fail "15h: a future VERSION printed actions: $out"; fi
+done
+R15="$TMP/t15/rp"; cp -R "$B15" "$R15"; rm "$R15/.specs/steering/project-profile.md"
+out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+[ ! -e "$R15/.specs/steering/project-profile.md" ] && echo "$out" | grep -q "project-profile.md is missing" || fail "15i: upgrade reseeded or did not report the missing profile: $out"
 fi; if sect 15c "upgrade repeats: one step equals stepping, a re-run is a no-op, a dry run writes nothing, protected paths keep their bytes"; then
 # a 0.7.0 kit is the 0.4.1 shape with the three scripts back; stepping through it must land where one step does
 kh 0.7.0 scripts/readme_check.py templates/steering/autonomy.md templates/steering/decisions.md templates/steering/lessons.md templates/SECURITY.md templates/ONBOARDING.md templates/github docs/chores.md docs/pipeline.md docs/upgrading.md playbooks/parallel.md

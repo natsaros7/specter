@@ -139,6 +139,57 @@ def keep(path, new):
     UP["saved"].append(key)
 
 
+def vtuple(v):
+    return tuple(map(int, v.split("."))) if re.fullmatch(r"\d+(\.\d+)*", v) else None
+
+
+def notes(text, old, new):
+    """[(version, [action], [(key, default, prose)])] for each `## <version>` block of upgrading.md with old < v <= new.
+    An old version that does not parse keeps every block."""
+    lo, hi, out = vtuple(old), vtuple(new), []
+    for m in re.finditer(r"^## (\S+)\n(.*?)(?=^## |\Z)", text, re.M | re.S):
+        v = vtuple(m.group(1))
+        if v is None or (lo is not None and not lo < v) or (hi is not None and v > hi):
+            continue
+        body = re.sub(r"\n[ \t]+", " ", m.group(2))  # join wrapped lines
+        out.append((m.group(1), re.findall(r"^- action: (.*)$", body, re.M),
+                    re.findall(r"^- key: `(\w+)` = `([^`]*)`:? ?(.*)$", body, re.M)))
+    return out
+
+
+def upgrade_report(kit, src_kit, specs, old, new):
+    """Lines describing what this upgrade does, from the old kit on disk (call before it is replaced)."""
+    def tree(root):
+        return {f.relative_to(root).as_posix(): blob_id(f.read_bytes()) for f in kit_files(root)
+                if f.name != "install.py" and f.relative_to(root).parts[0] in KIT_PARTS}
+    have, want = tree(kit), tree(src_kit)
+    add, chg, rm = sorted(want.keys() - have.keys()), sorted(p for p in want.keys() & have.keys() if want[p] != have[p]), sorted(have.keys() - want.keys())
+    lines = ["kit files: %d added, %d changed, %d removed" % (len(add), len(chg), len(rm))]
+    lines += ["  " + sign + " " + p for sign, ps in (("+", add), ("~", chg), ("-", rm)) for p in ps]
+    text = (src_kit / "docs/upgrading.md").read_text() if (src_kit / "docs/upgrading.md").is_file() else ""
+    try:
+        config = json.loads((specs / "spec-kit.json").read_text())
+    except (OSError, ValueError):
+        config = {}
+    blocks = notes(text, old, new)
+    if vtuple(old) is None:
+        lines.append("old version " + old + " is not a release number: showing every release")
+    keys = [(k, d, v, pr) for v, _, ks in blocks for k, d, pr in ks if k not in config]
+    if keys:
+        lines.append("spec-kit.json keys you can add (missing = the default; never written for you):")
+        lines += ["  %s = %s (%s): %s" % (k, d, v, pr) for k, d, v, pr in keys]
+    gone = sorted(t.name for t in (src_kit / "templates/steering").glob("*.md")
+                  if t.name != "project-profile.md" and not (specs / "steering" / t.name).exists())
+    if gone:
+        lines.append("steering templates not in .specs/steering/: " + ", ".join(gone) + " (copy from .specs/kit/templates/steering/)")
+    acts = [(v, a) for v, acts, _ in blocks for a in acts]
+    if acts:
+        lines.append("action needed (from .specs/kit/docs/upgrading.md):")
+        for v, a in acts:
+            lines.append("  " + v + ": " + a)
+    return lines
+
+
 def put_owned(path, text):
     """put_file for a file specter owns outside the kit (agent, skill, rule): an edited copy is backed up first."""
     keep(path, text.encode())
@@ -343,6 +394,7 @@ def install(kit_home, target):
         if UP["rec"] is None:
             say("could not verify what " + old_version + " shipped (no MANIFEST, no v" + old_version + " tag): "
                 "backed up every file that differs from the new kit", True)
+    report = upgrade_report(kit, src_kit, specs, old_version, (kit_home / "VERSION").read_text().strip()) if UP else []
     for part in KIT_PARTS:
         src, dst = src_kit / part, kit / part
         def go(src=src, dst=dst):
@@ -371,11 +423,13 @@ def install(kit_home, target):
     elif how == "adopt":
         say(".specs/spec-kit.json exists: untouched (set tracker_pattern and merged_ref yourself, see README)")
     elif old_version and old_version != version:
-        say("upgrade " + old_version + " -> " + version + " (your settings kept)")
+        say("upgrade " + old_version + " -> " + version + " (your settings kept)", True)
+        for line in report:
+            say(line, True)
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if how == "upgrade" and not profile.exists():
-        say(".specs/steering/project-profile.md is missing: not created on an upgrade (run the setup interview)", True)
+        say(".specs/steering/project-profile.md is missing: not recreated on an upgrade; run setup (.specs/kit/playbooks/setup.md) to write it", True)
     elif not profile.exists():
         text = (src_kit / "templates/steering/project-profile.md").read_text()
         if how == "adopt":
@@ -433,6 +487,8 @@ def install(kit_home, target):
 
     if UP and UP["saved"]:
         say("backed up to " + shown(UP["dir"]) + "/: " + ", ".join(UP["saved"]), True)
+    elif UP:
+        say("backed up: none", True)
     if not dry():
         rows = sorted((shown(f), blob_id(f.read_bytes())) for f in kit_files(kit) + [p for p in OWNED if p.is_file()])
         put_file(kit / "MANIFEST", "".join(blob + " " + path + "\n" for path, blob in rows))
