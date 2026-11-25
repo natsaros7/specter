@@ -15,7 +15,7 @@ Deploy impact: none (installer and selftest only; projects see the change on the
   this is ticked — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03] [REQ-V075-04]
 - [ ] 2 `MANIFEST` at every install, the `v<old>` tag when there is none, back up every file that is neither recorded
   nor new into `.specs/kit.bak-<old>/`, lint and uninstall leave the backup alone (selftest 15) — [REQ-V075-01]
-- [ ] 3 `kit/docs/upgrading.md` with blocks 0.5.0 to 0.11.0; rows that fail on a CHANGELOG release with no block and on
+- [x] 3 `kit/docs/upgrading.md` with blocks 0.5.0 to 0.11.0; rows that fail on a CHANGELOG release with no block and on
   a key default that differs from the script's (selftest 15b a, b) — [REQ-V075-02]
 - [ ] 4 The upgrade report: kit files added, changed and removed, backups, missing config keys, missing steering
   templates, action lines for the version range, in the run and in `--dry-run` (selftest 15b c to h) — [REQ-V075-02]

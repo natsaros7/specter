@@ -1387,6 +1387,23 @@ if docker info >/dev/null 2>&1; then
   [ "$rc" = 2 ] && echo "$out" | grep -qF "gates: /src is empty (does your container runtime share this path?)" || fail "14b: empty mount gave rc=$rc: $out"
 else echo "14b: empty-mount row skipped, no Docker reachable"; fi
 
+fi; if sect 15b "upgrading.md: a block per CHANGELOG release above 0.4.1, and each key default equals the script's"; then
+UG="$KIT/kit/docs/upgrading.md"
+for v in $(awk '/^## \[0\.4\.1\]/{exit} /^## \[[0-9]/{gsub(/[][]/,"",$2); print $2}' "$KIT/CHANGELOG.md"); do
+  grep -qx "## $v" "$UG" || fail "15b: upgrading.md has no block for $v"
+done
+python3 -I - "$KIT" <<'PY' || fail "15b: a key default in upgrading.md differs from the script's"
+import json, re, sys
+kit = sys.argv[1]
+sys.path.insert(0, kit + "/kit/scripts")
+import readme_check, spec_lint
+defaults = dict(spec_lint.DEFAULTS, readme=readme_check.DEFAULTS)
+keys = re.findall(r"^\s*- key: `(\w+)` = `([^`]*)`", open(kit + "/kit/docs/upgrading.md").read(), re.M)
+assert keys, "no key lines"
+for k, v in keys:
+    assert k in defaults and json.loads(v) == defaults[k], k
+PY
+
 fi; if sect 26 "readme_check.py: broken link and missing alt fail, a clean README passes, a bad setting exits 2"; then
 R="$TMP/t26"; mkdir -p "$R/.specs" "$R/img"; touch "$R/img/a.png"
 rcheck() { python3 "$KIT/kit/scripts/readme_check.py" --specs "$R/.specs" 2>&1; }
