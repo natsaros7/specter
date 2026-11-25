@@ -41,7 +41,7 @@ Show this table, filled in:
 
 | | Finding | What I'll do |
 |---|---|---|
-| Layout | single repo / monorepo / workspace of N repos | Install at `<path>`; git hook yes/no |
+| Layout | single repo / monorepo / workspace of N repos / platform over N repos | Install at `<path>`; git hook yes/no |
 | Parts I see | e.g. 3 services, 1 UI, 1 shared lib | Become `domains/` (you approve the list in setup) |
 | Requirements | e.g. Jira keys in commits / none found | I'll ask in setup |
 | Agents | e.g. Codex + Claude Code (from project files) | `spec-first` skill for each; `AGENTS.md` (+ `CLAUDE.md` …) marker block only, your text untouched |

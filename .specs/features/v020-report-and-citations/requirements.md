@@ -8,7 +8,7 @@ Tracker: none. Branch `feat/0.2.0`. Size M. Release: 0.2.0, after the Codex dry 
 
 Verified on `main` 2026-10-28 (`053958a`):
 
-- `kit/scripts/spec_lint.py:107`: a citation is `path:N` or `path:A-B` in backticks, nothing else. On a mature workspace spec set
+- `kit/scripts/spec_lint.py:115`: a citation is `path:N` or `path:A-B` in backticks, nothing else. On a mature workspace spec set
   (17 repos, months old), `--cites` failed 85 of 191 citations. Grouped by cause:
   - **Repo prefix (23):** `<repo>:<path>:<lines>`, where the prefix names a repo or an alias for one (a two-letter
     shorthand, or a chart's folder name). The checker treats it as part of the path.

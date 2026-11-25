@@ -3,6 +3,7 @@
 
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
        python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
+       python3 .specs/kit/scripts/spec_lint.py --members-root DIR   where a platform's member repos are checked out
        python3 .specs/kit/scripts/spec_lint.py --hash-term <word>               digest to add to denylist_sha256
        default DIR = the .specs/ this script is installed in; default features = all; exit 0 clean, 1 FAIL, 2 DIR not a directory
 
@@ -15,6 +16,12 @@ Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-d
       indexed up to two levels below the project. Elided paths (`.../web/Foo.java:12`) match by suffix; if several files
       match, those matching cite_ignore_globs are dropped. Every listed range is checked on its own.
       FAIL: no such file, ambiguous, unknown repo prefix, past EOF, or a blank cited range.
+
+Platform layer: spec-kit.json "layer" is "platform", "member" or null (default null; other values stop the lint) and
+      "members_root" a path string (default: the project's parent). On "platform", system/repos.md must hold a table with a
+      Repo and a Spec path column; a row whose repo is not a folder name, whose spec path is absolute or has a '..' part,
+      or a repo listed twice, FAILs with file:line. Member lookup (members()) is <root>/<repo>/<spec path>, --members-root
+      before members_root. A root without "layer": platform lints as before.
 
 History: a feature whose Status is Done or Dropped reports its structural FAILs below as WARN `history: <message>` (exit code unaffected);
       broken links and citations still FAIL everywhere.
@@ -76,7 +83,8 @@ FENCE = re.compile(r"^```.*?^```", re.M | re.S)
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 DEFAULTS = {"req_id_pattern": "REQ-[A-Z0-9]+-[0-9]+", "upstream_req_pattern": None, "required_sections": {},
             "cite_aliases": {}, "cite_ignore_globs": [], "drift_max_age_days": 90,
-            "tracker_pattern": None, "merged_ref": None, "decisions": {}, "denylist_sha256": [], "unresolved_req": "warn"}
+            "tracker_pattern": None, "merged_ref": None, "decisions": {}, "denylist_sha256": [], "unresolved_req": "warn",
+            "layer": None, "members_root": None}
 STATUS = re.compile(r"^\s*>?\s*(?:\*\*Status:\*\*|\*\*Status\*\*:|Status:)\s*(.*)$", re.I)
 STATES = (("proposed", "Proposed"), ("in progress", "In progress"), ("blocked on", "Blocked"), ("done", "Done"), ("dropped", "Dropped"))
 MERGED = "merged work found"
@@ -130,7 +138,52 @@ def load_config(specs):
         sys.exit('spec-kit.json: decisions.backlinks must be false, "warn" or true, got ' + json.dumps(dec["backlinks"]))
     if not isinstance(dec["enabled"], bool):
         sys.exit("spec-kit.json: decisions.enabled must be true or false, got " + json.dumps(dec["enabled"]))
+    if config["layer"] not in ("platform", "member", None):
+        sys.exit('spec-kit.json: layer must be "platform", "member" or null, got ' + json.dumps(config["layer"]))
+    if config["members_root"] is not None and not isinstance(config["members_root"], str):
+        sys.exit("spec-kit.json: members_root must be a path string, got " + json.dumps(config["members_root"]))
     return config
+
+
+REPO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
+
+
+def registry(specs):
+    """The platform's repo registry: the first table of system/repos.md with a Repo and a Spec path column.
+    Returns (rows, fails): rows are (repo, spec path, line) of the valid rows; each bad row (repo not a folder name,
+    spec path absolute or with a '..' part, repo listed twice) is one FAIL 'system/repos.md:<line>: <why>'."""
+    path, name = specs / "system" / "repos.md", "system/repos.md"
+    cols, head, rows, fails, seen = None, None, [], [], {}
+    for no, line in enumerate(unfenced(path.read_text()).splitlines() if path.is_file() else [], 1):
+        if not line.lstrip().startswith("|"):
+            if cols:
+                break
+            head = None
+            continue
+        cells = [c.strip().replace("`", "") for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
+        if head is None:
+            head = [c.lower() for c in cells]
+            if "repo" in head and "spec path" in head:
+                cols = (head.index("repo"), head.index("spec path"))
+        elif cols and not re.fullmatch(r"[\s|:-]+", line) and len(cells) > max(cols):
+            repo, sub = cells[cols[0]], cells[cols[1]]
+            why = ("repo '" + repo + "' is not a folder name" if not REPO.match(repo)
+                   else "spec path '" + sub + "' must be relative, with no .. part" if not sub or sub.startswith("/") or ".." in sub.split("/")
+                   else "repo '" + repo + "' is listed twice (first on line " + str(seen[repo]) + ")" if repo in seen else "")
+            if why:
+                fails.append(name + ":" + str(no) + ": " + why)
+            else:
+                seen[repo] = no
+                rows.append((repo, sub, no))
+    return rows, fails if cols else [name + ": no registry table (Repo, Spec path)"]
+
+
+def members(specs, config, root=None):
+    """(repo, spec dir or None when not checked out) per registry row. root: the --members-root argument, else
+    members_root of spec-kit.json relative to the project, else the project's parent. The platform itself is dropped."""
+    base = Path(root) if root else specs.parent / (config["members_root"] or "..")
+    found = [(repo, (base / repo / sub).resolve()) for repo, sub, _ in registry(specs)[0]]
+    return [(repo, d if d.is_dir() else None) for repo, d in found if d != specs.resolve()]
 
 
 def task_blocks(text):
@@ -474,7 +527,7 @@ def drift_rows(specs, max_age):
     return rows
 
 
-def lint_all(specs, names=()):
+def lint_all(specs, names=(), members_root=None):  # members_root: read by --members (v080 task 3)
     config = load_config(specs)
     features_dir = specs / "features"
     trace_path = specs / "system" / "traceability.md"
@@ -536,6 +589,8 @@ def lint_all(specs, names=()):
     links = broken_links(specs)
     ref_fails, ref_warns = refs(specs, config, req_defs)
     warnings += ["WARN " + w for w in ref_warns]
+    if config["layer"] == "platform":
+        ref_fails += registry(specs)[1]
     max_age = config.get("drift_max_age_days")
     drift = drift_rows(specs, max_age)
     if max_age is not None:
@@ -637,6 +692,10 @@ def main(argv):
         i = argv.index("--specs")
         given, argv = argv[i + 1], argv[:i] + argv[i + 2:]
         specs = Path(given).resolve()
+    members_root = None
+    if "--members-root" in argv:
+        i = argv.index("--members-root")
+        members_root, argv = argv[i + 1], argv[:i] + argv[i + 2:]
     if "--hash-term" in argv:
         toks = tokens(" ".join(a for a in argv[argv.index("--hash-term") + 1:] if not a.startswith("--")))
         if not 1 <= len(toks) <= 2:
@@ -657,7 +716,7 @@ def main(argv):
             print("spec-lint --cites: " + str(len(result["problems"])) + " FAIL of " + str(result["count"]) + " citation(s)")
         return 1 if result["problems"] else 0
     names = [a for a in argv if not a.startswith("--")]
-    result = lint_all(specs, names)
+    result = lint_all(specs, names, members_root)
     if as_json:
         json.dump(result, sys.stdout)
         return 1 if result["fails"] else 0

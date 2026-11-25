@@ -35,7 +35,7 @@ Fill the **Facts** table of the profile. Look for:
 | Look for | Typical evidence |
 |---|---|
 | Deployables and libraries | Build files: `pom.xml` modules, `build.gradle` / `settings.gradle`, `package.json` workspaces, `go.mod`, `Cargo.toml` workspace, `pyproject.toml`, `*.csproj`/`.sln`; `Dockerfile`s; deploy manifests (Helm charts, k8s YAML, compose, Terraform, serverless config) |
-| Layout | **single repo**, **monorepo** (many deployables, one repo), or **multi-repo workspace** (`.specs/` sits in a folder whose subfolders are separate git repos: `ls -d */.git`). In a workspace, record each child repo, its default branch and its remote, and pull each one before reading it |
+| Layout | **single repo**, **monorepo** (many deployables, one repo), or **multi-repo workspace** (`.specs/` sits in a folder whose subfolders are separate git repos: `ls -d */.git`), or **platform** (this repo holds only cross-repo specs; each member repo keeps its own `.specs/`). In a workspace, record each child repo, its default branch and its remote, and pull each one before reading it |
 | Public contracts | OpenAPI/Swagger, `.proto`, AsyncAPI, GraphQL schema, message/topic names, CLI surface |
 | Data | Migrations (Flyway, Liquibase, Alembic, Prisma, EF), schema files, ORM entities, caches |
 | Integration | HTTP/gRPC clients, broker producers/consumers, external base URLs in config |
@@ -118,6 +118,9 @@ From `.specs/kit/templates/`:
    what the user names as enforcing it and today's date (never guess a platform setting), and keep the Evidence
    placeholders unless the user gives numbers. An undeclared row or an unset threshold keeps the human in the loop.
 9. Update `.specs/spec-kit.json`: `upstream_req_pattern` (Q1), `spec_threshold_loc` (Q6), `spec_sync` and `code_globs` (Q7).
+10. **Platform layout only:** copy `system/repos.md` and `system/contracts.md`, fill `repos.md` with one row per member repo
+   (folder name, spec path, what it owns) from Phase 1, and set `"layer": "platform"` in `spec-kit.json`; record the layer
+   as a Facts row of the profile. Members are looked up next to this repo; if they live elsewhere, set `members_root`.
 
 ## Phase 6: Verify and report
 

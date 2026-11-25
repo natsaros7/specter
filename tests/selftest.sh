@@ -1471,5 +1471,54 @@ for cfg in '{"readme": {"max_lines": "9"}}' '{"readme": {"sections": "Use"}}' '{
 done
 printf '{}' > "$R/.specs/spec-kit.json"; rm "$R/README.md"; rc=0; rcheck >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "26: missing README exits $rc, want 2"
 
+fi; if sect 27 "platform layer: layer and members_root keys, the repo registry, member lookup"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+p27() { # dir: platform + orders + billing, no git; the platform lists both members
+  mkdir -p "$1/platform/.specs/steering" "$1/platform/.specs/system"
+  printf '{"layer": "platform"}' > "$1/platform/.specs/spec-kit.json"
+  printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders | .specs | orders |\n| billing | .specs | billing |\n' > "$1/platform/.specs/system/repos.md"
+  printf 'status: active\n' > "$1/platform/.specs/steering/project-profile.md"
+  for m in orders billing; do
+    mkdir -p "$1/$m/.specs/steering" "$1/$m/.specs/domains/d"
+    printf '{"layer": "member"}' > "$1/$m/.specs/spec-kit.json"
+    printf 'status: active\n' > "$1/$m/.specs/steering/project-profile.md"
+  done
+  printf '## Cap\n[REQ-ORD-1] orders cap\n' > "$1/orders/.specs/domains/d/requirements.md"
+  printf '## Cap\n[REQ-BIL-1] billing cap\n' > "$1/billing/.specs/domains/d/requirements.md"
+}
+lintp() { python3 "$LINT" --specs "$1/.specs" 2>&1; }
+P="$TMP/p27"; p27 "$P"
+out=$(lintp "$P/platform") || fail "27: clean platform: $out"
+printf '{"layer": "plat"}' > "$P/platform/.specs/spec-kit.json"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" != 0 ] && echo "$out" | grep -qF 'layer must be "platform", "member" or null' || fail "27a: bad layer rc=$rc: $out"
+printf '{"layer": "platform", "members_root": 3}' > "$P/platform/.specs/spec-kit.json"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" != 0 ] && echo "$out" | grep -qF 'members_root must be a path string' || fail "27b: bad members_root rc=$rc: $out"
+printf '{"layer": "platform"}' > "$P/platform/.specs/spec-kit.json"
+mv "$P/platform/.specs/system/repos.md" "$TMP/repos.md.keep"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'FAIL system/repos.md: no registry table (Repo, Spec path)' || fail "27c: no registry rc=$rc: $out"
+printf '# Repos\n\n| Repo | Spec path |\n|---|---|\n| ../evil | .specs |\n| pay | /abs |\n| ship | ../x |\n| billing | .specs |\n| billing | .specs |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?
+[ "$rc" = 1 ] && [ "$(echo "$out" | grep -c '^FAIL system/repos.md:[0-9]*: ')" = 4 ] || fail "27d: want 4 registry FAILs, rc=$rc: $out"
+echo "$out" | grep -qF "system/repos.md:5: repo '../evil'" && echo "$out" | grep -qF "system/repos.md:6: spec path '/abs'" && echo "$out" | grep -qF "system/repos.md:7: spec path '../x'" && echo "$out" | grep -qF "system/repos.md:9: repo 'billing' is listed twice (first on line 8)" || fail "27d: messages: $out"
+cp "$KIT/kit/templates/system/repos.md" "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF "system/repos.md:9: repo '<repo>' is not a folder name" || fail "27e: repos.md template rc=$rc: $out"
+cp "$KIT/kit/templates/system/contracts.md" "$P/platform/.specs/system/contracts.md"; cp "$TMP/repos.md.keep" "$P/platform/.specs/system/repos.md"
+out=$(lintp "$P/platform") || fail "27e: contracts.md template: $out"
+a=$(lintp "$P/orders") || fail "27f: orders: $a"; rm -rf "$P/platform"
+[ "$a" = "$(lintp "$P/orders")" ] || fail "27f: orders changed without the platform"
+mkdir -p "$TMP/p27n/.specs/system"; printf '| Repo | Spec path |\n|---|---|\n| ../x | /y |\n' > "$TMP/p27n/.specs/system/repos.md"
+out=$(lintp "$TMP/p27n") || fail "27f: no layer, broken repos.md must lint as today: $out"
+P="$TMP/p27x"; p27 "$P"; mkdir -p "$TMP/elsewhere"; mv "$P/orders" "$TMP/elsewhere/"
+out=$(python3 - "$LINT" "$P/platform/.specs" "$TMP/elsewhere" <<'PY'
+import sys, importlib.util
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("spec_lint", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+specs = Path(sys.argv[2]).resolve(); cfg = m.load_config(specs)
+name = lambda got: [(r, d is not None) for r, d in got]
+print(name(m.members(specs, cfg)), name(m.members(specs, cfg, sys.argv[3])))
+PY
+)
+[ "$out" = "[('orders', False), ('billing', True)] [('orders', True), ('billing', False)]" ] || fail "27g: member lookup: $out"
+
 fi; sect_end
 echo "selftest: OK"
