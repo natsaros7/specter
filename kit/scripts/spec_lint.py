@@ -4,7 +4,7 @@
 Usage: python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] [feature-dir-name ...]
        python3 .specs/kit/scripts/spec_lint.py [--specs DIR] [--json] --cites    check `path:line` citations only
        python3 .specs/kit/scripts/spec_lint.py --hash-term <word>               digest to add to denylist_sha256
-       default DIR = the .specs/ this script is installed in; default features = all
+       default DIR = the .specs/ this script is installed in; default features = all; exit 0 clean, 1 FAIL, 2 DIR not a directory
 
 --json prints one JSON object instead of text (same exit code): default mode {features, links, refs, drift, warnings, fails},
       --cites {count, problems}.
@@ -607,16 +607,20 @@ def cites(specs):
 
 
 def main(argv):
-    specs = Path(__file__).resolve().parents[2]
+    specs = given = Path(__file__).resolve().parents[2]
     if "--specs" in argv:
         i = argv.index("--specs")
-        specs, argv = Path(argv[i + 1]).resolve(), argv[:i] + argv[i + 2:]
+        given, argv = argv[i + 1], argv[:i] + argv[i + 2:]
+        specs = Path(given).resolve()
     if "--hash-term" in argv:
         toks = tokens(" ".join(a for a in argv[argv.index("--hash-term") + 1:] if not a.startswith("--")))
         if not 1 <= len(toks) <= 2:
             sys.exit("usage: --hash-term <term of one or two words>")
         print(hashlib.sha256("-".join(toks).encode()).hexdigest())
         return 0
+    if not specs.is_dir():  # a moved or misspelled path must not pass as "0 FAIL"
+        print("spec-lint: " + str(given) + ": not a directory", file=sys.stderr)
+        return 2
     as_json = "--json" in argv
     if "--cites" in argv:
         result = cites(specs)

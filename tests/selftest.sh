@@ -177,6 +177,10 @@ grep -qF '<i>x' "$K/r.html" && fail "hostile folder name not escaped" || true
 grep -q 'h%22%3E%3Ci%3Ex' "$K/r.html" && grep -q 'h&quot;&gt;&lt;i&gt;x' "$K/r.html" || fail "hostile name href or text"
 rc=0; python3 -I "$KIT/kit/scripts/spec_report.py" --specs "$K/nope" >/dev/null 2>&1 || rc=$?
 [ "$rc" = 2 ] && [ ! -e "$K/nope" ] || fail "missing specs dir: want exit 2 and nothing created"
+for m in "" --cites --json "--cites --json"; do
+  rc=0; err=$(L --specs "$K/nope" $m 2>&1 >/dev/null) || rc=$?
+  [ "$rc" = 2 ] && [ "$err" = "spec-lint: $K/nope: not a directory" ] || fail "lint missing specs dir ($m): rc=$rc err=$err"
+done
 
 fi; if sect 5l "status checks, merged-work detection, linked worktrees and submodules, report badge"; then
 M="$TMP/merged"; mkdir -p "$M/.specs/features/abc-7-x" "$M/.specs/features/abc-70-y" "$M/pkg"; gitq -C "$M" init

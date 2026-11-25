@@ -65,6 +65,7 @@ escalates without a failed gate. Details: [`kit/docs/model-routing.md`](../kit/d
 python3 .specs/kit/scripts/spec_lint.py           # files present, REQ traced both ways, links resolve
 python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation exists and points at real code
 python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdout (also with --cites)
+# exit 0 clean, 1 a FAIL, 2 a --specs path that is not a directory
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
 python3 .specs/kit/scripts/gates.py               # run the Gates table in steering/spec-rules.md, print a block for the PR
