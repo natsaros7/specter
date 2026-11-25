@@ -101,7 +101,7 @@ earned from evidence:
 | Stage | Who coordinates | Status |
 |---|---|---|
 | 3: memory, scheduled chores, the spec loop | a human reads every change | shipped, 0.6 to 0.9 |
-| 4: a pipeline; humans set goals and rules | the trust layer decides which changes need a human | built in 0.9, hardened in 0.10; Human `none` stays off until it is verified live |
+| 4: a pipeline; humans set goals and rules | the trust layer decides which changes need a human | built in 0.9, hardened in 0.10 and 0.11; Human `none` stays off until it is verified live |
 | 5: an orchestrator runs the agents from the goal and spec | the orchestrator; humans approve specs and handle escalations | later, as a separate layer on top of the kit |
 
 <p align="center"><img src="docs/overview/roadmap.svg" alt="Roadmap: the shipped releases, the release in progress, stage 4 built but off, stage 5 later" width="100%"></p>

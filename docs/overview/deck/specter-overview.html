@@ -61,7 +61,7 @@ th { font-weight: 600; }
 <p class="eyebrow in" style="--i:0">Specter · overview · November 2026</p>
 <h1 class="in" style="--i:1">Specs that don’t go stale</h1>
 <p class="lead in" style="--i:2; color:#C9D2E3; width:1400px;">A spec-first workflow any AI coding agent can follow, and a trust layer that decides how much of each change a human still has to read.</p>
-<p class="foot">Release 0.10.0 shipped (Human none still off) · Python 3.8+, stdlib only, no service</p>
+<p class="foot">Release 0.11.0 shipped (Human none still off) · Python 3.8+, stdlib only, no service</p>
 <aside>Specter is a kit you copy into a repository. It keeps specs honest with lint and citations, and since 0.6 it adds a staged path toward agent autonomy: every change gets a risk tier, a readiness verdict, and after merge, evidence.</aside>
 </section>
 
@@ -213,23 +213,23 @@ th { font-weight: 600; }
 <section id="ladder" class="alt">
 <h2>Where it stands on the ladder</h2>
 <div class="figure" style="display:flex; justify-content:center; padding:12px;">
-<img src="../roadmap.svg" alt="Kiro five-stage ladder: stage 3 shipped across 0.6.0 to 0.8.0, stage 4 built in 0.9.0 and hardened in 0.10.0 but off, next candidates, stage 5 later" style="width:1263px; height:680px; object-fit:contain;">
+<img src="../roadmap.svg" alt="Kiro five-stage ladder: stage 3 shipped across 0.6.0 to 0.8.0, stage 4 built in 0.9.0 and hardened in 0.10.0 and 0.11.0 but off, next candidates, stage 5 later" style="width:1263px; height:680px; object-fit:contain;">
 </div>
 <aside>The ladder is Kiro’s, classified by concurrent sessions. Specter sits at a solid stage 3 and has built the policy half of stage 4 (0.9.0), with the no-human setting off until it is verified live. Stage 5, a coordinating agent, comes later as a separate layer after stage 4 runs live.</aside>
 </section>
 
 <section id="next">
-<p class="eyebrow">0.10.0 · shipped</p>
-<h2>What 0.10.0 added</h2>
+<p class="eyebrow">0.11.0 · shipped</p>
+<h2>What 0.11.0 added</h2>
 <table>
 <tr><th style="width:26%">Piece</th><th style="width:56%">What it does</th><th>Status</th></tr>
-<tr><td>Size cap, trivial review</td><td>none only within 3 files and 50 lines, tests only added, reviewer writes complexity: trivial</td><td>shipped</td></tr>
-<tr><td>Base must be current</td><td>a PR behind the merged_ref tip is spot, so a demotion reaches PRs in flight</td><td>shipped</td></tr>
-<tr><td>Parallel playbook, lessons loop</td><td>batches of at most 3, a worktree base check, cherry-pick rc checked; a mistake becomes a lessons line</td><td>shipped</td></tr>
-<tr><td>Kit tools for any project</td><td>container gates (--docker), readme_check.py, a SECURITY.md template</td><td>shipped</td></tr>
-<tr><td>Ref and evidence fixes</td><td>case-folded refs refused, refs/replace ignored, relabelled commits counted apart</td><td>shipped</td></tr>
+<tr><td>Guards</td><td>commit-graph off, hidden submodule bumps seen, fork PRs kept out, LFS, symlinks and filtered paths guarded, Human-Findings: refused</td><td>shipped</td></tr>
+<tr><td>Byte cap</td><td>Max bytes (default 4000) beside files and lines</td><td>shipped</td></tr>
+<tr><td>Live kit</td><td>specter-auto-merge.yml template and the tests/live/github/ sandbox (recipe still not run live)</td><td>shipped</td></tr>
+<tr><td>Eval set</td><td>acme-shop goals E1 to E5 in examples/acme-shop/eval/</td><td>shipped</td></tr>
+<tr><td>G5 in a container</td><td>tests/acme-build.sh --docker</td><td>shipped</td></tr>
 </table>
-<aside>0.10.0 is released. The none setting is still off until it is verified on a live host; every change still gets a human check.</aside>
+<aside>0.11.0 is released. The none setting is still off until it is verified on a live host; every change still gets a human check.</aside>
 </section>
 
 <section id="later" class="alt">
@@ -238,7 +238,7 @@ th { font-weight: 600; }
 <div class="card">
 <p class="eyebrow">Next · not decided</p>
 <ul>
-<li><b>0.11</b> follow-ups (#40), then a live test of the recipe on a hosted repository</li>
+<li>A live test of the recipe on a hosted repository, and the round 3 advisories (#73)</li>
 <li><b>Stage 5</b> an orchestrator proposal, not built</li>
 <li><b>E6</b> verification gates proposed by stack: property, contract and architecture tests</li>
 <li><b>E9</b> a Drift Register entry naming an anti-pattern gets a lint rule first, then cleanup tasks</li>
@@ -264,7 +264,7 @@ th { font-weight: 600; }
 <div class="two">
 <div class="stack">
 <p class="big">off</p>
-<p>the no-human setting: built in 0.9.0, hardened in 0.10.0, kept off until it is verified on a live host</p>
+<p>the no-human setting: built in 0.9.0, hardened in 0.11.0, kept off until it is verified on a live host</p>
 </div>
 <div class="stack">
 <p class="big">0</p>
