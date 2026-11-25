@@ -9,8 +9,8 @@ v060 is done: slice 4 is released as 0.9.0 on branch `feat/0.9.0` (pushed; stack
 `feat/0.6.5-acme-java` and `feat/0.6.0`; none merged to `main`, none tagged). Reviews per slice in `docs/reviews/`.
 - Release order needs the maintainer: merge 0.6.0, 0.6.5, 0.7.0, 0.8.0, 0.9.0 to `main` and tag, in that order.
 - Open follow-ups live in `.specs/features/v061-trust-hardening/` (the advisories of the slice 3 and 4 reviews).
-- Pinned (do not start): the platform layer for multi-repo systems, until a multi-repo spec split on another project
-  proves the model. Its input is that split's list of gaps, kept outside this repo.
+- The platform layer for multi-repo systems was unpinned on 2026-11-25; its input is in
+  `.specs/features/v080-platform-layer/`.
 
 ## Slice 1: a solid stage 3 (release 0.6.0)
 
