@@ -1074,6 +1074,22 @@ want "13e14 a replace ref hid a revert" "routine: breach (reverted 25.0% > 10%)"
 nr "t13e23"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; A2=$(git -C "$R" rev-parse HEAD); gitq -C "$R" revert --no-edit "$A1"; mr docs -m a3
 printf '%s %s\n' "$(git -C "$R" rev-parse HEAD)" "$A2" > "$R/.git/info/grafts"
 want "13e23 a grafts file hid a revert" "routine: breach (reverted 25.0% > 10%)"
+# a forged .git/objects/info/commit-graph (a3's first parent rewritten to a2) drops the revert from --first-parent unless core.commitGraph is off
+nr "t13e26"; mr docs -m a1; A1=$(git -C "$R" rev-parse HEAD); mr docs -m a2; A2=$(git -C "$R" rev-parse HEAD); gitq -C "$R" revert --no-edit "$A1"; mr docs -m a3
+gitq -C "$R" commit-graph write --reachable
+python3 - "$R/.git/objects/info/commit-graph" "$(git -C "$R" rev-parse HEAD)" "$A2" <<'PY' || fail "13e26: could not forge the commit-graph"
+import os, struct, sys
+p, a3, a2 = sys.argv[1:]
+b = bytearray(open(p, "rb").read())
+ch = {bytes(b[8 + 12 * i:12 + 12 * i]): struct.unpack(">Q", b[12 + 12 * i:20 + 12 * i])[0] for i in range(b[6] + 1)}
+n = struct.unpack(">I", b[ch[b"OIDF"] + 1020:ch[b"OIDF"] + 1024])[0]
+oids = [bytes(b[ch[b"OIDL"] + 20 * i:ch[b"OIDL"] + 20 * i + 20]).hex() for i in range(n)]
+o = ch[b"CDAT"] + 36 * oids.index(a3) + 20
+b[o:o + 4] = struct.pack(">I", oids.index(a2))
+os.unlink(p); open(p, "wb").write(b)  # git writes the graph 0444
+PY
+want "13e26 a forged commit-graph hid a revert" "routine: breach (reverted 25.0% > 10%)"
+out=$(cd "$R" && python3 -c 'import sys; sys.path.insert(0, ".specs/kit/scripts"); import tiers, subprocess; print(subprocess.check_output(["git", "config", "core.commitGraph"], text=True), end="")') && [ "$out" = false ] || fail "13e26: core.commitGraph not false in a tiers child: $out"
 
 # an idle gap before backdated agent commits: the window cut sits above the agent commit, and its revert (dated now) must pull it in
 ER='| routine | 90 | 1 | 10 | - | - |\n| domain | 90 | 1 | - | - | - |\n'

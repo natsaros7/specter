@@ -53,10 +53,18 @@ sys.dont_write_bytecode = True  # an installed kit must stay free of __pycache__
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gates  # noqa: E402
 
-# Run standalone, this file's git calls (branch_ref, merged_commits) must not follow refs/replace or .git/info/grafts either
-# (tiers.py sets the same two before its own calls); the graft path never exists (a file under /dev/null).
+# Run standalone, this file's git calls (branch_ref, merged_commits) need the same protection as tiers.py's: refs/replace,
+# .git/info/grafts and a forged .git/objects/info/commit-graph can rewrite the chain or a blob; children (git) inherit
+# these. The graft path never exists (a file under /dev/null). core.commitGraph=false goes in through GIT_CONFIG_COUNT,
+# appended to any inherited entries.
 os.environ["GIT_NO_REPLACE_OBJECTS"] = "1"
 os.environ["GIT_GRAFT_FILE"] = os.devnull + "/none"
+# shortcut: git < 2.31 ignores GIT_CONFIG_COUNT; refuse older git if a job can run one
+_n = int(os.environ.get("GIT_CONFIG_COUNT") or 0)
+if os.environ.get(f"GIT_CONFIG_KEY_{_n - 1}") != "core.commitGraph" or os.environ.get(f"GIT_CONFIG_VALUE_{_n - 1}") != "false":
+    os.environ[f"GIT_CONFIG_KEY_{_n}"] = "core.commitGraph"  # appended last, so it wins; not twice when both modules import
+    os.environ[f"GIT_CONFIG_VALUE_{_n}"] = "false"
+    os.environ["GIT_CONFIG_COUNT"] = str(_n + 1)
 
 TASK = re.compile(r"^\s*- \[[ xX]\] ")
 KEBAB = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
