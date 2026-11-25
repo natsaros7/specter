@@ -84,7 +84,7 @@ a named group of paths (docs, domain code, build files…); each tier says how m
 <p align="center"><img src="docs/overview/workflow.svg" alt="Spec-first workflow: GO, install, setup interview, then spec, implement, gates, review, human check, sync" width="100%"></p>
 <p align="center"><img src="docs/overview/trust-layer.svg" alt="Trust layer: tiers and guardrails give a label; gates, review and verification feed a readiness verdict; evidence flows back from merged history" width="100%"></p>
 
-Real output from the acme-shop example, captured at 0.8.0 (the raw text sits beside each image; the recipe is in
+Real output from the acme-shop example, captured at 0.10.0 (the raw text sits beside each image; the recipe is in
 [`docs/overview/`](docs/overview/README.md)):
 
 <p align="center"><img src="docs/overview/screenshots/02-tiers-staged.png" alt="tiers.py labels a staged pom.xml change critical" width="80%"><br><a href="docs/overview/screenshots/02-tiers-staged.txt">raw text</a></p>
