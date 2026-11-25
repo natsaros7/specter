@@ -14,7 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14"
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15c:15"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
@@ -1453,6 +1453,59 @@ assert keys, "no key lines"
 for k, v in keys:
     assert k in defaults and json.loads(v) == defaults[k], k
 PY
+
+fi; if sect 15c "upgrade repeats: one step equals stepping, a re-run is a no-op, a dry run writes nothing, protected paths keep their bytes"; then
+# a 0.7.0 kit is the 0.4.1 shape with the three scripts back; stepping through it must land where one step does
+kh 0.7.0 scripts/readme_check.py templates/steering/autonomy.md templates/steering/decisions.md templates/steering/lessons.md templates/SECURITY.md templates/ONBOARDING.md templates/github docs/chores.md docs/pipeline.md docs/upgrading.md playbooks/parallel.md
+S15="$TMP/t15c"; mkdir -p "$S15"
+h15() { (cd "$1" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum; shasum .git/hooks/pre-commit) | shasum; }
+act15() { grep -i "action" | sort; }
+SB="$S15/b"; cp -R "$B15" "$SB"; outb1=$("$KH/install.sh" "$SB" --agents=claude 2>&1)
+kh "$NEWV"
+outb2=$(up15 "$SB")
+SA="$S15/a"; cp -R "$B15" "$SA"; outa=$(up15 "$SA")
+diff -r "$SA/.specs" "$SB/.specs" >/dev/null && cmp -s "$SA/AGENTS.md" "$SB/AGENTS.md" || fail "15c a: stepping 0.4.1 -> 0.7.0 -> $NEWV differs from one step: $(diff -r "$SA/.specs" "$SB/.specs" | head -5)"
+[ "$(printf '%s\n%s\n' "$outb1" "$outb2" | act15)" = "$(echo "$outa" | act15)" ] || fail "15c a: action lines of the two steps differ from the one step"
+before=$(h15 "$SA"); out=$(up15 "$SA"); [ "$before" = "$(h15 "$SA")" ] || fail "15c b: a re-run changed a byte"
+[ -z "$(baks "$SA")" ] || fail "15c b: a re-run made a backup: $(baks "$SA")"
+# shortcut: "is current" is printed by the upgrade report (task 4); drop the grep guard once it has landed
+! grep -q "is current" "$KIT/kit/scripts/install.py" || echo "$out" | grep -q "is current" || fail "15c b: re-run does not say is current: $out"
+SC="$S15/c"; cp -R "$B15" "$SC"; edit15 "$SC"; before=$(h15 "$SC")
+"$KH/install.sh" "$SC" --agents=claude --dry-run >/dev/null || fail "15c c: dry run failed"
+[ "$before" = "$(h15 "$SC")" ] || fail "15c c: dry run wrote a file"
+[ -z "$(baks "$SC")" ] && [ ! -e "$SC/.specs/kit/MANIFEST" ] || fail "15c c: dry run made a backup or a MANIFEST"
+
+SD="$S15/d"; cp -R "$B15" "$SD"; edit15 "$SD"
+mkdir -p "$SD/.specs/features/f-1" "$SD/.specs/domains/d" "$SD/.specs/system"
+echo "[REQ-F-01] mine" > "$SD/.specs/features/f-1/requirements.md"; echo "[REQ-D-01] mine" > "$SD/.specs/domains/d/requirements.md"
+echo "# Steer mine" > "$SD/.specs/steering/extra.md"; echo "# Sys mine" > "$SD/.specs/system/s.md"
+python3 -I - "$SD" <<'PY'
+import json, re, sys
+d = sys.argv[1]
+c = json.load(open(d + "/.specs/spec-kit.json")); c["tracker_pattern"] = "MINE-\\d+"; json.dump(c, open(d + "/.specs/spec-kit.json", "w"), indent=2)
+for n in ("AGENTS.md", "CLAUDE.md"):
+    t = open(d + "/" + n).read()
+    t = re.sub(r"(<!-- specter:begin -->).*?(<!-- specter:end -->)", r"\1\nOLD RULES\n\2", t, flags=re.S)
+    open(d + "/" + n, "w").write("TOP of mine\n" + t + "\nBOTTOM of mine\n")
+PY
+outside() { python3 -I -c 'import re,sys; print(re.sub(r"<!-- specter:begin -->.*?<!-- specter:end -->", "", open(sys.argv[1]).read(), flags=re.S))' "$1"; }
+pfp() { (cd "$SD" && find .specs/features .specs/domains .specs/steering .specs/system .specs/spec-kit.json -type f | sort | xargs shasum; outside "$SD/AGENTS.md"; outside "$SD/CLAUDE.md") | shasum; }
+before=$(pfp); up15 "$SD" >/dev/null
+[ "$before" = "$(pfp)" ] || fail "15c d: a protected path or text outside the marker block changed"
+for n in AGENTS.md CLAUDE.md; do ! grep -q "OLD RULES" "$SD/$n" || fail "15c d: $n block keeps the old rules"; grep -q "^TOP of mine" "$SD/$n" || fail "15c d: $n lost its top"; done
+grep -qF "$(sed -n 1p "$KIT/kit/AGENT_RULES.md")" "$SD/AGENTS.md" || fail "15c d: AGENTS.md block lacks the new rules"
+[ -f "$SD/.specs/kit.bak-0.4.1/scripts/mine.py" ] || fail "15c d: the edited kit file was not backed up"
+
+SE="$S15/e"; cp -R "$B15" "$SE"; rm "$SE/.specs/steering/project-profile.md"
+out=$(up15 "$SE")
+[ ! -e "$SE/.specs/steering/project-profile.md" ] || fail "15c e: the upgrade seeded a profile"
+echo "$out" | grep "project-profile.md" | grep -q "missing" || fail "15c e: output does not say the profile is missing: $out"
+
+out=$("$KH/install.sh" "$SA" --uninstall 2>&1)
+[ ! -e "$SA/.specs/kit" ] && [ ! -e "$SA/AGENTS.md" ] && [ ! -e "$SA/.claude/agents/reviewer.md" ] && [ ! -e "$SA/.git/hooks/pre-commit" ] || fail "15c f: uninstall left kit files: $out"
+"$KH/install.sh" "$SD" --uninstall >/dev/null
+[ -f "$SD/.specs/kit.bak-0.4.1/scripts/mine.py" ] && [ -f "$SD/.specs/features/f-1/requirements.md" ] && [ -f "$SD/.specs/steering/extra.md" ] || fail "15c f: uninstall removed a backup or a project file"
+! grep -q "specter" "$SD/AGENTS.md" || fail "15c f: uninstall left the block"; grep -q "^TOP of mine" "$SD/AGENTS.md" || fail "15c f: uninstall lost user text"
 
 fi; if sect 26 "readme_check.py: broken link and missing alt fail, a clean README passes, a bad setting exits 2"; then
 R="$TMP/t26"; mkdir -p "$R/.specs" "$R/img"; touch "$R/img/a.png"

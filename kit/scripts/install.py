@@ -374,7 +374,9 @@ def install(kit_home, target):
         say("upgrade " + old_version + " -> " + version + " (your settings kept)")
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
-    if not profile.exists():
+    if how == "upgrade" and not profile.exists():
+        say(".specs/steering/project-profile.md is missing: not created on an upgrade (run the setup interview)", True)
+    elif not profile.exists():
         text = (src_kit / "templates/steering/project-profile.md").read_text()
         if how == "adopt":
             text = text.replace("status: setup-incomplete", "status: active\nadopted: " + datetime.date.today().isoformat()
