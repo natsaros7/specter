@@ -1,6 +1,6 @@
 # v070 Live recipe, deep-review follow-ups and the acme eval set — Requirements
 
-Status: Proposed — draft, awaiting approval
+Status: In progress (approved 2026-11-25, decisions 1 to 9 as recommended)
 Tracker: GitHub milestone "0.11.0" and one issue per task (Nikos creates them; #40 and #35 are the sources). Branch
 `feat/0.11.0`. Size M.
 
