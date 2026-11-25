@@ -12,6 +12,14 @@ Two line forms are machine-read; everything else is prose:
 - ``- key: `name` = `<JSON default>` `` a `spec-kit.json` key you may add. A missing key already acts as this default,
   so adding it is optional.
 
+## 0.12.0
+
+No `action` for a single-repo project. A platform repository sets `layer` and writes `system/repos.md`
+(`.specs/kit/templates/` has the `repos.md` and `contracts.md` templates).
+
+- key: `layer` = `null`: `"platform"` turns on the platform layer; `"member"` or `null` leaves it off.
+- key: `members_root` = `null`: where member checkouts live; null means the project's parent folder.
+
 ## 0.11.0
 
 No `action`. The `Max bytes` Evidence column in `steering/autonomy.md` is optional (default 4000), and

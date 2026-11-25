@@ -5,7 +5,15 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-11-25
+
+Safe incremental upgrade (v075) and the platform layer's first slice (v080). The platform layer is off unless
+`spec-kit.json` sets `layer: platform`; single-repo projects see no change.
+
 ### Added
+- Platform layer, first slice: the `layer` and `members_root` config keys; `system/repos.md` and `contracts.md`
+  templates; `spec_lint.py --members`; platform features resolve member REQ ids, with ambiguity FAILs; cross-repo task
+  lines with `after:` and children.
 - `.specs/kit/MANIFEST`: what specter wrote, as blob ids, so an upgrade knows what you edited.
 - `.specs/kit/docs/upgrading.md`: one block per release since 0.4.1 with the manual `action` and optional `key` lines.
 - An upgrade report (also in `install.sh --dry-run`): kit files added, changed and removed, config keys you can add,
@@ -15,6 +23,11 @@ The installed version is stamped into each project (`.specs/kit/VERSION`; a `spe
 - An upgrade backs up every file you edited to `.specs/kit.bak-<old>/` before replacing it; without a MANIFEST or a
   `v<old>` tag it backs up everything that differs from the new kit.
 - New config keys are listed, never written. A missing `project-profile.md` is reported, not reseeded.
+
+### Known limits
+- A missing member checkout is a WARN, not a FAIL.
+- G4 to G14 of the platform layer are not done.
+- The live GitHub test, eval E2 to E5, #73 and #78 are still open.
 
 ## [0.11.0] - 2026-11-25
 
