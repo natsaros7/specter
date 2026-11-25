@@ -319,7 +319,7 @@ def main(argv):
         return refuse(rel + " at " + str(base)[:7] + ": " + str(err))
     if not rows or not head:
         return refuse("no Gates table in " + rel + " at the base, or no head commit")
-    staged = not rng and subprocess.run(["git", "-C", str(root), "diff", "--cached", "--quiet"]).returncode == 1
+    staged = not rng and subprocess.run(["git", "-C", str(root), "diff", *tiers.SUBS, "--cached", "--quiet"]).returncode == 1
     g = check_gates(text, [r[0] for r in rows], head, bool(rng), staged)
     # gates.py runs the head's table in order, so any edit (a row added before a base row, a duplicate label, a changed
     # command) changes what ran. Equal rows or not ready.

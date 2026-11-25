@@ -109,6 +109,8 @@ GUARDED = [".specs/steering/*", ".specs/spec-kit.json", ".specs/kit/*", ".specs/
            ".claude/*", "*/.claude/*", ".codex/*", ".cursor/*", "*/.cursor/*", ".gemini/*", ".agents/*", ".agent/*",
            ".clinerules", ".clinerules/*", ".windsurfrules", ".cursorrules", ".mcp.json", "CODEOWNERS", ".github/CODEOWNERS",
            "docs/CODEOWNERS", ".gitattributes", "*/.gitattributes", ".gitmodules"]  # attributes can turn a file into an LFS pointer or binary
+# every diff the label, the size cap and ready.py read: the base's .gitmodules `ignore` and diff.ignoreSubmodules hide no gitlink
+SUBS = ("--ignore-submodules=none",)
 EHEAD = ["Tier", "Window (days)", "Min merged", "Max reverted %", "Max escaped %", "Max human-caught %"]
 SIZE = ["Max files", "Max lines", "Max bytes"]  # optional trailing columns of Evidence: the size cap of Human none (defaults 3, 50, 4000)
 # Default `## Tests` globs: wide on purpose, an unknown layout (pkg/tests/, __tests__/, *.spec.ts, spec/) counts as tests.
@@ -356,7 +358,7 @@ def classify(root, rel, rng, specs=None, where=None):
     """Label the staged change or the range. Returns {base, head, files, tier, reviewer, human, set_by, counts, guardrails, why, note, globs, key}
     (why is None when a profile was read; guardrails is then {rows, undeclared, downgraded} (else None) and human is
     `spot` when the tier's Human is `none` and the Guardrails section is absent, empty or has an undeclared row; note names the base and how it was found) or raises ValueError(message).
-    ready.py reuses it. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
+    ready.py reuses it. The diff takes SUBS: no submodule ignore setting hides a gitlink. Files and Tiers globs are repo-root-relative, whatever folder .specs/ sits in; specs (default
     root/.specs) is the folder whose spec-kit.json, as committed at HEAD, names merged_ref. key is the tier's row_keys()
     entry (evidence compares it). where: (top-level, prefix) of
     root when the caller already has them (evidence calls this once per commit)."""
@@ -366,7 +368,7 @@ def classify(root, rel, rng, specs=None, where=None):
         a, _, b = rng.partition("...") if "..." in rng else rng.partition("..")
         a, head = end_commit(root, a), end_commit(root, b)
         base = git(root, "merge-base", a, head) if a and head else None
-        files = gitz(top, "diff", "--no-renames", "--name-only", "-z", base, head) if base else None
+        files = gitz(top, "diff", *SUBS, "--no-renames", "--name-only", "-z", base, head) if base else None
         note = str(base)[:7] + " (merge base of " + rng + ")"
     else:
         head = git(root, "rev-parse", "--verify", "-q", "HEAD")
@@ -375,7 +377,7 @@ def classify(root, rel, rng, specs=None, where=None):
         # No merge base (or a merged_ref refused as a tag or ambiguous): fail closed, every file takes the last row.
         base, closed = merge or head, not merge
         note = merge[:7] + " (merge base with " + ref + ")" if merge else "HEAD (" + (rwhy or "no merge base") + ": last tier)"
-        files = gitz(top, "diff", "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
+        files = gitz(top, "diff", *SUBS, "--cached", "--no-renames", "--name-only", "-z", *([base] if base else []))
     if files is None:
         raise ValueError("cannot resolve " + (("--range " + rng) if rng else "the staged change") + " in " + str(root))
     text = profile_at(root, base, rel) if base else None
@@ -452,10 +454,12 @@ def earned(root, rel, specs, profile, tier, base, head, staged=False):
 
 def small(root, rel, tier, base, head, staged):
     """[why] when a change in Human none's tier is over the size cap or edits a test other than by adding lines, else [].
-    One `git diff --numstat`, one `--raw` and one `-U0` patch (the index against base when staged). Cap: Max files / Max lines / Max
+    One `git diff --numstat`, one `--raw` and one `-U0` patch (the index against base when staged; SUBS, so every gitlink shows)
+    and one `git check-attr filter` at base. Cap: Max files / Max lines / Max
     bytes of the tier's Evidence row at base (3, 50 and 4000 when absent or -); bytes are those of the + and - lines of the hunks, and a
     changed Git LFS pointer line (version or oid, LF or CRLF, a git-lfs, hawser or git-media spec URL) is over the cap whatever its size; tests: the `## Tests` globs at base (TESTS). A
-    binary file, a gitlink, a symlink or a diff that cannot be read counts as over the cap.
+    binary file, a gitlink, a symlink, a path whose `filter` attribute is set at base (`filter <name> on <path>`: LFS, git-annex,
+    git-fat store content the diff never shows) or a diff or attribute that cannot be read counts as over the cap.
     A profile that cannot be read says so: none is never kept on a guess."""
     try:
         text = profile_at(root, base, rel) or ""
@@ -467,7 +471,7 @@ def small(root, rel, tier, base, head, staged):
     mf, ml, mb = (int(v if v is not None else d) for v, d in ((mf, 3), (ml, 50), (mb, 4000)))
     globs = [g for _, ln in section(text, "Tests") or [] for g in re.findall(r"`([^`]+)`", ln)] or TESTS
     top, spec = git(root, "rev-parse", "--show-toplevel"), (["--cached", base] if staged else [base, head])
-    quiet = ("--no-renames", "--no-ext-diff", "--no-textconv")  # no configured driver runs on the change
+    quiet = (*SUBS, "--no-renames", "--no-ext-diff", "--no-textconv")  # no configured driver runs on the change
     out, raw = (gitz(top, "diff", f, "-z", *quiet, *spec) for f in ("--numstat", "--raw"))
     run = subprocess.run(["git", "-C", str(top), "diff", "-U0", "--no-color", *quiet, *spec], capture_output=True)
     if out is None or raw is None or run.returncode:
@@ -497,6 +501,15 @@ def small(root, rel, tier, base, head, staged):
         why.append("bytes %d > cap %d" % (nbytes, mb))
     if lfs is not None:
         why.append("LFS pointer: " + ent[lfs][2])
+    # A filter (LFS, git-annex, git-fat) stores content the diff never shows; attributes as of base, .gitattributes is guarded.
+    # shortcut: --source needs git 2.40+; older git fails closed (every none change is spot), upgrade git on such a runner
+    att = subprocess.run(["git", "-C", str(top), "check-attr", "--stdin", "-z", "--source=" + base, "filter"], capture_output=True,
+                         input=b"\0".join(p.encode("utf-8", "surrogateescape") for _, _, p in ent))
+    av = att.stdout.split(b"\0")[:-1]
+    if att.returncode or len(av) != 3 * len(ent):
+        return why + ["size: cannot read the filter attribute"]
+    why += ["filter %s on %s" % (v.decode("utf-8", "surrogateescape"), p.decode("utf-8", "surrogateescape"))
+            for p, v in zip(av[::3], av[2::3]) if v not in (b"unspecified", b"unset")][:1]
     # numstat misses a deleted empty file, a mode change and an added skip line; `__init__.py` and conftest.py change what runs
     changed = next((p for a, d, p in ent if hit(p, globs) and d != "0"), None) or next((p for m, p in meta if (
         hit(p, globs) and (m[4][0] in "DT" or m[4][0] == "M" and m[0][1:] != m[1])) or key(posixpath.basename(p)) in ("conftest.py", "__init__.py")), None)

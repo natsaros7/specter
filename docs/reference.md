@@ -195,7 +195,10 @@ behave as in 0.5.0; the report always gains the In flight card. Setup asks about
   `spot` when it has more files or lines than the cap (`size <f> files / <l> lines > cap <F>/<L>`; a binary file counts as over),
   more changed bytes than `Max bytes` (`bytes <b> > cap <B>`; a diff that cannot be read counts as over), or changes a Git LFS pointer line, LF or CRLF (`LFS pointer: <path>`),
   or deletes or edits a line of a test file, deletes or re-modes one, or adds or changes a `conftest.py` or `__init__.py`
-  (`tests changed, not only added: <path>`; a gitlink or a symlink counts as over the cap). The cap is three optional trailing
+  (`tests changed, not only added: <path>`; a gitlink or a symlink counts as over the cap), or changes a path whose `filter`
+  attribute is set at the base, as LFS, git-annex and git-fat set it (`filter <name> on <path>`; an attribute that cannot
+  be read, as on git older than 2.40, counts as over). Every diff the label, the cap and `ready.py` read passes
+  `--ignore-submodules=none`, so no `.gitmodules` `ignore` or `diff.ignoreSubmodules` setting hides a gitlink. The cap is three optional trailing
   Evidence columns, `Max files`, `Max lines` and `Max bytes` (defaults 3, 50 and 4000; `-` is the default; any other non-number is exit 2 with
   `file:line`), and the test files are the globs of an optional `## Tests` section (defaults `tests/*`, `*/tests/*`, `test/*`, `*/test/*`, `__tests__/*`, `*/__tests__/*`, `spec/*`, `*/spec/*`, `*_test.*`, `*.test.*`, `*_spec.*`, `*.spec.*`, `test_*`, `*/test_*`, `conftest.py`, `*/conftest.py`,
   matched case- and Unicode-folded), both read at the base. `ready.py` applies the evidence and size rules as the label does, and the label reads the Evidence thresholds at the

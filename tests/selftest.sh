@@ -804,6 +804,25 @@ for m in spec_lint tiers; do
   out=$(cd "$B" && GIT_CONFIG_PARAMETERS="'core.commitgraph'='true'" python3 -c 'import sys, os, subprocess; sys.path.insert(0, ".specs/kit/scripts"); __import__(sys.argv[1]); print(subprocess.check_output(["git", "config", "core.commitGraph"], text=True).strip(), os.environ["GIT_CONFIG_PARAMETERS"].count("false"))' "$m")
   [ "$out" = "false 1" ] || fail "13c2 t70c: an inherited GIT_CONFIG_PARAMETERS turned the commit-graph on in $m (want 'false 1'): $out"
 done
+# v070 task 24a: the base's submodule ignore settings hide no gitlink; a filtered path is over the cap (fixture t70b)
+S1=$(printf '%040d' 1); S2=$(printf '%040d' 2); gitq -C "$B" reset -q --hard trunk; gitq -C "$B" config diff.ignoreSubmodules all
+printf '[submodule "a"]\n\tpath = src/security/mod\n\turl = ./a\n\tignore = all\n[submodule "b"]\n\tpath = docs/mod\n\turl = ./b\n\tignore = all\n' > "$B/.gitmodules"
+echo "docs/an.md filter=annex" > "$B/.gitattributes"; echo a > "$B/docs/an.md"; gitq -C "$B" add -A
+for p in src/security/mod docs/mod; do gitq -C "$B" update-index --add --cacheinfo "160000,$S1,$p"; done
+gitq -C "$B" -c core.autocrlf=false commit -qm sub; gitq -C "$B" branch -f trunk
+# bg <gitlink path or -> <docs/ file to edit or ->: one commit on trunk; the bump goes through the index, a work tree has no submodule
+bg() { gitq -C "$B" reset -q --hard trunk; [ "$1" = - ] || gitq -C "$B" update-index --cacheinfo "160000,$S2,$1"
+  [ "$2" = - ] || { echo b >> "$B/$2"; gitq -C "$B" add -- "$2"; }; gitq -C "$B" -c core.autocrlf=false commit -q --allow-empty -m g; }
+bq() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n- rounds: 1\n- complexity: trivial\n' "$(git -C "$B" rev-parse --short HEAD)" "$(git -C "$B" merge-base trunk HEAD | cut -c1-7)" | python3 "$B/.specs/kit/scripts/ready.py" --specs "$B/.specs" --range trunk...HEAD --auto-merge 2>&1; }
+bg - docs/three.md; out=$(bl)
+echo "$out" | grep -q "human: none" && ! echo "$out" | grep -q "none → spot" || fail "13c2 t70d: a docs edit next to the ignored gitlinks lost none: $out"
+bg src/security/mod docs/three.md; out=$(bl)
+echo "$out" | grep -q "tier: critical (reviewer: deep, human: required)" || fail "13c2 t70d: a gitlink bump under ignore = all in a critical path was not critical: $out"
+rc=0; out=$(bq) || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -q "^auto-merge: no (human required" || fail "13c2 t70d: ready.py auto-merged a hidden gitlink bump (exit $rc): $out"
+bg docs/mod -; out=$(bl)
+echo "$out" | grep -q "none → spot (size 1 files / 2+ lines" || fail "13c2 t70d: a gitlink bump under ignore = all in a none path kept none: $out"
+bg - docs/an.md; out=$(bl)
+echo "$out" | grep -q "none → spot (filter annex on docs/an.md)" || fail "13c2 t70d: a one-line change to a filter=annex path kept none: $out"
 fi; if sect 13d "fix-round cap: rounds <= 2 ready, > 2, malformed or repeated not ready, missing a warning (the demote line is in 13c, on its evidence fixture)"; then
 fk() { printf '### Gates\n- G1 Lint: pass (a)\n- commit: %s+dirty\n- verdict: ready (1 passed)\n\n### Review\n- implementer: claude-sonnet-5-5\n- reviewer: gpt-5-1 (deep)\n- rules: %s\n%s' "$FH" "$FH" "$1" | python3 "$F/.specs/kit/scripts/ready.py" --specs "$F/.specs" ${2:+"$2"} 2>&1; }
 rc=0; out=$(fk '- rounds: 3
