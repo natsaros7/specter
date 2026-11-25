@@ -73,10 +73,12 @@ decides.
 
 ### The trust layer
 
-Alongside the loop, three things run offline against your own profile, `.specs/steering/autonomy.md`:
+Alongside the loop, three things run offline against your own profile, `.specs/steering/autonomy.md`. A **tier** is
+a named group of paths (docs, domain code, build files…); each tier says how much human review its changes need:
+`required` (a human approves), `spot` (a human looks after) or `none` (it may merge with no human):
 
 1. **A risk label per change**: `tiers.py` gives each file the lowest tier whose glob matches, and the change its strictest file.
-2. **A rule for when a human must look**: `ready.py` reads the PR text (gates, review, verification) and says `ready` or not. The tier sets the human check: `required`, `spot` or `none`.
+2. **A rule for when a human must look**: `ready.py` reads the PR text (gates, review, verification) and says `ready` or not. `none` also needs a small change (3 files and 50 lines by default, tests only added), a branch based on the trunk's latest commit, and a reviewer who marks it `complexity: trivial`.
 3. **Autonomy earned from merged history**: `tiers.py --evidence` counts merged, reverted, escaped and human-caught changes per tier and says `eligible`, `hold` or `breach`. It edits nothing.
 
 <p align="center"><img src="docs/overview/workflow.svg" alt="Spec-first workflow: GO, install, setup interview, then spec, implement, gates, review, human check, sync" width="100%"></p>
@@ -99,7 +101,7 @@ earned from evidence:
 | Stage | Who coordinates | Status |
 |---|---|---|
 | 3: memory, scheduled chores, the spec loop | a human reads every change | shipped, 0.6 to 0.9 |
-| 4: a pipeline; humans set goals and rules | the trust layer decides which changes need a human | built in 0.9; Human `none` stays off until it is verified live |
+| 4: a pipeline; humans set goals and rules | the trust layer decides which changes need a human | built in 0.9, hardened in 0.10; Human `none` stays off until it is verified live |
 | 5: an orchestrator runs the agents from the goal and spec | the orchestrator; humans approve specs and handle escalations | later, as a separate layer on top of the kit |
 
 <p align="center"><img src="docs/overview/roadmap.svg" alt="Roadmap: the shipped releases, the release in progress, stage 4 built but off, stage 5 later" width="100%"></p>
@@ -110,7 +112,8 @@ earned from evidence:
 - Citations are checked by a lint, not by trust in the agent.
 - Risk is read from paths and from the base commit, never from the change under review, so a change cannot rewrite its own rules.
 - No orchestrator or merge bot in the kit; the platform merges.
-- `human: none` is earned from merged history, per tier, and a human edits the profile to grant it.
+- `human: none` is earned from merged history, per tier, and a human edits the profile to grant it. Even then it
+  covers only small changes a reviewer calls trivial.
 
 The full list is in [the reference](docs/reference.md#decisions-names-deploy-impact-gates); the method in
 [`PHILOSOPHY.md`](PHILOSOPHY.md).
@@ -139,13 +142,14 @@ The installer wires the agents your project already uses (`.claude/`, `.codex/`,
 | Gemini CLI | `GEMINI.md` block | `.gemini/skills/spec-first/` | best-effort |
 | GitHub Copilot | `.github/copilot-instructions.md` block | `.github/skills/spec-first/` | best-effort |
 | Antigravity (`agy`) | `AGENTS.md` | `.agents/skills/spec-first/` | best-effort |
-| Anything else | `AGENTS.md` | — | Paste "Follow `.specs/kit/playbooks/…`" |
+| Anything else | `AGENTS.md` | — | After install, paste "Follow `.specs/kit/playbooks/…`" |
 
 ## Limits: when not to use specter
 
 - **`human: none` is built but off.** No repository runs it; it stays off until it is verified on a live host. Today
-  every change still gets a human check. Each of ten review rounds in [`docs/reviews/`](docs/reviews/) found a way to
-  reach `none` without a human; those were fixed, and the reports are public.
+  every change still gets a human check. Each of eleven review rounds in [`docs/reviews/`](docs/reviews/) found a way
+  to reach `none` without a human; those were fixed, and the reports are public (a new one goes to a private
+  advisory first).
 - **The GitLab recipe is an untested sketch**, and the GitHub one has not run live
   ([`kit/docs/review-loop.md`](kit/docs/review-loop.md)).
 - **Stage 5 is not in the kit.** There is no coordinating agent, queue, scheduler or merge bot, and no plan to add one
@@ -168,14 +172,16 @@ path first and `--uninstall` removes what it wrote.
 [`docs/reference.md`](docs/reference.md) has the spec tree, roles, every script, all `spec-kit.json` keys, the autonomy
 profile, upgrade and uninstall, and short answers (model choice, cost, silencing the hook). The method is in
 [`kit/docs/spec-driven.md`](kit/docs/spec-driven.md), the stages from triage to merge in
-[`kit/docs/pipeline.md`](kit/docs/pipeline.md), scheduled spec health in [`kit/docs/chores.md`](kit/docs/chores.md),
+[`kit/docs/pipeline.md`](kit/docs/pipeline.md), scheduled spec health in [`kit/docs/chores.md`](kit/docs/chores.md), running several agents at once in
+[`kit/playbooks/parallel.md`](kit/playbooks/parallel.md),
 diagrams and the deck in [`docs/overview/`](docs/overview/README.md), dated research in
 [`docs/research/`](docs/research/README.md), changes in [`CHANGELOG.md`](CHANGELOG.md).
 
 ## Contributing
 
-Issues and PRs are welcome. Every change passes the gates in [`AGENTS.md`](AGENTS.md#working-on-specter-itself);
-`sh tests/selftest.sh` runs them offline. Specter is built with specter: its own specs are in [`.specs/`](.specs/).
+Issues and PRs are welcome. Every change passes the gates in [`AGENTS.md`](AGENTS.md#working-on-specter-itself):
+`sh tests/gates.sh` runs them offline (`--docker` in a container), and `git config core.hooksPath .githooks` runs
+them before each push. Specter is built with specter: its own specs are in [`.specs/`](.specs/).
 
 ## License and credits
 
