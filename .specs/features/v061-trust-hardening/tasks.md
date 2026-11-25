@@ -2,18 +2,18 @@
 
 Moved from v060 at its close-out (2026-11-24). Each keeps its v060 number in brackets.
 
-## ▶ Resume here (2026-11-24)
+## ▶ Resume here (2026-11-25)
 
 - **Plan:** pinned issue #31 holds the batches, decisions and dispatch rules. Tick a batch there when it lands.
-- **Landed on `feat/0.10.0`:** tasks 1, 2, 3, 6, 7, 9, 13, 15, 17. G1 to G4 pass at the tip; G3 took 54 min on the
-  corporate-scanned Mac.
-- **Next: batch 1, task 22 (#29), alone.** Make the selftest faster with fewer process launches and copied fixtures,
-  and add `tests/gates.sh --docker` (Colima). Every later batch runs its gates in Docker.
-- **Then** batches 2 to 5 and the release, as listed in #31. Task 24 (#32, the lessons loop and the parallel-dispatch
-  playbook) is in batch 4.
+- **Landed on `feat/0.10.0` (tip `bcf15a8`):** tasks 1 to 7, 9, 10, 13 to 15, 17, 18, 21, 22, and README pass 1
+  (task 20). G1 to G4 pass in Docker (`sh tests/gates.sh --docker`, about 25 s).
+- **Next: batch 4.** Task 8 (#10), task 11 (#13), task 24 (#32); then task 12 (#14) and task 25 (#34). Task 25 also
+  takes the Colima lesson: `gates.sh --docker` must refuse loudly when the mounted dir is empty (Colima shares only
+  `$HOME`).
+- **Then** batch 5 (task 23, #30), bug #33, and the release (task 16, #18; task 19, #26; README pass 2).
 - **Rules:** 2 to 3 agents per batch. Reset each worktree to the tip. `PYTHONDONTWRITEBYTECODE=1`. Use
-  `f=$(mktemp)` for every gate output. Kill an agent's leftover selftests after it reports. Run the full G3 once
-  per batch, on the tip.
+  `f=$(mktemp)` for every gate output. No polling loops. Gates in Docker. Land with `git cherry-pick`, check the rc,
+  count the 24 task lines, then run the gates once on the tip.
 
 - [x] 1 `--evidence` thresholds from the profile at the `merged_ref` tip, and print its commit (v060 19a) (#3) — [REQ-V061-01]
 - [x] 2 `section()` skips fenced code and HTML comments (v060 19b) (#4) — [REQ-V061-01]
