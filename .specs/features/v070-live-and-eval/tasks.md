@@ -33,7 +33,7 @@ and a GitHub App are created under Nikos's account for the live test, then archi
 - [ ] 15 Key evidence by the Tiers rows from the tier down plus Knowledge globs; the finding-5 probe in 13c3 `t13e25` (security) (#60) — [REQ-V070-04]
 - [x] 16 `core.commitGraph=false` at the `tiers` import; probe a forged commit-graph first, row `t13e26` (security) (#61) — [REQ-V070-05]
 - [x] 17 `tests/gates.sh --docker` copies only `git ls-files --cached --others --exclude-standard` (#62) — [REQ-V070-06]
-- [ ] 18 G5 in a container: `scripts/mvnw-docker.sh`, `tests/acme-build.sh --docker`; probe alpine and protoc first (Nikos OKs the first networked build) (#63) — [REQ-V070-07]
+- [x] 18 G5 in a container: `scripts/mvnw-docker.sh`, `tests/acme-build.sh --docker`; probe alpine and protoc first (Nikos OKs the first networked build) (#63) — [REQ-V070-07]
 - [ ] 19 Eval set: `examples/acme-shop/eval/` goals E1 to E5, run procedure, `sandbox.sh`, score-sheet template; the dry run is green (#64) — [REQ-V070-08]
 - [ ] 20 First eval run, one goal at a time, then `docs/evals/<date>-acme.md` (Nikos OKs the token spend) (#65) — [REQ-V070-08]
 - [ ] 21 AGENTS.md: a generic resume rule, and the G1 and G5 rows matching the scripts (rule change, Human required) (#66) — [REQ-V070-09] [REQ-V070-07]
