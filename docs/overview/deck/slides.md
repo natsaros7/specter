@@ -16,7 +16,7 @@ Specs that don't go stale. A spec-first workflow for any AI coding agent.
 
 <div class="pt-6 opacity-70">
 
-Release 0.11.0 shipped (Human `none` still off) · Python 3.8+, stdlib only, no service
+Release 0.12.0 shipped (Human `none` still off) · Python 3.8+, stdlib only, no service
 
 </div>
 
@@ -203,21 +203,20 @@ Demo history: ten commits with `Human-Findings:` trailers and one `git revert`. 
 
 <img src="/diagrams/roadmap.svg" class="mx-auto" style="height: 400px; margin-top: 6px" />
 
-<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.11.0. Next: a live test of the recipe, then a stage 5 orchestrator proposal (not built). Stage 4 is built, off until verified live.</div>
+<div class="text-sm opacity-70">Shipped: 0.6.0 to 0.12.0. Next: a live test of the recipe, then a stage 5 orchestrator proposal (not built). Stage 4 is built, off until verified live.</div>
 
 ---
 
-# What 0.11.0 added (shipped; `none` is still off)
+# What 0.12.0 added (shipped; `none` is still off)
 
-Live and eval: the kit to test the recipe on a hosted repository, an eval set, and the paths to `none` the reviews found.
+Safe upgrade and the platform layer's first slice, off unless `layer: platform`.
 
 | Piece | What it does |
 |---|---|
-| Guards | commit-graph off, hidden submodule bumps seen, fork PRs kept out, LFS, symlinks and filtered paths guarded, `Human-Findings:` refused |
-| Byte cap | `Max bytes` (default 4000) beside files and lines |
-| Live kit | `specter-auto-merge.yml` template and the `tests/live/github/` sandbox (recipe still not run live) |
-| Eval set | acme-shop goals E1 to E5 in `examples/acme-shop/eval/` |
-| G5 in a container | `tests/acme-build.sh --docker` |
+| Safe upgrade | MANIFEST, backups of edited files, an upgrade report and `upgrading.md` |
+| Platform config | `layer` and `members_root` keys; `system/repos.md` and `contracts.md` templates |
+| Member lint | `spec_lint.py --members`; platform features resolve member REQ ids, ambiguity FAILs |
+| Cross-repo tasks | task lines with `after:` and children |
 
 ---
 

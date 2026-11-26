@@ -1,5 +1,6 @@
 """Installer logic for install.sh. Python 3.8+, stdlib only. Idempotent: every write is a full copy or a marker block."""
 import datetime
+import hashlib
 import json
 import re
 import shutil
@@ -85,6 +86,115 @@ def put_file(path, text):
         path.write_text(text)
     write(path, "create" if old is None else "replace", go)
     return True
+
+
+def blob_id(data):
+    """git's blob hash, so a file compares with `git ls-tree` output without a git call per file."""
+    return hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest()
+
+
+def recorded(kit_home, kit, old):
+    """{root-relative path: blob id} of what the old kit shipped: its MANIFEST, else the v<old> tag, else None (unverified)."""
+    try:
+        pairs = [l.split(" ", 1) for l in (kit / "MANIFEST").read_text().splitlines() if l]
+        if pairs and all(len(p) == 2 for p in pairs):
+            return {path: blob for blob, path in pairs}
+    except OSError:
+        pass
+    done = git(kit_home, "ls-tree", "-r", "-z", "v" + old, "--", *["kit/" + p for p in KIT_PARTS])
+    if done.returncode != 0 or not done.stdout:
+        return None
+    rec = {}
+    for entry in done.stdout.split("\0"):
+        meta, _, path = entry.partition("\t")
+        if path and path != "kit/scripts/install.py":
+            rec[".specs/" + path] = meta.split()[2]
+    return rec or None
+
+
+UP = None  # backup state: {"old", "rec", "dir", "saved"}; set by install() in every mode
+OWNED = []  # project files put_owned wrote or found current: they go in MANIFEST
+
+
+def kit_files(kit):
+    return sorted(f for f in kit.rglob("*") if f.is_file() and f.name not in ("MANIFEST", "VERSION") and "__pycache__" not in f.parts)
+
+
+def keep(path, new):
+    """Copy path into .specs/kit.bak-<old>/ unless its bytes are the recorded ones or the new ones."""
+    if UP is None or not path.is_file():
+        return
+    have, key = blob_id(path.read_bytes()), shown(path)
+    if have == (blob_id(new) if new is not None else None) or (UP["rec"] or {}).get(key) == have:
+        return
+    if UP["dir"] is None:
+        base = ROOT / (".specs/kit.bak-" + UP["old"])
+        UP["dir"] = next(d for d in [base] + [Path(str(base) + "-%d" % n) for n in range(2, 10000)] if not d.exists())
+    rel = key[len(".specs/kit/"):] if key.startswith(".specs/kit/") else "project/" + key
+    dst = UP["dir"] / rel
+    def go():
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, dst)
+    write(path, "back up", go)
+    UP["saved"].append(key)
+
+
+def vtuple(v):
+    return tuple(map(int, v.split("."))) if re.fullmatch(r"\d+(\.\d+)*", v) else None
+
+
+def notes(text, old, new):
+    """[(version, [action], [(key, default, prose)])] for each `## <version>` block of upgrading.md with old < v <= new.
+    An old version that does not parse keeps every block."""
+    lo, hi, out = vtuple(old), vtuple(new), []
+    for m in re.finditer(r"^## (\S+)\n(.*?)(?=^## |\Z)", text, re.M | re.S):
+        v = vtuple(m.group(1))
+        if v is None or (lo is not None and not lo < v) or (hi is not None and v > hi):
+            continue
+        body = re.sub(r"\n[ \t]+", " ", m.group(2))  # join wrapped lines
+        out.append((m.group(1), re.findall(r"^- action: (.*)$", body, re.M),
+                    re.findall(r"^- key: `(\w+)` = `([^`]*)`:? ?(.*)$", body, re.M)))
+    return out
+
+
+def upgrade_report(kit, src_kit, specs, old, new):
+    """Lines describing what this upgrade does, from the old kit on disk (call before it is replaced)."""
+    def tree(root):
+        return {f.relative_to(root).as_posix(): blob_id(f.read_bytes()) for f in kit_files(root)
+                if f.name != "install.py" and f.relative_to(root).parts[0] in KIT_PARTS}
+    have, want = tree(kit), tree(src_kit)
+    add, chg, rm = sorted(want.keys() - have.keys()), sorted(p for p in want.keys() & have.keys() if want[p] != have[p]), sorted(have.keys() - want.keys())
+    lines = ["kit files: %d added, %d changed, %d removed" % (len(add), len(chg), len(rm))]
+    lines += ["  " + sign + " " + p for sign, ps in (("+", add), ("~", chg), ("-", rm)) for p in ps]
+    text = (src_kit / "docs/upgrading.md").read_text() if (src_kit / "docs/upgrading.md").is_file() else ""
+    try:
+        config = json.loads((specs / "spec-kit.json").read_text())
+    except (OSError, ValueError):
+        config = {}
+    blocks = notes(text, old, new)
+    if vtuple(old) is None:
+        lines.append("old version " + old + " is not a release number: showing every release")
+    keys = [(k, d, v, pr) for v, _, ks in blocks for k, d, pr in ks if k not in config]
+    if keys:
+        lines.append("spec-kit.json keys you can add (missing = the default; never written for you):")
+        lines += ["  %s = %s (%s): %s" % (k, d, v, pr) for k, d, v, pr in keys]
+    gone = sorted(t.name for t in (src_kit / "templates/steering").glob("*.md")
+                  if t.name != "project-profile.md" and not (specs / "steering" / t.name).exists())
+    if gone:
+        lines.append("steering templates not in .specs/steering/: " + ", ".join(gone) + " (copy from .specs/kit/templates/steering/)")
+    acts = [(v, a) for v, acts, _ in blocks for a in acts]
+    if acts:
+        lines.append("action needed (from .specs/kit/docs/upgrading.md):")
+        for v, a in acts:
+            lines.append("  " + v + ": " + a)
+    return lines
+
+
+def put_owned(path, text):
+    """put_file for a file specter owns outside the kit (agent, skill, rule): an edited copy is backed up first."""
+    keep(path, text.encode())
+    OWNED.append(path)
+    return put_file(path, text)
 
 
 def read_raw(path):
@@ -220,7 +330,7 @@ def install_skill(kit_home, dest_dir):
     if not writable(dst):
         return False
     src = (kit_home / "kit/skill/spec-first/SKILL.md").read_text()
-    put_file(dst, src.replace("{{KIT_HOME}}", str(kit_home)))
+    put_owned(dst, src.replace("{{KIT_HOME}}", str(kit_home)))
     return True
 
 
@@ -275,11 +385,21 @@ def install(kit_home, target):
                                   "upgrade": " (kit installed: it is replaced, your specs and settings kept)",
                                   "fresh": " (forced by --fresh)" if "--fresh" in ARGS else " (no spec system yet)"}[how])
     old_version = (kit / "VERSION").read_text().strip() if how == "upgrade" else None
+    global UP
+    UP = {"old": old_version or how, "rec": recorded(kit_home, kit, old_version) if old_version else None, "dir": None, "saved": []}
+    if how == "upgrade":
+        for f in kit_files(kit):
+            new = src_kit / f.relative_to(kit)
+            keep(f, new.read_bytes() if new.is_file() else None)
+        if UP["rec"] is None:
+            say("could not verify what " + old_version + " shipped (no MANIFEST, no v" + old_version + " tag): "
+                "backed up every file that differs from the new kit", True)
+    report = upgrade_report(kit, src_kit, specs, old_version, (kit_home / "VERSION").read_text().strip()) if how == "upgrade" else []
     for part in KIT_PARTS:
         src, dst = src_kit / part, kit / part
         def go(src=src, dst=dst):
             if dst.exists():
-                shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+                dst.unlink() if dst.is_symlink() or not dst.is_dir() else shutil.rmtree(dst)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
         write(dst, "replace" if dst.exists() else "create", go)
@@ -291,7 +411,7 @@ def install(kit_home, target):
     top = git(target, "rev-parse", "--show-toplevel").stdout.strip()
     is_repo = bool(top) and Path(top).resolve() == target
     repos = nested_repos(target)
-    if not config_path.exists():
+    if not config_path.exists() and how != "upgrade":
         config = json.loads((src_kit / "spec-kit.json").read_text())
         if repos or not is_repo:
             config["spec_sync"] = "off"
@@ -302,11 +422,20 @@ def install(kit_home, target):
             + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
     elif how == "adopt":
         say(".specs/spec-kit.json exists: untouched (set tracker_pattern and merged_ref yourself, see README)")
-    elif old_version and old_version != version:
-        say("upgrade " + old_version + " -> " + version + " (your settings kept)")
+    elif how == "upgrade" and not config_path.exists():
+        say(".specs/spec-kit.json is missing: not recreated on an upgrade (defaults apply); run setup (.specs/kit/playbooks/setup.md) to write it", True)
+    if how == "upgrade":
+        if old_version != version:
+            say("upgrade " + old_version + " -> " + version + " (your settings kept)", True)
+            for line in report:
+                say(line, True)
+        else:
+            say("kit " + version + " is current: nothing to change", True)
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
-    if not profile.exists():
+    if how == "upgrade" and not profile.exists():
+        say(".specs/steering/project-profile.md is missing: not recreated on an upgrade; run setup (.specs/kit/playbooks/setup.md) to write it", True)
+    elif not profile.exists():
         text = (src_kit / "templates/steering/project-profile.md").read_text()
         if how == "adopt":
             text = text.replace("status: setup-incomplete", "status: active\nadopted: " + datetime.date.today().isoformat()
@@ -337,14 +466,14 @@ def install(kit_home, target):
                 continue
             dst = target / ".claude/agents" / agent.name
             if writable(dst):
-                put_file(dst, agent.read_text())
+                put_owned(dst, agent.read_text())
                 wrote.append(agent.stem)
         if wrote:
             say(".claude/agents: " + " / ".join(wrote) + " (sub-agents for .specs/kit/roles/)")
     if "cursor" in agents and (target / ".cursor").is_dir():
         header = (kit_home / "kit/adapters/cursor/spec-first.mdc").read_text()
         if writable(target / ".cursor/rules/spec-first.mdc"):
-            put_file(target / ".cursor/rules/spec-first.mdc", header + rules)
+            put_owned(target / ".cursor/rules/spec-first.mdc", header + rules)
             say(".cursor/rules/spec-first.mdc")
     if put_block(target / ".github/copilot-instructions.md", rules, create=False):
         say(".github/copilot-instructions.md: spec rules block")
@@ -361,6 +490,13 @@ def install(kit_home, target):
     else:
         say("not a git repo: no hook. Run `git init` here if you want the specs versioned.")
 
+    if UP["saved"]:
+        say(("would back up to " if dry() else "backed up to ") + shown(UP["dir"]) + "/: " + ", ".join(UP["saved"]), True)
+    elif how == "upgrade":
+        say("backed up: none", True)
+    if not dry():
+        rows = sorted((shown(f), blob_id(f.read_bytes())) for f in kit_files(kit) + [p for p in OWNED if p.is_file()])
+        put_file(kit / "MANIFEST", "".join(blob + " " + path + "\n" for path, blob in rows))
     if dry():
         print("\nDry run done (mode: " + how + "). Nothing was written.")
     elif "--from-go" in ARGS and how == "adopt":
@@ -458,6 +594,7 @@ def uninstall(target):
             (target / d).rmdir()  # only when empty
         except OSError:
             pass
+    kept += [shown(d) + " (your backup)" for d in sorted(specs.glob("kit.bak-*"))]
     print("Removed: " + (", ".join(removed) or "nothing"))
     if kept:
         print("Kept (not specter's): " + ", ".join(kept))

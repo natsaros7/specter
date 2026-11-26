@@ -1,6 +1,6 @@
 # Visual overview
 
-Diagrams, screenshots from real runs, and a slide deck for specter. Releases 0.6.0 to 0.11.0 are shipped (0.11.0 is the v070 live kit and eval set). Stage 4 is built but off: the `none` human setting stays off until it is verified live. Next: a live test of the recipe, then a stage 5 proposal (not built).
+Diagrams, screenshots from real runs, and a slide deck for specter. Releases 0.6.0 to 0.12.0 are shipped (0.12.0 is safe upgrade and the platform layer's first slice). Stage 4 is built but off: the `none` human setting stays off until it is verified live. Next: a live test of the recipe, then a stage 5 proposal (not built).
 
 ## Diagrams
 
@@ -12,7 +12,7 @@ Diagrams, screenshots from real runs, and a slide deck for specter. Releases 0.6
 
 `trust-layer.svg`: how a change is judged, and how merged history reports which tier earned more autonomy. Drawn at 0.8.0; it does not yet show the 0.9.0 human values `required`, `spot` and `none`.
 
-![Kiro stage ladder with specter's releases: 0.6.0 to 0.11.0 shipped, stage 4 built but off, next steps undecided, stage 5 later](roadmap.svg)
+![Kiro stage ladder with specter's releases: 0.6.0 to 0.12.0 shipped, stage 4 built but off, next steps undecided, stage 5 later](roadmap.svg)
 
 `roadmap.svg`: shipped and next work against the Kiro five-stage ladder. Stage 5 is a later, separate layer, to start after stage 4 runs live.
 

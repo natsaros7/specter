@@ -14,7 +14,7 @@ gitq() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@" >/
 
 # SELFTEST_ONLY="13e 13c": run only the named sections (ids as in the echoed headers), after the setup above.
 # A section that reads what an earlier one built lists it in DEPS (needer:needed), and the needed one runs as well.
-DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14"
+DEPS="3:2 4:2 6:2 5f2:5f 5g:5f 5h:5g 5i:5g 5j:5f 5k:5f 5l:5f 8:7 10:5f 11:5f 12:5f 13b2:13b 13b3:13b2 13c2:13c 13c3:13 13d:13c2 11c:11b 11d:11b 11e:11b 14b:14 15b:15 15c:15 27b:27 27c:27 27d:27"
 ONLY=" ${SELFTEST_ONLY:-} "
 case "${SELFTEST_ONLY:-x}" in *[![:space:]]*) ;; *) echo "selftest: SELFTEST_ONLY is blank" >&2; exit 2;; esac
 for n in ${SELFTEST_ONLY:-}; do  # a typo must not turn into a green run of nothing
@@ -1387,6 +1387,168 @@ if docker info >/dev/null 2>&1; then
   [ "$rc" = 2 ] && echo "$out" | grep -qF "gates: /src is empty (does your container runtime share this path?)" || fail "14b: empty mount gave rc=$rc: $out"
 else echo "14b: empty-mount row skipped, no Docker reachable"; fi
 
+fi; if sect 15 "upgrade keeps edited files: MANIFEST, tag fallback, .specs/kit.bak-<old>"; then
+# fake specter checkout: this repo's install.sh, VERSION and kit/, committed and tagged per version
+KH="$TMP/t15/specter"; mkdir -p "$KH"; gitq -C "$KH" init
+NEWV=$(cat "$KIT/VERSION")
+# kh <version> [kit paths to drop...]: commit $KIT's install.sh, VERSION and kit/ into $KH with the paths removed, tag v<version>
+kh() {
+  v=$1; shift
+  rm -rf "$KH/kit"; cp -R "$KIT/kit" "$KH/kit"; cp "$KIT/install.sh" "$KH/install.sh"; echo "$v" > "$KH/VERSION"
+  for p; do rm -rf "$KH/kit/$p"; done
+  [ "$v" != 0.4.1 ] || echo "old line" >> "$KH/kit/playbooks/sync.md"
+  gitq -C "$KH" add -A; gitq -C "$KH" commit -qm "v$v"; gitq -C "$KH" tag -f "v$v"
+}
+kh 0.4.1 scripts/tiers.py scripts/ready.py scripts/gates.py scripts/readme_check.py templates/steering/autonomy.md templates/steering/decisions.md templates/steering/lessons.md templates/SECURITY.md templates/ONBOARDING.md templates/github docs/chores.md docs/pipeline.md docs/upgrading.md playbooks/parallel.md
+B15="$TMP/t15/base"; mkdir -p "$B15/.claude"; gitq -C "$B15" init
+"$KH/install.sh" "$B15" --agents=claude >/dev/null
+[ -f "$B15/.specs/kit/MANIFEST" ] || fail "15: install wrote no MANIFEST"
+rm -f "$B15/.specs/kit/MANIFEST"  # a 0.4.1 install has none
+kh "$NEWV"
+up15() { "$KH/install.sh" "$1" --agents=claude 2>&1; }
+baks() { find "$1/.specs" -maxdepth 1 -name 'kit.bak-*' | sort; }
+edit15() { echo "# mine" >> "$1/.specs/kit/playbooks/setup.md"; echo "x = 1" > "$1/.specs/kit/scripts/mine.py"; echo "# mine" >> "$1/.claude/agents/reviewer.md"; }
+
+A15="$TMP/t15/a"; cp -R "$B15" "$A15"; up15 "$A15" >/dev/null
+[ -z "$(baks "$A15")" ] || fail "15a: a pristine 0.4.1 install made a backup: $(baks "$A15")"
+[ -f "$A15/.specs/kit/MANIFEST" ] && grep -q " .specs/kit/playbooks/setup.md$" "$A15/.specs/kit/MANIFEST" && grep -q " .claude/agents/reviewer.md$" "$A15/.specs/kit/MANIFEST" || fail "15a: upgrade wrote no usable MANIFEST"
+
+A15="$TMP/t15/b"; cp -R "$B15" "$A15"; edit15 "$A15"
+cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-setup"; cp "$A15/.specs/kit/scripts/mine.py" "$TMP/t15/x-mine"; cp "$A15/.claude/agents/reviewer.md" "$TMP/t15/x-rev"
+out=$(up15 "$A15"); BK="$A15/.specs/kit.bak-0.4.1"
+cmp -s "$TMP/t15/x-setup" "$BK/playbooks/setup.md" && cmp -s "$TMP/t15/x-mine" "$BK/scripts/mine.py" && cmp -s "$TMP/t15/x-rev" "$BK/project/.claude/agents/reviewer.md" || fail "15b: backup does not hold the three edited files byte for byte: $out"
+[ "$(cd "$BK" && find . -type f | sort | tr '\n' ' ')" = "./playbooks/setup.md ./project/.claude/agents/reviewer.md ./scripts/mine.py " ] || fail "15b: backup holds more or less than the three files: $(cd "$BK" && find . -type f)"
+for n in playbooks/setup.md scripts/mine.py .claude/agents/reviewer.md; do echo "$out" | grep -qF "$n" || fail "15b: output does not name $n: $out"; done
+B15B="$A15"
+
+A15="$TMP/t15/c"; cp -R "$B15" "$A15"; edit15 "$A15"
+NG="$TMP/t15/nogit"; mkdir -p "$NG"; cp -R "$KH/kit" "$KH/install.sh" "$KH/VERSION" "$NG/"  # a tarball: no .git, so no tag
+out=$("$NG/install.sh" "$A15" --agents=claude 2>&1); BK="$A15/.specs/kit.bak-0.4.1"
+echo "$out" | grep -q "could not verify" || fail "15c: output does not say could not verify: $out"
+for f in playbooks/setup.md scripts/mine.py playbooks/sync.md project/.claude/agents/reviewer.md; do [ -f "$BK/$f" ] || fail "15c: unverified backup lacks $f"; done
+[ ! -e "$BK/AGENT_RULES.md" ] || fail "15c: backed up a file equal to the new kit"
+
+A15="$TMP/t15/d"; cp -R "$B15" "$A15"; up15 "$A15" >/dev/null
+echo "e1" >> "$A15/.specs/kit/playbooks/setup.md"; cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-e1"; up15 "$A15" >/dev/null
+cmp -s "$TMP/t15/x-e1" "$A15/.specs/kit.bak-$NEWV/playbooks/setup.md" || fail "15d: same-version re-run did not back up the edit"
+echo "e2" >> "$A15/.specs/kit/playbooks/setup.md"; cp "$A15/.specs/kit/playbooks/setup.md" "$TMP/t15/x-e2"; up15 "$A15" >/dev/null
+cmp -s "$TMP/t15/x-e2" "$A15/.specs/kit.bak-$NEWV-2/playbooks/setup.md" && cmp -s "$TMP/t15/x-e1" "$A15/.specs/kit.bak-$NEWV/playbooks/setup.md" || fail "15d: second edit did not get its own -2 folder"
+
+out=$("$KH/install.sh" "$B15B" --uninstall 2>&1)
+[ -f "$B15B/.specs/kit.bak-0.4.1/playbooks/setup.md" ] || fail "15f: uninstall removed the backup"
+echo "$out" | grep -q "^Kept.*kit.bak-0.4.1" || fail "15f: uninstall does not name the backup under Kept: $out"
+P="$TMP/t15e"; mkdir -p "$P/.specs/kit.bak-0.1.0" "$P/.specs/steering"; printf '{}' > "$P/.specs/spec-kit.json"; printf 'status: active\n' > "$P/.specs/steering/project-profile.md"
+L15="$KIT/kit/scripts/spec_lint.py"; before=$(python3 "$L15" --specs "$P/.specs" 2>&1; python3 "$L15" --specs "$P/.specs" --cites 2>&1)
+printf '[x](nope.md) REQ-FOO-01 `nope.txt:3`\n' > "$P/.specs/kit.bak-0.1.0/a.md"
+[ "$before" = "$(python3 "$L15" --specs "$P/.specs" 2>&1; python3 "$L15" --specs "$P/.specs" --cites 2>&1)" ] || fail "15e: a kit.bak-* .md changed the lint result"
+fi; if sect 15b "upgrading.md: a block per CHANGELOG release above 0.4.1, and each key default equals the script's"; then
+UG="$KIT/kit/docs/upgrading.md"
+for v in $(awk '/^## \[0\.4\.1\]/{exit} /^## \[[0-9]/{gsub(/[][]/,"",$2); print $2}' "$KIT/CHANGELOG.md"); do
+  grep -qx "## $v" "$UG" || fail "15b: upgrading.md has no block for $v"
+done
+python3 -I - "$KIT" <<'PY' || fail "15b: a key default in upgrading.md differs from the script's"
+import json, re, sys
+kit = sys.argv[1]
+sys.path.insert(0, kit + "/kit/scripts")
+import readme_check, spec_lint
+defaults = dict(spec_lint.DEFAULTS, readme=readme_check.DEFAULTS)
+keys = re.findall(r"^\s*- key: `(\w+)` = `([^`]*)`", open(kit + "/kit/docs/upgrading.md").read(), re.M)
+assert keys, "no key lines"
+for k, v in keys:
+    assert k in defaults and json.loads(v) == defaults[k], k
+PY
+
+# c to h: the upgrade report, on the 0.4.1 fixture of section 15 (a project that ran setup has spec-rules.md)
+R15="$TMP/t15/r"; cp -R "$B15" "$R15"; : > "$R15/.specs/steering/spec-rules.md"
+python3 -I -c 'import json,sys; p=sys.argv[1]; c=json.load(open(p)); c["unresolved_req"]="off"; json.dump(c,open(p,"w"))' "$R15/.specs/spec-kit.json"
+cp "$R15/.specs/spec-kit.json" "$TMP/t15/x-cfg"
+dry=$("$KH/install.sh" "$R15" --agents=claude --dry-run 2>&1); [ ! -e "$R15/.specs/kit.bak-0.4.1" ] || fail "15g: dry run wrote a backup"
+out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+echo "$out" | grep -q "kit files: [0-9]* added, [0-9]* changed, [0-9]* removed" || fail "15c: no kit files count line: $out"
+echo "$out" | grep -qE "^ +\+ scripts/tiers.py$" || fail "15c: no + scripts/tiers.py: $out"
+echo "$out" | grep -qE "^ +~ playbooks/sync.md$" || fail "15c: no ~ playbooks/sync.md: $out"
+for v in 0.5.0 0.7.0 0.8.0 0.9.0 0.10.0; do echo "$out" | grep -qE "^ +$v: " || fail "15d: no action line for $v: $out"; done
+for v in 0.4.1 0.6.0 0.6.5 0.11.0; do ! echo "$out" | grep -qE "^ +$v: " || fail "15d: action line for $v: $out"; done
+for k in decisions denylist_sha256 readme; do echo "$out" | grep -qE "^ +$k = " || fail "15e: key $k not listed: $out"; done
+echo "$out" | grep -qE "^ +decisions = \{\} \(0.5.0\)" || fail "15e: decisions default not shown: $out"
+! echo "$out" | grep -qE "^ +unresolved_req = " || fail "15e: listed a key the config already has: $out"
+cmp -s "$TMP/t15/x-cfg" "$R15/.specs/spec-kit.json" || fail "15e: spec-kit.json changed"
+echo "$out" | grep -q "steering templates not in .specs/steering/: autonomy.md, code-standards.md, decisions.md, lessons.md" || fail "15f: wrong missing templates: $out"
+for l in "kit files:" "+ scripts/tiers.py" "~ playbooks/sync.md" "decisions = {}" "steering templates not in" "0.5.0: " "backed up"; do
+  echo "$dry" | grep -qF "$l" || fail "15g: dry run lacks '$l': $dry"
+done
+for old in 0.0.x 99.0.0; do
+  R15="$TMP/t15/r$old"; cp -R "$B15" "$R15"; echo "$old" > "$R15/.specs/kit/VERSION"
+  out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+  if [ "$old" = 0.0.x ]; then
+    for v in 0.5.0 0.10.0; do echo "$out" | grep -qE "^ +$v: " || fail "15h: 0.0.x did not print $v: $out"; done
+    echo "$out" | grep -q "not a release number" || fail "15h: no unparsed-version note: $out"
+  else ! echo "$out" | grep -q "action needed" || fail "15h: a future VERSION printed actions: $out"; fi
+done
+R15="$TMP/t15/rp"; cp -R "$B15" "$R15"; rm "$R15/.specs/steering/project-profile.md"
+out=$("$KH/install.sh" "$R15" --agents=claude 2>&1)
+[ ! -e "$R15/.specs/steering/project-profile.md" ] && echo "$out" | grep -q "project-profile.md is missing" || fail "15i: upgrade reseeded or did not report the missing profile: $out"
+fi; if sect 15c "upgrade repeats: one step equals stepping, a re-run is a no-op, a dry run writes nothing, protected paths keep their bytes"; then
+# a 0.7.0 kit is the 0.4.1 shape with the three scripts back; stepping through it must land where one step does
+kh 0.7.0 scripts/readme_check.py templates/steering/autonomy.md templates/steering/decisions.md templates/steering/lessons.md templates/SECURITY.md templates/ONBOARDING.md templates/github docs/chores.md docs/pipeline.md docs/upgrading.md playbooks/parallel.md
+S15="$TMP/t15c"; mkdir -p "$S15"
+h15() { (cd "$1" && find . -path ./.git -prune -o -type f -print | sort | xargs shasum; shasum .git/hooks/pre-commit) | shasum; }
+act15() { grep -i "action" | sort; }
+SB="$S15/b"; cp -R "$B15" "$SB"; outb1=$("$KH/install.sh" "$SB" --agents=claude 2>&1)
+kh "$NEWV"
+outb2=$(up15 "$SB")
+SA="$S15/a"; cp -R "$B15" "$SA"; outa=$(up15 "$SA")
+diff -r "$SA/.specs" "$SB/.specs" >/dev/null && cmp -s "$SA/AGENTS.md" "$SB/AGENTS.md" || fail "15c a: stepping 0.4.1 -> 0.7.0 -> $NEWV differs from one step: $(diff -r "$SA/.specs" "$SB/.specs" | head -5)"
+[ "$(printf '%s\n%s\n' "$outb1" "$outb2" | act15)" = "$(echo "$outa" | act15)" ] || fail "15c a: action lines of the two steps differ from the one step"
+before=$(h15 "$SA"); out=$(up15 "$SA"); [ "$before" = "$(h15 "$SA")" ] || fail "15c b: a re-run changed a byte"
+[ -z "$(baks "$SA")" ] || fail "15c b: a re-run made a backup: $(baks "$SA")"
+echo "$out" | grep -q "is current: nothing to change" || fail "15c b: re-run does not say is current: $out"
+SC="$S15/c"; cp -R "$B15" "$SC"; edit15 "$SC"; before=$(h15 "$SC")
+"$KH/install.sh" "$SC" --agents=claude --dry-run >/dev/null || fail "15c c: dry run failed"
+[ "$before" = "$(h15 "$SC")" ] || fail "15c c: dry run wrote a file"
+[ -z "$(baks "$SC")" ] && [ ! -e "$SC/.specs/kit/MANIFEST" ] || fail "15c c: dry run made a backup or a MANIFEST"
+
+SD="$S15/d"; cp -R "$B15" "$SD"; edit15 "$SD"
+mkdir -p "$SD/.specs/features/f-1" "$SD/.specs/domains/d" "$SD/.specs/system"
+echo "[REQ-F-01] mine" > "$SD/.specs/features/f-1/requirements.md"; echo "[REQ-D-01] mine" > "$SD/.specs/domains/d/requirements.md"
+echo "# Steer mine" > "$SD/.specs/steering/extra.md"; echo "# Sys mine" > "$SD/.specs/system/s.md"
+python3 -I - "$SD" <<'PY'
+import json, re, sys
+d = sys.argv[1]
+c = json.load(open(d + "/.specs/spec-kit.json")); c["tracker_pattern"] = "MINE-\\d+"; json.dump(c, open(d + "/.specs/spec-kit.json", "w"), indent=2)
+for n in ("AGENTS.md", "CLAUDE.md"):
+    t = open(d + "/" + n).read()
+    t = re.sub(r"(<!-- specter:begin -->).*?(<!-- specter:end -->)", r"\1\nOLD RULES\n\2", t, flags=re.S)
+    open(d + "/" + n, "w").write("TOP of mine\n" + t + "\nBOTTOM of mine\n")
+PY
+outside() { python3 -I -c 'import re,sys; print(re.sub(r"<!-- specter:begin -->.*?<!-- specter:end -->", "", open(sys.argv[1]).read(), flags=re.S))' "$1"; }
+pfp() { (cd "$SD" && find .specs/features .specs/domains .specs/steering .specs/system .specs/spec-kit.json -type f | sort | xargs shasum; outside "$SD/AGENTS.md"; outside "$SD/CLAUDE.md") | shasum; }
+before=$(pfp); up15 "$SD" >/dev/null
+[ "$before" = "$(pfp)" ] || fail "15c d: a protected path or text outside the marker block changed"
+for n in AGENTS.md CLAUDE.md; do ! grep -q "OLD RULES" "$SD/$n" || fail "15c d: $n block keeps the old rules"; grep -q "^TOP of mine" "$SD/$n" || fail "15c d: $n lost its top"; done
+grep -qF "$(sed -n 1p "$KIT/kit/AGENT_RULES.md")" "$SD/AGENTS.md" || fail "15c d: AGENTS.md block lacks the new rules"
+[ -f "$SD/.specs/kit.bak-0.4.1/scripts/mine.py" ] || fail "15c d: the edited kit file was not backed up"
+
+SE="$S15/e"; cp -R "$B15" "$SE"; rm "$SE/.specs/steering/project-profile.md"
+out=$(up15 "$SE")
+[ ! -e "$SE/.specs/steering/project-profile.md" ] || fail "15c e: the upgrade seeded a profile"
+echo "$out" | grep "project-profile.md" | grep -q "missing" || fail "15c e: output does not say the profile is missing: $out"
+rm "$SE/.specs/spec-kit.json"; up15 "$SE" >/dev/null
+[ ! -e "$SE/.specs/spec-kit.json" ] || fail "15c e: the upgrade seeded spec-kit.json"
+# an edited owned agent is backed up on an adopt/fresh install too, and a symlinked kit part upgrades cleanly
+SG="$S15/g"; cp -R "$B15" "$SG"; rm -rf "$SG/.specs"; echo "# mine" >> "$SG/.claude/agents/reviewer.md"; cp "$SG/.claude/agents/reviewer.md" "$S15/g-rev"
+up15 "$SG" >/dev/null
+cmp -s "$S15/g-rev" "$SG/.specs/kit.bak-fresh/project/.claude/agents/reviewer.md" || fail "15c g: fresh install lost an edited agent: $(find "$SG/.specs" -maxdepth 1)"
+SH="$S15/h"; cp -R "$B15" "$SH"; mkdir "$S15/h-tgt"; echo keep > "$S15/h-tgt/f"; rm -rf "$SH/.specs/kit/docs"; ln -s "$S15/h-tgt" "$SH/.specs/kit/docs"
+out=$(up15 "$SH") || fail "15c h: symlinked kit part crashed the upgrade: $out"
+[ "$(cat "$S15/h-tgt/f")" = keep ] && [ ! -L "$SH/.specs/kit/docs" ] || fail "15c h: link target touched or link kept"
+
+out=$("$KH/install.sh" "$SA" --uninstall 2>&1)
+[ ! -e "$SA/.specs/kit" ] && [ ! -e "$SA/AGENTS.md" ] && [ ! -e "$SA/.claude/agents/reviewer.md" ] && [ ! -e "$SA/.git/hooks/pre-commit" ] || fail "15c f: uninstall left kit files: $out"
+"$KH/install.sh" "$SD" --uninstall >/dev/null
+[ -f "$SD/.specs/kit.bak-0.4.1/scripts/mine.py" ] && [ -f "$SD/.specs/features/f-1/requirements.md" ] && [ -f "$SD/.specs/steering/extra.md" ] || fail "15c f: uninstall removed a backup or a project file"
+! grep -q "specter" "$SD/AGENTS.md" || fail "15c f: uninstall left the block"; grep -q "^TOP of mine" "$SD/AGENTS.md" || fail "15c f: uninstall lost user text"
+
 fi; if sect 26 "readme_check.py: broken link and missing alt fail, a clean README passes, a bad setting exits 2"; then
 R="$TMP/t26"; mkdir -p "$R/.specs" "$R/img"; touch "$R/img/a.png"
 rcheck() { python3 "$KIT/kit/scripts/readme_check.py" --specs "$R/.specs" 2>&1; }
@@ -1404,5 +1566,150 @@ for cfg in '{"readme": {"max_lines": "9"}}' '{"readme": {"sections": "Use"}}' '{
 done
 printf '{}' > "$R/.specs/spec-kit.json"; rm "$R/README.md"; rc=0; rcheck >/dev/null || rc=$?; [ "$rc" = 2 ] || fail "26: missing README exits $rc, want 2"
 
+fi; if sect 27 "platform layer: layer and members_root keys, the repo registry, member lookup"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+p27() { # dir: platform + orders + billing, no git; the platform lists both members
+  mkdir -p "$1/platform/.specs/steering" "$1/platform/.specs/system"
+  printf '{"layer": "platform"}' > "$1/platform/.specs/spec-kit.json"
+  printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders | .specs | orders |\n| billing | .specs | billing |\n' > "$1/platform/.specs/system/repos.md"
+  printf 'status: active\n' > "$1/platform/.specs/steering/project-profile.md"
+  for m in orders billing; do
+    mkdir -p "$1/$m/.specs/steering" "$1/$m/.specs/domains/d"
+    printf '{"layer": "member"}' > "$1/$m/.specs/spec-kit.json"
+    printf 'status: active\n' > "$1/$m/.specs/steering/project-profile.md"
+  done
+  printf '## Cap\n[REQ-ORD-1] orders cap\n' > "$1/orders/.specs/domains/d/requirements.md"
+  printf '## Cap\n[REQ-BIL-1] billing cap\n' > "$1/billing/.specs/domains/d/requirements.md"
+}
+lintp() { python3 "$LINT" --specs "$1/.specs" 2>&1; }
+P="$TMP/p27"; p27 "$P"
+out=$(lintp "$P/platform") || fail "27: clean platform: $out"
+printf '{"layer": "plat"}' > "$P/platform/.specs/spec-kit.json"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" != 0 ] && echo "$out" | grep -qF 'layer must be "platform", "member" or null' || fail "27a: bad layer rc=$rc: $out"
+printf '{"layer": "platform", "members_root": 3}' > "$P/platform/.specs/spec-kit.json"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" != 0 ] && echo "$out" | grep -qF 'members_root must be a path string' || fail "27b: bad members_root rc=$rc: $out"
+printf '{"layer": "platform"}' > "$P/platform/.specs/spec-kit.json"
+mv "$P/platform/.specs/system/repos.md" "$TMP/repos.md.keep"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'FAIL system/repos.md: no registry table (Repo, Spec path)' || fail "27c: no registry rc=$rc: $out"
+printf '# Repos\n\n| Repo | Spec path |\n|---|---|\n| ../evil | .specs |\n| pay | /abs |\n| ship | ../x |\n| billing | .specs |\n| billing | .specs |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?
+[ "$rc" = 1 ] && [ "$(echo "$out" | grep -c '^FAIL system/repos.md:[0-9]*: ')" = 4 ] || fail "27d: want 4 registry FAILs, rc=$rc: $out"
+echo "$out" | grep -qF "system/repos.md:5: repo '../evil'" && echo "$out" | grep -qF "system/repos.md:6: spec path '/abs'" && echo "$out" | grep -qF "system/repos.md:7: spec path '../x'" && echo "$out" | grep -qF "system/repos.md:9: repo 'billing' is listed twice (first on line 8)" || fail "27d: messages: $out"
+cp "$KIT/kit/templates/system/repos.md" "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF "system/repos.md:9: repo '<repo>' is not a folder name" || fail "27e: repos.md template rc=$rc: $out"
+cp "$KIT/kit/templates/system/contracts.md" "$P/platform/.specs/system/contracts.md"; cp "$TMP/repos.md.keep" "$P/platform/.specs/system/repos.md"
+out=$(lintp "$P/platform") || fail "27e: contracts.md template: $out"
+a=$(lintp "$P/orders") || fail "27f: orders: $a"; rm -rf "$P/platform"
+[ "$a" = "$(lintp "$P/orders")" ] || fail "27f: orders changed without the platform"
+mkdir -p "$TMP/p27n/.specs/system"; printf '| Repo | Spec path |\n|---|---|\n| ../x | /y |\n' > "$TMP/p27n/.specs/system/repos.md"
+out=$(lintp "$TMP/p27n") || fail "27f: no layer, broken repos.md must lint as today: $out"
+P="$TMP/p27x"; p27 "$P"; mkdir -p "$TMP/elsewhere"; mv "$P/orders" "$TMP/elsewhere/"
+out=$(python3 - "$LINT" "$P/platform/.specs" "$TMP/elsewhere" <<'PY'
+import sys, importlib.util
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("spec_lint", sys.argv[1]); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+specs = Path(sys.argv[2]).resolve(); cfg = m.load_config(specs)
+name = lambda got: [(r, d is not None) for r, d in got]
+print(name(m.members(specs, cfg)), name(m.members(specs, cfg, sys.argv[3])))
+PY
+)
+[ "$out" = "[('orders', False), ('billing', True)] [('orders', True), ('billing', False)]" ] || fail "27g: member lookup: $out"
+
+P="$TMP/p27h"; p27 "$P"
+printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders |\n| billing | | b |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -qF 'system/repos.md:5: row has 1 cells, no Spec path' && [ "$(echo "$out" | grep -c '^FAIL system/repos.md')" = 1 ] || fail "27h: short row, blank Spec path means .specs, rc=$rc: $out"
+printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders | .specs | o |\n| billing | nope/x | b |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'system/repos.md:6: billing is checked out but nope/x is not a folder' || fail "27h: checkout without spec dir rc=$rc: $out"
+fi; if sect 27b "platform layer: --members lints the platform and every member"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+lintm() { p=$1; shift; python3 "$LINT" --specs "$p/platform/.specs" --members "$@" 2>&1; }
+P="$TMP/p27m"; p27 "$P"
+rc=0; out=$(lintm "$P") || rc=$?; heads=$(echo "$out" | grep '^== ' | tr '\n' ' ')
+[ "$rc" = 0 ] && [ "$heads" = "== platform == orders == billing " ] && [ "$(echo "$out" | tail -n 1)" = "spec-lint --members: 0 FAIL across 3 repo(s)" ] || fail "27b(a): clean rc=$rc: $out"
+mkdir -p "$P/orders/.specs/features/nodesign"; printf '# F\n' > "$P/orders/.specs/features/nodesign/requirements.md"
+rc=0; out=$(lintm "$P") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | sed -n '/^== orders/,/^== billing/p' | grep -q 'FAIL nodesign' && echo "$out" | tail -n 1 | grep -q 'spec-lint --members: [1-9][0-9]* FAIL across 3 repo(s)' || fail "27b(b): member FAIL rc=$rc: $out"
+jout=$(python3 "$LINT" --specs "$P/platform/.specs" --members --json) && fail "27b(g): json on (b) exited 0"
+echo "$jout" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert set(d)=={"platform","members","unchecked"} and d["unchecked"]==[] and d["members"]["orders"]["fails"]>0 and "features" in d["platform"]' || fail "27b(g): json shape: $jout"
+rm -rf "$P/orders/.specs/features"
+mv "$P/billing" "$TMP/billing.gone"
+rc=0; out=$(lintm "$P") || rc=$?
+[ "$rc" = 0 ] && echo "$out" | grep -q '^WARN member billing: no checkout at ' && echo "$out" | tail -n 1 | grep -qF '; 1 not checked: billing' || fail "27b(c): missing member rc=$rc: $out"
+jout=$(python3 "$LINT" --specs "$P/platform/.specs" --members --json) || fail "27b(g): json on (c) must exit 0"
+echo "$jout" | python3 -c 'import json,sys; d=json.load(sys.stdin); assert d["unchecked"]==["billing"] and d["members"]["billing"] is None and d["members"]["orders"] is not None' || fail "27b(g): json unchecked: $jout"
+mv "$TMP/billing.gone" "$P/billing"
+printf '{"layer": "member", "required_sections": {"requirements": ["## Nope"]}}' > "$P/orders/.specs/spec-kit.json"
+mkdir -p "$P/orders/.specs/features/f" "$P/billing/.specs/features/f"
+for m in orders billing; do printf '# F\n\n## Why\nx\n' > "$P/$m/.specs/features/f/requirements.md"; done
+out=$(lintm "$P") || :; [ "$(echo "$out" | sed -n '/^== orders/,/^== billing/p' | grep -c 'Nope')" -ge 1 ] && [ "$(echo "$out" | sed -n '/^== billing/,$p' | grep -c 'Nope')" = 0 ] && [ "$(echo "$out" | sed -n '/^== platform/,/^== orders/p' | grep -c 'Nope')" = 0 ] || fail "27b(d): own config: $out"
+P="$TMP/p27e"; p27 "$P"; mkdir -p "$TMP/elsewhere2"; mv "$P/orders" "$P/billing" "$TMP/elsewhere2/"
+out=$(lintm "$P" --members-root "$TMP/elsewhere2"); echo "$out" | tail -n 1 | grep -qF 'across 3 repo(s)' && ! echo "$out" | grep -q 'not checked' || fail "27b(e): --members-root: $out"
+printf '{"layer": "platform", "members_root": "../../elsewhere2"}' > "$P/platform/.specs/spec-kit.json"
+out=$(lintm "$P"); ! echo "$out" | grep -q 'not checked' || fail "27b(e): members_root key: $out"
+printf '{"layer": "platform"}' > "$P/platform/.specs/spec-kit.json"
+out=$(lintm "$P"); echo "$out" | tail -n 1 | grep -qF '; 2 not checked: orders, billing' || fail "27b(e): neither: $out"
+mkdir -p "$P/platform/.specs/features/x"
+for a in "--cites" "x"; do rc=0; out=$(lintm "$P" $a) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): $a rc=$rc: $out"; done
+rc=0; out=$(python3 "$LINT" --specs "$TMP/elsewhere2/orders/.specs" --members 2>&1) || rc=$?; [ "$rc" = 2 ] && echo "$out" | grep -qF -- '--members' || fail "27b(f): no layer rc=$rc: $out"
+fi; if sect 27c "platform layer: platform features resolve member REQ ids"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+P="$TMP/p27c"; p27 "$P"; S="$P/platform/.specs"; mkdir -p "$S/features/cross-a" "$P/billing/.specs/features/b"
+printf '# B\n\n[REQ-BIL-2] billing feature cap\n' > "$P/billing/.specs/features/b/requirements.md"
+printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on REQ-ORD-1\n' > "$S/features/cross-a/requirements.md"
+printf '# D\n\nREQ-PLT-1 uses [REQ-ORD-1] and [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+out=$(lintp "$P/platform") || fail "27c(a): member ids must resolve: $out"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2] [REQ-NOPE-9]\n' > "$S/features/cross-a/tasks.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'referenced but never defined: REQ-NOPE-9' || fail "27c(b): undefined id rc=$rc: $out"
+printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1] [REQ-BIL-2]\n' > "$S/features/cross-a/tasks.md"
+mv "$P/billing" "$TMP/billing.gone27c"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 0 ] && echo "$out" | grep -q 'WARN.*REQ-BIL-2.*not checked: billing$' && ! echo "$out" | grep -q 'WARN.*REQ-ORD-1' || fail "27c(c): unchecked member rc=$rc: $out"
+mv "$TMP/billing.gone27c" "$P/billing"
+printf '## Cap\n[REQ-ORD-1] dup\n' > "$P/billing/.specs/domains/d/requirements.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'REQ-ORD-1 is ambiguous: defined in billing, orders' || fail "27c(d): ambiguous rc=$rc: $out"
+printf '## Cap\n[REQ-BIL-1] billing cap\n' > "$P/billing/.specs/domains/d/requirements.md"
+printf 'Uses REQ-ORD-1 and REQ-BIL-2.\n' > "$S/system/architecture.md"
+out=$(lintp "$P/platform") || fail "27c(e): arch cite: $out"; ! echo "$out" | grep -q 'cited but defined in no' || fail "27c(e): arch WARN: $out"
+printf '# D\n\nREQ-PLT-1 uses [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
+printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on [REQ-ORD-1]\n' > "$S/features/cross-a/requirements.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'design.md does not trace REQ-ORD-1' || fail "27c(f): bracket defines rc=$rc: $out"
+printf '# C\n\nStatus: Proposed\n\n[REQ-PLT-1] x\n[REQ-ORD-1] clash\n' > "$S/features/cross-a/requirements.md"
+printf 'REQ-PLT-1 REQ-ORD-1\n' > "$S/features/cross-a/design.md"; printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1]\n' > "$S/features/cross-a/tasks.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'REQ-ORD-1 is ambiguous: defined in orders, platform' || fail "27c(g): bracketed member id rc=$rc: $out"
+fi; if sect 27d "platform layer: cross-repo task lines"; then
+LINT="$KIT/kit/scripts/spec_lint.py"
+P="$TMP/p27t"; p27 "$P"; S="$P/platform/.specs"; F="$S/features/cross-b"; T="$F/tasks.md"
+mkdir -p "$F" "$P/orders/.specs/features/f"
+printf '# B\nStatus: Proposed\n[REQ-PLT-1] x\n' > "$F/requirements.md"; printf '# D\nREQ-PLT-1\n' > "$F/design.md"
+good() { printf '%s\n' '- [ ] 1 platform: decision — [REQ-PLT-1]' \
+  '- [ ] 2 orders: a → orders/.specs/features/f/ · after: 1 — [REQ-PLT-1]' \
+  '- [ ] 3 billing: b → https://example.invalid/pull/12 · after: 2 — [REQ-PLT-1]' \
+  '- [ ] 4 billing: c → billing#13 · after: 1, 3 — [REQ-PLT-1]' \
+  '- [ ] 5 orders: wrapped' '  -> orders#7 · after: 4 — [REQ-PLT-1]' > "$T"; }
+tl() { # sed expr, appended line: rewrite the good file, then lint it
+  good; [ -z "$1" ] || { sed "$1" "$T" > "$TMP/t27d" && cat "$TMP/t27d" > "$T"; }; [ -z "$2" ] || printf '%s\n' "$2" >> "$T"
+  python3 "$LINT" --specs "$S" cross-b 2>&1
+}
+t27() { rc=0; out=$(tl "$2" "$3") || rc=$?; [ "$rc" = "$1" ] && echo "$out" | grep -qF -- "$4" || fail "27d($5): rc=$rc want $1 and '$4': $out"; }
+t27 0 '' '' 'OK   cross-b' clean
+t27 1 '' '- [ ] 6 shipping: x → shipping#1 — [REQ-PLT-1]' "task 6: unknown repo 'shipping' (not in system/repos.md)" a
+t27 1 '2s/ → orders[^ ]*//' '' "task 2: no child (→ orders/.specs/features/<f>/ or a PR)" b
+t27 1 '2s#orders/.specs#billing/.specs#' '' "task 2: child is not an orders feature or PR" c1
+t27 1 '2s#→ [^ ]*#→ billing\#2#' '' "task 2: child is not an orders feature or PR" c2
+t27 1 '2s#features/f#features/nope#' '' "task 2: child orders/.specs/features/nope/ not found" d1
+mv "$P/orders" "$P/orders.off"; t27 0 '2s#features/f#features/nope#' '' 'OK   cross-b' d2; mv "$P/orders.off" "$P/orders"
+t27 1 's/after: 4/after: 9/' '' "task 5: after 9: no such task" e
+t27 1 '2s/after: 1/after: 3/;3s/after: 2/after: 2/' '' "after: cycle 2 → 3 → 2" f1
+[ "$(echo "$out" | grep -c 'cycle')" = 1 ] || fail "27d(f): cycle reported once: $out"
+t27 1 '4s/after: 1, 3/after: 4/' '' "after: cycle 4 → 4" f2
+t27 1 '' '- [ ] foo: no number' "task line without a number: '- [ ] foo: no number'" g1
+t27 1 '4s/- \[ \] 4/- [ ] 3/' '' "task 3: number used twice" g2
+sed 's/^Status: Proposed/Status: Done 2026-11-25 (#1)/' "$F/requirements.md" > "$TMP/t27d" && cat "$TMP/t27d" > "$F/requirements.md"
+t27 0 's/\[ \]/[x]/' '- [x] 6 shipping: x → shipping#1 — [REQ-PLT-1]' "history: task 6: unknown repo" h
+printf '{}' > "$S/spec-kit.json"; out=$(tl '' '- [ ] foo: no number') || fail "27d(i): no layer lints as today: $out"
+mkdir -p "$TMP/t27j/.specs/features/f"; printf '{}' > "$TMP/t27j/.specs/spec-kit.json"
+sed 's/<FEAT>/F/g' "$KIT/kit/templates/feature/tasks.md" > "$TMP/t27j/.specs/features/f/tasks.md"
+[ "$(grep -c '^ *- \[ \]' "$TMP/t27j/.specs/features/f/tasks.md")" = 6 ] || fail "27d(j): the template comment adds tasks"
 fi; sect_end
 echo "selftest: OK"

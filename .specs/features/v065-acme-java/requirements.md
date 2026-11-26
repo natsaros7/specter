@@ -22,7 +22,7 @@ Verified on `feat/0.6.0` 2026-11-21 (`aabed8b`):
   `examples/acme-shop/.specs/steering/project-profile.md:14` and `examples/acme-shop/.specs/system/traceability.md:7`.
   They name `shop-common/` and `orders-api/` paths, a `GrpcSecurityFilter`, a `SecurityHeader` enum, `orders.proto`
   and an `application.yml` holding the Kafka topic names.
-- Citations resolve against the folder that holds `.specs/`, from `git ls-files` run there: `kit/scripts/spec_lint.py:498`
+- Citations resolve against the folder that holds `.specs/`, from `git ls-files` run there: `kit/scripts/spec_lint.py:551`
   and `kit/scripts/spec_lint.py:484-486`. So code committed under `examples/acme-shop/` makes them resolvable with no
   lint change. `cite_ignore_globs` breaks a tie between several matches (`kit/scripts/spec_lint.py:518-519`); the
   example sets only `ignore_globs`, which the citation check does not read (`examples/acme-shop/.specs/spec-kit.json:4`).

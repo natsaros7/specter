@@ -65,6 +65,7 @@ escalates without a failed gate. Details: [`kit/docs/model-routing.md`](../kit/d
 python3 .specs/kit/scripts/spec_lint.py           # files present, REQ traced both ways, links resolve
 python3 .specs/kit/scripts/spec_lint.py --cites   # every `path:line` citation exists and points at real code
 python3 .specs/kit/scripts/spec_lint.py --json    # same checks as JSON on stdout (also with --cites)
+python3 .specs/kit/scripts/spec_lint.py --members # platform root: lint it, then every checked-out member under its own config
 # exit 0 clean, 1 a FAIL, 2 a --specs path that is not a directory
 python3 .specs/kit/scripts/spec_report.py         # one HTML page: feature progress, open drift, coverage, citations
 python3 .specs/kit/scripts/spec_sync_check.py     # code changed but no spec change? (the pre-commit hook)
@@ -89,6 +90,8 @@ New `.specs/spec-kit.json` keys (all optional):
 | `drift_max_age_days` | `90` | Unresolved Drift Register rows older than this WARN; `null` switches it off |
 | `tracker_pattern` | `null` | Regex for ticket keys in feature folder names (`"ABC-[0-9]+"`). When set, the lint WARNs if commits on `merged_ref` name a feature's key while its spec says Proposed, has no `Status:` line, or has no task ticked |
 | `decisions` | `{}` | `file` (default `steering/decisions.md`), `backlinks` (`false`, `"warn"` or `true`) and `enabled` (default `true`); any other value or key stops the lint; see below |
+| `layer` | `null` | `"platform"`, `"member"` or `null`; any other value stops the lint. On `"platform"`, `system/repos.md` must hold a table with `Repo` and `Spec path` columns; a row whose repo is not a folder name, whose spec path is absolute or has a `..` part, or a repo listed twice FAILs with `file:line`. Not written by the installer. On `"platform"`, a feature's REQ ids also resolve from the checked-out members' `domains/*` and `features/*` requirements; an id two repos define FAILs as ambiguous, one defined nowhere is a WARN naming the members not checked out (a FAIL when all are). Brackets in a platform `requirements.md` still define, so cite a member id there without them. Every task of every feature on a platform root reads `- [ ] N <repo>: <what> → <repo>/.specs/features/<f>/ · after: N — [REQ-…]` (`platform:` for work in no repo): the repo is a registry repo, the child a feature of it (must exist when that member is checked out) or a PR (URL, `#n`, `<repo>#n`), `after:` names existing tasks with no cycle |
+| `members_root` | `null` | Where the member repos are checked out, relative to the project (default: its parent folder); `--members-root DIR` on the command line wins. A string or `null`; not written by the installer |
 | `unresolved_req` | `"warn"` | `"off"` silences the WARN for REQ ids cited in `.specs/` but defined nowhere |
 | `denylist_sha256` | `[]` | SHA-256 digests of terms that must not appear in `.specs/`; see below |
 | `merged_ref` | `null` | Ref searched for those commits, in the project and in every indexed child repo: a full ref name (`"refs/remotes/origin/develop"`, the safe spelling) or a short name that names exactly one branch or remote-tracking ref. A tag or an ambiguous name (a tag `origin/develop` next to the remote) is refused: the lint skips that repo with a WARN (a repo without the ref is skipped quietly); `tiers.py` labels `spot` and `--evidence` exits 2. Unset: `refs/remotes/origin/HEAD` when it is a symbolic ref (a plain one, as a pushed branch named `HEAD` makes, is refused), then `HEAD`. Commits touching only `.specs/` never count. Since 0.7.0 it also sets the staged base of `tiers.py` and `ready.py`: with neither it nor `refs/remotes/origin/HEAD`, every staged change takes the last tier. A CI checkout (`actions/checkout`) has no `origin/HEAD`: set it |
@@ -235,10 +238,32 @@ Afterwards, set `tracker_pattern` (your ticket key regex) and `merged_ref` in `.
 ## Upgrade, uninstall, versions
 
 ```bash
-cd ~/tools/specter && git pull && ./install.sh ~/code/my-project   # upgrade: replaces .specs/kit/, keeps your specs and settings
+cd ~/tools/specter && git pull && ./install.sh ~/code/my-project --dry-run   # upgrade preview: the report, nothing written
+./install.sh ~/code/my-project                                     # upgrade: replaces .specs/kit/, keeps your specs and settings
 ./install.sh ~/code/my-project --uninstall                         # removes what specter wrote (only if still ours), marker blocks byte for byte; keeps .specs/ content
 ./install.sh ~/code/my-project --detect                            # which agents it would wire, and why
 ```
+
+### How an upgrade works
+
+Every install writes `.specs/kit/MANIFEST`: one line per file specter owns (`<git blob id> <path>`), covering the kit and the
+agent, skill and rule files it wrote outside it. On an upgrade the installer compares each file with what the old version
+shipped, taken from that MANIFEST, else from the `v<old>` tag of the specter checkout. A file you edited (not the recorded
+bytes, not the new ones) is copied to `.specs/kit.bak-<old>/` before it is replaced: kit files under their kit path, other
+files under `project/`. A second backup of the same version gets a `-2` suffix. If neither MANIFEST nor tag exists, the
+installer says it could not verify and backs up every file that differs from the new kit. It never refuses to upgrade.
+
+`--dry-run` prints every path it would create, modify or replace, the mode, and the upgrade report, and writes nothing.
+Run it first and read the report. It lists:
+
+- kit files added (`+`), changed (`~`) and removed (`-`);
+- `spec-kit.json` keys you can add, with their default. A missing key already acts as the default; the installer never
+  writes one;
+- steering templates that are not yet in `.specs/steering/`;
+- each `action` line from [`.specs/kit/docs/upgrading.md`](../kit/docs/upgrading.md) for the versions between yours and the
+  new one. That file is the one place for what the installer cannot do for you; every release has a block.
+
+A missing `steering/project-profile.md` is reported, not recreated: run setup to write it. Re-running an upgrade is a no-op.
 
 The installed version is in `.specs/kit/VERSION`. The `spec-kit.json` the installer creates records the first-install version in `kit_version`; it is never rewritten afterwards, and an existing config is never touched. Changes are listed in [`CHANGELOG.md`](../CHANGELOG.md).
 Self-test, run locally: `tests/selftest.sh`.
