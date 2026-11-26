@@ -112,7 +112,7 @@ def recorded(kit_home, kit, old):
     return rec or None
 
 
-UP = None  # upgrade state: {"old", "rec", "dir", "saved"}; None outside upgrade mode
+UP = None  # backup state: {"old", "rec", "dir", "saved"}; set by install() in every mode
 OWNED = []  # project files put_owned wrote or found current: they go in MANIFEST
 
 
@@ -121,7 +121,7 @@ def kit_files(kit):
 
 
 def keep(path, new):
-    """Upgrade mode: copy path into .specs/kit.bak-<old>/ unless its bytes are the recorded ones or the new ones."""
+    """Copy path into .specs/kit.bak-<old>/ unless its bytes are the recorded ones or the new ones."""
     if UP is None or not path.is_file():
         return
     have, key = blob_id(path.read_bytes()), shown(path)
@@ -386,20 +386,20 @@ def install(kit_home, target):
                                   "fresh": " (forced by --fresh)" if "--fresh" in ARGS else " (no spec system yet)"}[how])
     old_version = (kit / "VERSION").read_text().strip() if how == "upgrade" else None
     global UP
-    UP = {"old": old_version, "rec": recorded(kit_home, kit, old_version), "dir": None, "saved": []} if how == "upgrade" else None
-    if UP:
+    UP = {"old": old_version or how, "rec": recorded(kit_home, kit, old_version) if old_version else None, "dir": None, "saved": []}
+    if how == "upgrade":
         for f in kit_files(kit):
             new = src_kit / f.relative_to(kit)
             keep(f, new.read_bytes() if new.is_file() else None)
         if UP["rec"] is None:
             say("could not verify what " + old_version + " shipped (no MANIFEST, no v" + old_version + " tag): "
                 "backed up every file that differs from the new kit", True)
-    report = upgrade_report(kit, src_kit, specs, old_version, (kit_home / "VERSION").read_text().strip()) if UP else []
+    report = upgrade_report(kit, src_kit, specs, old_version, (kit_home / "VERSION").read_text().strip()) if how == "upgrade" else []
     for part in KIT_PARTS:
         src, dst = src_kit / part, kit / part
         def go(src=src, dst=dst):
             if dst.exists():
-                shutil.rmtree(dst) if dst.is_dir() else dst.unlink()
+                dst.unlink() if dst.is_symlink() or not dst.is_dir() else shutil.rmtree(dst)
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(src, dst, ignore=shutil.ignore_patterns("install.py", "__pycache__")) if src.is_dir() else shutil.copy(src, dst)
         write(dst, "replace" if dst.exists() else "create", go)
@@ -411,7 +411,7 @@ def install(kit_home, target):
     top = git(target, "rev-parse", "--show-toplevel").stdout.strip()
     is_repo = bool(top) and Path(top).resolve() == target
     repos = nested_repos(target)
-    if not config_path.exists():
+    if not config_path.exists() and how != "upgrade":
         config = json.loads((src_kit / "spec-kit.json").read_text())
         if repos or not is_repo:
             config["spec_sync"] = "off"
@@ -422,10 +422,15 @@ def install(kit_home, target):
             + ("…" if len(config["code_globs"]) > 4 else "") + "; setup confirms them)")
     elif how == "adopt":
         say(".specs/spec-kit.json exists: untouched (set tracker_pattern and merged_ref yourself, see README)")
-    elif old_version and old_version != version:
-        say("upgrade " + old_version + " -> " + version + " (your settings kept)", True)
-        for line in report:
-            say(line, True)
+    elif how == "upgrade" and not config_path.exists():
+        say(".specs/spec-kit.json is missing: not recreated on an upgrade (defaults apply); run setup (.specs/kit/playbooks/setup.md) to write it", True)
+    if how == "upgrade":
+        if old_version != version:
+            say("upgrade " + old_version + " -> " + version + " (your settings kept)", True)
+            for line in report:
+                say(line, True)
+        else:
+            say("kit " + version + " is current: nothing to change", True)
     ensure_line(specs / ".gitignore", "report.html")
     profile = specs / "steering" / "project-profile.md"
     if how == "upgrade" and not profile.exists():
@@ -485,9 +490,9 @@ def install(kit_home, target):
     else:
         say("not a git repo: no hook. Run `git init` here if you want the specs versioned.")
 
-    if UP and UP["saved"]:
-        say("backed up to " + shown(UP["dir"]) + "/: " + ", ".join(UP["saved"]), True)
-    elif UP:
+    if UP["saved"]:
+        say(("would back up to " if dry() else "backed up to ") + shown(UP["dir"]) + "/: " + ", ".join(UP["saved"]), True)
+    elif how == "upgrade":
         say("backed up: none", True)
     if not dry():
         rows = sorted((shown(f), blob_id(f.read_bytes())) for f in kit_files(kit) + [p for p in OWNED if p.is_file()])

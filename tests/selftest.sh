@@ -1502,8 +1502,7 @@ diff -r "$SA/.specs" "$SB/.specs" >/dev/null && cmp -s "$SA/AGENTS.md" "$SB/AGEN
 [ "$(printf '%s\n%s\n' "$outb1" "$outb2" | act15)" = "$(echo "$outa" | act15)" ] || fail "15c a: action lines of the two steps differ from the one step"
 before=$(h15 "$SA"); out=$(up15 "$SA"); [ "$before" = "$(h15 "$SA")" ] || fail "15c b: a re-run changed a byte"
 [ -z "$(baks "$SA")" ] || fail "15c b: a re-run made a backup: $(baks "$SA")"
-# shortcut: "is current" is printed by the upgrade report (task 4); drop the grep guard once it has landed
-! grep -q "is current" "$KIT/kit/scripts/install.py" || echo "$out" | grep -q "is current" || fail "15c b: re-run does not say is current: $out"
+echo "$out" | grep -q "is current: nothing to change" || fail "15c b: re-run does not say is current: $out"
 SC="$S15/c"; cp -R "$B15" "$SC"; edit15 "$SC"; before=$(h15 "$SC")
 "$KH/install.sh" "$SC" --agents=claude --dry-run >/dev/null || fail "15c c: dry run failed"
 [ "$before" = "$(h15 "$SC")" ] || fail "15c c: dry run wrote a file"
@@ -1534,6 +1533,15 @@ SE="$S15/e"; cp -R "$B15" "$SE"; rm "$SE/.specs/steering/project-profile.md"
 out=$(up15 "$SE")
 [ ! -e "$SE/.specs/steering/project-profile.md" ] || fail "15c e: the upgrade seeded a profile"
 echo "$out" | grep "project-profile.md" | grep -q "missing" || fail "15c e: output does not say the profile is missing: $out"
+rm "$SE/.specs/spec-kit.json"; up15 "$SE" >/dev/null
+[ ! -e "$SE/.specs/spec-kit.json" ] || fail "15c e: the upgrade seeded spec-kit.json"
+# an edited owned agent is backed up on an adopt/fresh install too, and a symlinked kit part upgrades cleanly
+SG="$S15/g"; cp -R "$B15" "$SG"; rm -rf "$SG/.specs"; echo "# mine" >> "$SG/.claude/agents/reviewer.md"; cp "$SG/.claude/agents/reviewer.md" "$S15/g-rev"
+up15 "$SG" >/dev/null
+cmp -s "$S15/g-rev" "$SG/.specs/kit.bak-fresh/project/.claude/agents/reviewer.md" || fail "15c g: fresh install lost an edited agent: $(find "$SG/.specs" -maxdepth 1)"
+SH="$S15/h"; cp -R "$B15" "$SH"; mkdir "$S15/h-tgt"; echo keep > "$S15/h-tgt/f"; rm -rf "$SH/.specs/kit/docs"; ln -s "$S15/h-tgt" "$SH/.specs/kit/docs"
+out=$(up15 "$SH") || fail "15c h: symlinked kit part crashed the upgrade: $out"
+[ "$(cat "$S15/h-tgt/f")" = keep ] && [ ! -L "$SH/.specs/kit/docs" ] || fail "15c h: link target touched or link kept"
 
 out=$("$KH/install.sh" "$SA" --uninstall 2>&1)
 [ ! -e "$SA/.specs/kit" ] && [ ! -e "$SA/AGENTS.md" ] && [ ! -e "$SA/.claude/agents/reviewer.md" ] && [ ! -e "$SA/.git/hooks/pre-commit" ] || fail "15c f: uninstall left kit files: $out"
