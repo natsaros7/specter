@@ -151,6 +151,11 @@ def load_config(specs):
     return config
 
 
+def skipped(rel):
+    """kit/ and the upgrade backups kit.bak-<version>/ are not project specs."""
+    return rel.parts[0] == "kit" or rel.parts[0].startswith("kit.bak-")
+
+
 REPO = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
@@ -171,10 +176,12 @@ def registry(specs):
             head = [c.lower() for c in cells]
             if "repo" in head and "spec path" in head:
                 cols = (head.index("repo"), head.index("spec path"))
-        elif cols and not re.fullmatch(r"[\s|:-]+", line) and len(cells) > max(cols):
-            repo, sub = cells[cols[0]], cells[cols[1]]
+        elif cols and not re.fullmatch(r"[\s|:-]+", line) and len(cells) <= max(cols):
+            fails.append(name + ":" + str(no) + ": row has " + str(len(cells)) + " cells, no Spec path")
+        elif cols and not re.fullmatch(r"[\s|:-]+", line):
+            repo, sub = cells[cols[0]], cells[cols[1]] or ".specs"
             why = ("repo '" + repo + "' is not a folder name" if not REPO.match(repo)
-                   else "spec path '" + sub + "' must be relative, with no .. part" if not sub or sub.startswith("/") or ".." in sub.split("/")
+                   else "spec path '" + sub + "' must be relative, with no .. part" if sub.startswith("/") or ".." in sub.split("/")
                    else "repo '" + repo + "' is listed twice (first on line " + str(seen[repo]) + ")" if repo in seen else "")
             if why:
                 fails.append(name + ":" + str(no) + ": " + why)
@@ -184,11 +191,15 @@ def registry(specs):
     return rows, fails if cols else [name + ": no registry table (Repo, Spec path)"]
 
 
-def members(specs, config, root=None):
+def members(specs, config, root=None, fails=None):
     """(repo, spec dir or None when not checked out) per registry row. root: the --members-root argument, else
-    members_root of spec-kit.json relative to the project, else the project's parent. The platform itself is dropped."""
+    members_root of spec-kit.json relative to the project, else the project's parent. The platform itself is dropped.
+    fails (a list) collects a FAIL per repo that is checked out without its spec path."""
     base = Path(root) if root else specs.parent / (config["members_root"] or "..")
     found = [(repo, (base / repo / sub).resolve()) for repo, sub, _ in registry(specs)[0]]
+    for repo, sub, no in registry(specs)[0]:
+        if fails is not None and (base / repo).is_dir() and not (base / repo / sub).is_dir():
+            fails.append("system/repos.md:" + str(no) + ": " + repo + " is checked out but " + sub + " is not a folder")
     return [(repo, d if d.is_dir() else None) for repo, d in found if d != specs.resolve()]
 
 
@@ -266,7 +277,7 @@ def platform_tasks(text, rows, members):
     return fails
 
 
-def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_ids=None, unchecked=(), platform=None):
+def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_ids=None, unchecked=(), platform=None, platform_ids=frozenset()):
     fails, warns = [], []
     req = re.compile(config["req_id_pattern"])
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
@@ -291,8 +302,8 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_
                 fails.append(name + ".md does not trace " + ", ".join(untraced))
     referenced = set().union(*(req.findall(text) for text in docs.values()))
     member_ids = member_ids or {}
-    for r in sorted(referenced - defined):  # platform root: ids of checked-out members (v080 decisions 5-7)
-        repos = sorted(member_ids.get(r, []) + (["platform"] if r in domain_reqs else []))
+    for r in sorted(referenced):  # platform root: ids of checked-out members (v080 decisions 5-7)
+        repos = sorted(member_ids.get(r, []) + (["platform"] if r in defined or r in platform_ids else []))
         if len(repos) > 1:
             fails.append(r + " is ambiguous: defined in " + ", ".join(repos))
     dangling = sorted(referenced - defined - domain_reqs - member_ids.keys())
@@ -335,7 +346,7 @@ def lint_feature(feature, config, traceability, domain_reqs=frozenset(), member_
 def broken_links(specs):
     broken = []
     for md in sorted(specs.rglob("*.md")):
-        if "kit" in md.relative_to(specs).parts[:1]:
+        if skipped(md.relative_to(specs)):
             continue
         text = FENCE.sub("", md.read_text())
         for target in LINK.findall(text):
@@ -410,7 +421,7 @@ def req_block(lines, i, defined_re):
 def spec_docs(specs):
     """[(relative path, text)] of every .md under specs, outside kit/."""
     return [(md.relative_to(specs).as_posix(), md.read_text()) for md in sorted(specs.rglob("*.md"))
-            if md.relative_to(specs).parts[0] != "kit"]
+            if not skipped(md.relative_to(specs))]
 
 
 def cited_ids(docs, config, req_defs, rows):
@@ -573,7 +584,7 @@ def merged_commits(root, child_repos, config):
 def drift_rows(specs, max_age):
     today, rows = datetime.date.today(), []
     for md in sorted(specs.rglob("*.md")):
-        if md.relative_to(specs).parts[0] == "kit":
+        if skipped(md.relative_to(specs)):
             continue
         cols = None
         for line in FENCE.sub("", md.read_text()).splitlines():
@@ -613,9 +624,9 @@ def lint_all(specs, names=(), members_root=None):
         targets = []
     defined_re = re.compile(r"\[(" + config["req_id_pattern"] + r")\]")
     domain_reqs = frozenset(i for p in sorted(specs.glob("domains/*/requirements.md")) for i in defined_re.findall(p.read_text()))
-    member_ids, unchecked = {}, []
+    member_ids, unchecked, member_fails = {}, [], []
     if config["layer"] == "platform":
-        for repo, d in members(specs, config, members_root):
+        for repo, d in members(specs, config, members_root, member_fails):
             if d is None:
                 unchecked.append(repo)
                 continue
@@ -642,7 +653,7 @@ def lint_all(specs, names=(), members_root=None):
             warnings.append("WARN merged-work check skipped: invalid tracker_pattern (" + str(err) + ")")
     for feature in targets:
         if feature.is_dir():
-            fails, warns = lint_feature(feature, config, traceability, domain_reqs, member_ids, unchecked, platform)
+            fails, warns = lint_feature(feature, config, traceability, domain_reqs, member_ids, unchecked, platform, domain_reqs | req_defs.keys())
             req_path = feature / "requirements.md"
             status = feature_status(req_path.read_text()) if req_path.exists() else None
             if status and status["state"] in ("Done", "Dropped"):
@@ -675,7 +686,7 @@ def lint_all(specs, names=(), members_root=None):
     ref_fails, ref_warns = refs(specs, config, req_defs, member_ids)
     warnings += ["WARN " + w for w in ref_warns]
     if config["layer"] == "platform":
-        ref_fails += registry(specs)[1]
+        ref_fails += registry(specs)[1] + member_fails
     max_age = config.get("drift_max_age_days")
     drift = drift_rows(specs, max_age)
     if max_age is not None:
@@ -709,6 +720,7 @@ def cites(specs):
         return [prefix + f for f in out if not f.endswith("/")]
     children = repos(root)
     files = list(dict.fromkeys(ls(root) + [f for repo in children for f in ls(root / repo, repo + "/")]))
+    files = [f for f in files if not f.startswith(".specs/kit.bak-")]
     files = files or [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
     problems, count = [], 0
     def resolve(md, prefix, path):
@@ -743,7 +755,7 @@ def cites(specs):
             return root / hits[0], None
         return None, "ambiguous (use the repo-relative path): " + ", ".join(hits[:3]) if hits else "no such file"
     for md in sorted(specs.rglob("*.md")):
-        if "kit" in md.relative_to(specs).parts[:1]:
+        if skipped(md.relative_to(specs)):
             continue
         for m in CITE.finditer(FENCE.sub("", md.read_text())):
             count += 1
@@ -789,7 +801,8 @@ def lint_members(specs, config, root, as_json):
             print("== " + repo)
             if result is None:
                 # shortcut: a missing checkout WARNs and exits as before (CI may check out one repo), --strict-members when a pipeline must fail on it
-                print("WARN member " + repo + ": no checkout at " + str(base / repo))
+                if not (base / repo).is_dir():  # a checkout without its spec path is a FAIL in the platform block
+                    print("WARN member " + repo + ": no checkout at " + str(base / repo))
             else:
                 print_text(result)
         print("spec-lint --members: " + str(fails) + " FAIL across " + str(len(results) + 1) + " repo(s)"

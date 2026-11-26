@@ -1437,6 +1437,10 @@ cmp -s "$TMP/t15/x-e2" "$A15/.specs/kit.bak-$NEWV-2/playbooks/setup.md" && cmp -
 out=$("$KH/install.sh" "$B15B" --uninstall 2>&1)
 [ -f "$B15B/.specs/kit.bak-0.4.1/playbooks/setup.md" ] || fail "15f: uninstall removed the backup"
 echo "$out" | grep -q "^Kept.*kit.bak-0.4.1" || fail "15f: uninstall does not name the backup under Kept: $out"
+P="$TMP/t15e"; mkdir -p "$P/.specs/kit.bak-0.1.0" "$P/.specs/steering"; printf '{}' > "$P/.specs/spec-kit.json"; printf 'status: active\n' > "$P/.specs/steering/project-profile.md"
+L15="$KIT/kit/scripts/spec_lint.py"; before=$(python3 "$L15" --specs "$P/.specs" 2>&1; python3 "$L15" --specs "$P/.specs" --cites 2>&1)
+printf '[x](nope.md) REQ-FOO-01 `nope.txt:3`\n' > "$P/.specs/kit.bak-0.1.0/a.md"
+[ "$before" = "$(python3 "$L15" --specs "$P/.specs" 2>&1; python3 "$L15" --specs "$P/.specs" --cites 2>&1)" ] || fail "15e: a kit.bak-* .md changed the lint result"
 fi; if sect 15b "upgrading.md: a block per CHANGELOG release above 0.4.1, and each key default equals the script's"; then
 UG="$KIT/kit/docs/upgrading.md"
 for v in $(awk '/^## \[0\.4\.1\]/{exit} /^## \[[0-9]/{gsub(/[][]/,"",$2); print $2}' "$KIT/CHANGELOG.md"); do
@@ -1603,6 +1607,12 @@ PY
 )
 [ "$out" = "[('orders', False), ('billing', True)] [('orders', True), ('billing', False)]" ] || fail "27g: member lookup: $out"
 
+P="$TMP/p27h"; p27 "$P"
+printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders |\n| billing | | b |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?
+[ "$rc" = 1 ] && echo "$out" | grep -qF 'system/repos.md:5: row has 1 cells, no Spec path' && [ "$(echo "$out" | grep -c '^FAIL system/repos.md')" = 1 ] || fail "27h: short row, blank Spec path means .specs, rc=$rc: $out"
+printf '# Repos\n\n| Repo | Spec path | Owns |\n|---|---|---|\n| orders | .specs | o |\n| billing | nope/x | b |\n' > "$P/platform/.specs/system/repos.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'system/repos.md:6: billing is checked out but nope/x is not a folder' || fail "27h: checkout without spec dir rc=$rc: $out"
 fi; if sect 27b "platform layer: --members lints the platform and every member"; then
 LINT="$KIT/kit/scripts/spec_lint.py"
 lintm() { p=$1; shift; python3 "$LINT" --specs "$p/platform/.specs" --members "$@" 2>&1; }
@@ -1656,6 +1666,9 @@ out=$(lintp "$P/platform") || fail "27c(e): arch cite: $out"; ! echo "$out" | gr
 printf '# D\n\nREQ-PLT-1 uses [REQ-BIL-2]\n' > "$S/features/cross-a/design.md"
 printf '# Cross\n\nStatus: Proposed\n\n[REQ-PLT-1] cross cap, builds on [REQ-ORD-1]\n' > "$S/features/cross-a/requirements.md"
 rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'design.md does not trace REQ-ORD-1' || fail "27c(f): bracket defines rc=$rc: $out"
+printf '# C\n\nStatus: Proposed\n\n[REQ-PLT-1] x\n[REQ-ORD-1] clash\n' > "$S/features/cross-a/requirements.md"
+printf 'REQ-PLT-1 REQ-ORD-1\n' > "$S/features/cross-a/design.md"; printf -- '- [ ] 1 platform: x [REQ-PLT-1] [REQ-ORD-1]\n' > "$S/features/cross-a/tasks.md"
+rc=0; out=$(lintp "$P/platform") || rc=$?; [ "$rc" = 1 ] && echo "$out" | grep -qF 'REQ-ORD-1 is ambiguous: defined in orders, platform' || fail "27c(g): bracketed member id rc=$rc: $out"
 fi; if sect 27d "platform layer: cross-repo task lines"; then
 LINT="$KIT/kit/scripts/spec_lint.py"
 P="$TMP/p27t"; p27 "$P"; S="$P/platform/.specs"; F="$S/features/cross-b"; T="$F/tasks.md"
@@ -1687,5 +1700,8 @@ t27 1 '4s/- \[ \] 4/- [ ] 3/' '' "task 3: number used twice" g2
 sed 's/^Status: Proposed/Status: Done 2026-11-25 (#1)/' "$F/requirements.md" > "$TMP/t27d" && cat "$TMP/t27d" > "$F/requirements.md"
 t27 0 's/\[ \]/[x]/' '- [x] 6 shipping: x → shipping#1 — [REQ-PLT-1]' "history: task 6: unknown repo" h
 printf '{}' > "$S/spec-kit.json"; out=$(tl '' '- [ ] foo: no number') || fail "27d(i): no layer lints as today: $out"
+mkdir -p "$TMP/t27j/.specs/features/f"; printf '{}' > "$TMP/t27j/.specs/spec-kit.json"
+sed 's/<FEAT>/F/g' "$KIT/kit/templates/feature/tasks.md" > "$TMP/t27j/.specs/features/f/tasks.md"
+[ "$(grep -c '^ *- \[ \]' "$TMP/t27j/.specs/features/f/tasks.md")" = 6 ] || fail "27d(j): the template comment adds tasks"
 fi; sect_end
 echo "selftest: OK"
