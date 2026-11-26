@@ -23,5 +23,5 @@ Deploy impact: none (installer and selftest only; projects see the change on the
   profile seed on upgrade, uninstall after an upgrade (selftest 15c) — [REQ-V075-03] [REQ-V075-04]
 - [x] 6 Docs: `docs/reference.md` upgrade section, GO.md's upgrade step, the `install.sh` usage line, CHANGELOG
   Unreleased — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03]
-- [ ] 7 Hand run of a real 0.4.1 install upgraded by this branch, G1 to G4 with rc per gate, deep review, PR with
+- [x] 7 Hand run of a real 0.4.1 install upgraded by this branch, G1 to G4 with rc per gate, deep review, PR with
   Gates, Review and Verification blocks — [REQ-V075-01] [REQ-V075-02] [REQ-V075-03] [REQ-V075-04]

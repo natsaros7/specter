@@ -1,6 +1,6 @@
 # v080 Platform layer for multi-repo systems — Requirements
 
-Status: In progress (first slice approved 2026-11-25, decisions 1 to 11 as recommended)
+Status: Done 2026-11-26 (release 0.12.0; first slice, G1-rest and G4 to G14 still open)
 Tracker: none yet. After task 1, one GitHub issue per task under the milestone of the release that ships it. Size M
 for this slice.
 
